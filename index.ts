@@ -1,7 +1,7 @@
 import * as readline from "node:readline/promises";
 import { createAgents } from "./src/agents.ts";
 import { log } from "./src/logger.ts";
-import { broadcastRequest } from "./src/protocol.ts";
+import { sendUserRequest } from "./src/protocol.ts";
 import { store } from "./src/store.ts";
 
 if (!process.env.ANTHROPIC_API_KEY) {
@@ -40,5 +40,5 @@ while (true) {
 
 	if (!trimmed) continue;
 
-	await broadcastRequest(user.id, trimmed, agents);
+	await sendUserRequest(user.id, trimmed);
 }

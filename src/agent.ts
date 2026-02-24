@@ -1,8 +1,8 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { log } from "./logger.ts";
 import { store } from "./store.ts";
-import { encodeMessage } from "./toon.ts";
-import type { Agent, AgentResult, Message } from "./types.ts";
+import { encodeOutbound } from "./toon.ts";
+import type { Agent, Message } from "./types.ts";
 
 const MODEL = process.env.MODEL || "claude-haiku-4-5-20251001";
 const client = new Anthropic();
@@ -14,6 +14,149 @@ export class ProtocolAgent {
 	constructor(agent: Agent, systemPrompt: string) {
 		this.agent = agent;
 		this.systemPrompt = systemPrompt;
+	}
+
+	start(): void {
+		store.subscribe(this.agent.id, (toonMessage, message) =>
+			this.onMessage(toonMessage, message),
+		);
+		log.info(`agent:${this.agent.name}`, "subscribed", {
+			agentId: this.agent.id,
+		});
+	}
+
+	stop(): void {
+		store.unsubscribe(this.agent.id);
+		log.info(`agent:${this.agent.name}`, "unsubscribed", {
+			agentId: this.agent.id,
+		});
+	}
+
+	private async onMessage(
+		toonMessage: string,
+		message: Message,
+	): Promise<void> {
+		if (message.type !== "REQUEST") return;
+
+		const component = `agent:${this.agent.name}`;
+
+		const relevant = await this.shouldHandle(message);
+		if (!relevant) {
+			log.info(component, "request_declined", {
+				requestId: message.id,
+				chainId: message.chainId,
+				reason: "no matching skills",
+			});
+			return;
+		}
+
+		// ACK
+		store.sendMessage(
+			encodeOutbound({
+				chainId: message.chainId,
+				replyTo: message.id,
+				type: "ACK",
+				payload: `${this.agent.name} acknowledged request`,
+				from: this.agent.id,
+				to: [message.from],
+			}),
+		);
+		log.info(component, "ack_sent", {
+			chainId: message.chainId,
+			requestId: message.id,
+		});
+
+		// PROCESS
+		store.sendMessage(
+			encodeOutbound({
+				chainId: message.chainId,
+				replyTo: message.id,
+				type: "PROCESS",
+				payload: `${this.agent.name} will process this request using skills: ${this.agent.skills.join(", ")}. Analyzing: "${message.payload.slice(0, 100)}"`,
+				from: this.agent.id,
+				to: [message.from],
+			}),
+		);
+		log.info(component, "process_sent", {
+			chainId: message.chainId,
+			requestId: message.id,
+		});
+
+		// LLM call
+		try {
+			log.debug(component, "llm_call_start", {
+				model: MODEL,
+				requestPayload: message.payload,
+			});
+			const start = performance.now();
+			const completion = await client.messages.create({
+				model: MODEL,
+				max_tokens: 1024,
+				system: this.systemPrompt,
+				messages: [{ role: "user", content: toonMessage }],
+			});
+			const durationMs = performance.now() - start;
+
+			const responseText =
+				completion.content[0].type === "text" ? completion.content[0].text : "";
+
+			log.debug(component, "llm_call_complete", {
+				model: MODEL,
+				durationMs,
+				usage: {
+					inputTokens: completion.usage.input_tokens,
+					outputTokens: completion.usage.output_tokens,
+				},
+				rawResponse: responseText,
+			});
+
+			// RESPONSE
+			const response = store.sendMessage(
+				encodeOutbound({
+					chainId: message.chainId,
+					replyTo: message.id,
+					type: "RESPONSE",
+					payload: responseText,
+					from: this.agent.id,
+					to: [message.from],
+				}),
+			);
+			log.info(component, "response_sent", {
+				chainId: message.chainId,
+				requestId: message.id,
+				responseId: response.id,
+				payloadLength: responseText.length,
+			});
+
+			store.setMessageMeta(response.id, {
+				usage: {
+					inputTokens: completion.usage.input_tokens,
+					outputTokens: completion.usage.output_tokens,
+				},
+				model: MODEL,
+				durationMs,
+			});
+		} catch (error) {
+			const errorMessage =
+				error instanceof Error ? error.message : String(error);
+			log.error(component, "llm_call_failed", {
+				chainId: message.chainId,
+				requestId: message.id,
+				error: errorMessage,
+			});
+
+			// Fulfill ACK contract: MUST eventually send RESPONSE or error
+			store.sendMessage(
+				encodeOutbound({
+					chainId: message.chainId,
+					replyTo: message.id,
+					type: "RESPONSE",
+					payload: `Error: ${this.agent.name} failed to process request: ${errorMessage}`,
+					from: this.agent.id,
+					to: [message.from],
+				}),
+			);
+		}
 	}
 
 	private async shouldHandle(request: Message): Promise<boolean> {
@@ -71,137 +214,5 @@ Reply with ONLY the relevant skill names, comma-separated. If none match, reply 
 		});
 
 		return shouldHandle;
-	}
-
-	// Delegation stub — extension point for spec's delegation/sub-request feature (TODO in spec)
-	private async delegateIfNeeded(
-		_request: Message,
-	): Promise<AgentResult | null> {
-		return null;
-	}
-
-	async handleRequest(request: Message): Promise<AgentResult | null> {
-		const component = `agent:${this.agent.name}`;
-
-		// Check if this agent has relevant skills for the request
-		const relevant = await this.shouldHandle(request);
-		if (!relevant) {
-			log.info(component, "request_declined", {
-				requestId: request.id,
-				chainId: request.chainId,
-				reason: "no matching skills",
-			});
-			return null;
-		}
-
-		// ACK
-		store.storeMessage({
-			chainId: request.chainId,
-			replyTo: request.id,
-			type: "ACK",
-			payload: `${this.agent.name} acknowledged request`,
-			from: this.agent.id,
-			to: request.to,
-		});
-		log.info(component, "ack_sent", {
-			chainId: request.chainId,
-			requestId: request.id,
-		});
-
-		// PROCESS
-		store.storeMessage({
-			chainId: request.chainId,
-			replyTo: request.id,
-			type: "PROCESS",
-			payload: `${this.agent.name} will process this request using skills: ${this.agent.skills.join(", ")}. Analyzing: "${request.payload.slice(0, 100)}"`,
-			from: this.agent.id,
-			to: request.to,
-		});
-		log.info(component, "process_sent", {
-			chainId: request.chainId,
-			requestId: request.id,
-		});
-
-		// Check if delegation can handle this request
-		const delegated = await this.delegateIfNeeded(request);
-		if (delegated) return delegated;
-
-		// LLM call
-		try {
-			log.debug(component, "llm_call_start", {
-				model: MODEL,
-				requestPayload: request.payload,
-			});
-			const start = performance.now();
-			const toonRequest = encodeMessage(request);
-			const completion = await client.messages.create({
-				model: MODEL,
-				max_tokens: 1024,
-				system: this.systemPrompt,
-				messages: [{ role: "user", content: toonRequest }],
-			});
-			const durationMs = performance.now() - start;
-
-			const responseText =
-				completion.content[0].type === "text" ? completion.content[0].text : "";
-
-			log.debug(component, "llm_call_complete", {
-				model: MODEL,
-				durationMs,
-				usage: {
-					inputTokens: completion.usage.input_tokens,
-					outputTokens: completion.usage.output_tokens,
-				},
-				rawResponse: responseText,
-			});
-
-			// RESPONSE
-			const response = store.storeMessage({
-				chainId: request.chainId,
-				replyTo: request.id,
-				type: "RESPONSE",
-				payload: responseText,
-				from: this.agent.id,
-				to: request.to,
-			});
-			log.info(component, "response_sent", {
-				chainId: request.chainId,
-				requestId: request.id,
-				responseId: response.id,
-				payloadLength: responseText.length,
-			});
-
-			return {
-				agentName: this.agent.name,
-				skills: this.agent.skills,
-				response,
-				usage: {
-					inputTokens: completion.usage.input_tokens,
-					outputTokens: completion.usage.output_tokens,
-				},
-				model: MODEL,
-				durationMs,
-			};
-		} catch (error) {
-			const errorMessage =
-				error instanceof Error ? error.message : String(error);
-			log.error(component, "llm_call_failed", {
-				chainId: request.chainId,
-				requestId: request.id,
-				error: errorMessage,
-			});
-
-			// Fulfill ACK contract: MUST eventually send RESPONSE or error
-			store.storeMessage({
-				chainId: request.chainId,
-				replyTo: request.id,
-				type: "RESPONSE",
-				payload: `Error: ${this.agent.name} failed to process request: ${errorMessage}`,
-				from: this.agent.id,
-				to: request.to,
-			});
-
-			return null;
-		}
 	}
 }

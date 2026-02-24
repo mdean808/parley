@@ -1,6 +1,6 @@
 [
   {
-    "timestamp": "2026-02-24T22:19:31.737Z",
+    "timestamp": "2026-02-24T22:37:34.468Z",
     "level": "INFO",
     "component": "init",
     "event": "session_start",
@@ -10,22 +10,22 @@
     }
   },
   {
-    "timestamp": "2026-02-24T22:19:31.745Z",
+    "timestamp": "2026-02-24T22:37:34.479Z",
     "level": "INFO",
     "component": "store",
     "event": "user_registered",
     "data": {
-      "id": "d5d5ee00-b470-4797-b793-bcc20da41110",
+      "id": "33809c29-6de7-4291-bfb6-927b889c8034",
       "name": "User"
     }
   },
   {
-    "timestamp": "2026-02-24T22:19:31.745Z",
+    "timestamp": "2026-02-24T22:37:34.479Z",
     "level": "INFO",
     "component": "store",
     "event": "agent_registered",
     "data": {
-      "id": "04f1584b-5a12-4a5f-a5b6-4aa7ba36f449",
+      "id": "af250ebd-3d69-45ad-b1b7-cd1f863c1757",
       "name": "Atlas - Research",
       "skills": [
         "general-knowledge",
@@ -34,12 +34,12 @@
     }
   },
   {
-    "timestamp": "2026-02-24T22:19:31.745Z",
+    "timestamp": "2026-02-24T22:37:34.479Z",
     "level": "INFO",
     "component": "store",
     "event": "agent_registered",
     "data": {
-      "id": "cc920405-b2ff-4f0d-a3f6-90848a4818a6",
+      "id": "718e3fa1-2a4c-47c6-b502-31cf0d7b062d",
       "name": "Sage - Creative",
       "skills": [
         "creative-writing",
@@ -48,12 +48,12 @@
     }
   },
   {
-    "timestamp": "2026-02-24T22:19:31.745Z",
+    "timestamp": "2026-02-24T22:37:34.479Z",
     "level": "INFO",
     "component": "store",
     "event": "agent_registered",
     "data": {
-      "id": "74a7584c-ca33-4dfd-b6cb-daa0118c37fa",
+      "id": "d89036ce-2638-47a0-969c-91552eaf01ac",
       "name": "Bolt - Technical",
       "skills": [
         "coding",
@@ -62,7 +62,7 @@
     }
   },
   {
-    "timestamp": "2026-02-24T22:19:31.745Z",
+    "timestamp": "2026-02-24T22:37:34.479Z",
     "level": "INFO",
     "component": "init",
     "event": "agents_ready",

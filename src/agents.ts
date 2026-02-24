@@ -32,6 +32,8 @@ const personas: AgentPersona[] = [
 export function createAgents(): ProtocolAgent[] {
 	return personas.map((persona) => {
 		const agent = store.registerAgent(persona.name, persona.skills);
-		return new ProtocolAgent(agent, persona.systemPrompt);
+		const protocolAgent = new ProtocolAgent(agent, persona.systemPrompt);
+		protocolAgent.start();
+		return protocolAgent;
 	});
 }

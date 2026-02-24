@@ -39,6 +39,14 @@ export interface AgentPersona {
 	systemPrompt: string;
 }
 
+export type MessageHandler = (toonMessage: string, message: Message) => void;
+
+export interface MessageMeta {
+	usage: { inputTokens: number; outputTokens: number };
+	model: string;
+	durationMs: number;
+}
+
 export interface AgentResult {
 	agentName: string;
 	skills: string[];

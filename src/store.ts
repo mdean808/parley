@@ -1,11 +1,20 @@
 import { log } from "./logger.ts";
-import { encodeMessage } from "./toon.ts";
-import type { Agent, Message, MessageFilter, User } from "./types.ts";
+import { decodeMessage, encodeMessage } from "./toon.ts";
+import type {
+	Agent,
+	Message,
+	MessageFilter,
+	MessageHandler,
+	MessageMeta,
+	User,
+} from "./types.ts";
 
 export class Store {
 	private users: User[] = [];
 	private agents: Agent[] = [];
 	private messages: Message[] = [];
+	private subscribers: Map<string, MessageHandler> = new Map();
+	private messageMeta: Map<string, MessageMeta> = new Map();
 
 	registerUser(name: string): User {
 		const user: User = { id: crypto.randomUUID(), name };
@@ -39,16 +48,50 @@ export class Store {
 		);
 	}
 
-	storeMessage(fields: Omit<Message, "id" | "timestamp">): Message {
+	subscribe(entityId: string, handler: MessageHandler): void {
+		this.subscribers.set(entityId, handler);
+		log.debug("store", "subscribed", { entityId });
+	}
+
+	unsubscribe(entityId: string): void {
+		this.subscribers.delete(entityId);
+		log.debug("store", "unsubscribed", { entityId });
+	}
+
+	setMessageMeta(messageId: string, meta: MessageMeta): void {
+		this.messageMeta.set(messageId, meta);
+	}
+
+	getMessageMeta(messageId: string): MessageMeta | undefined {
+		return this.messageMeta.get(messageId);
+	}
+
+	sendMessage(toonString: string): Message {
+		const decoded = decodeMessage(toonString);
+
 		const message: Message = {
-			...fields,
+			...decoded,
 			id: crypto.randomUUID(),
 			timestamp: new Date().toISOString(),
 		};
-		// Validate TOON encoding — rejects malformed messages per spec
-		encodeMessage(message);
+
+		// Validate by re-encoding — rejects malformed messages per spec
+		const completeToon = encodeMessage(message);
+
 		this.messages.push(message);
 		log.debug("store", "message_stored", { ...message });
+
+		// Notify subscribers via queueMicrotask to prevent re-entrant issues
+		const senderId = message.from;
+		const isBroadcast = message.to.includes("*");
+
+		for (const [entityId, handler] of this.subscribers) {
+			if (entityId === senderId) continue;
+			if (isBroadcast || message.to.includes(entityId)) {
+				queueMicrotask(() => handler(completeToon, message));
+			}
+		}
+
 		return message;
 	}
 

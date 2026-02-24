@@ -18,6 +18,17 @@ export function decodeMessage(toon: string): Message {
 	} as Message;
 }
 
+export function encodeOutbound(
+	fields: Omit<Message, "id" | "timestamp">,
+): string {
+	return encode({
+		...fields,
+		id: "",
+		timestamp: "",
+		replyTo: fields.replyTo ?? null,
+	});
+}
+
 export function validateToon(message: Message): string {
 	return encodeMessage(message);
 }
