@@ -1,4 +1,5 @@
 import { log } from "./logger.ts";
+import { encodeMessage } from "./toon.ts";
 import type { Agent, Message, MessageFilter, User } from "./types.ts";
 
 export class Store {
@@ -44,6 +45,8 @@ export class Store {
 			id: crypto.randomUUID(),
 			timestamp: new Date().toISOString(),
 		};
+		// Validate TOON encoding — rejects malformed messages per spec
+		encodeMessage(message);
 		this.messages.push(message);
 		log.debug("store", "message_stored", { ...message });
 		return message;
@@ -52,8 +55,12 @@ export class Store {
 	getMessages(filter: MessageFilter): Message[] {
 		return this.messages.filter((m) => {
 			for (const [key, value] of Object.entries(filter)) {
-				if (value !== undefined && m[key as keyof Message] !== value)
+				if (value === undefined) continue;
+				if (key === "to") {
+					if (!m.to.includes(value as string)) return false;
+				} else if (m[key as keyof Message] !== value) {
 					return false;
+				}
 			}
 			return true;
 		});

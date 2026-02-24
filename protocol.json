@@ -1,433 +1,95 @@
 [
-	{
-		"timestamp": "2026-02-24T22:03:40.237Z",
-		"level": "INFO",
-		"component": "init",
-		"event": "session_start",
-		"data": {
-			"logFile": "./protocol.json",
-			"logLevel": "DEBUG"
-		}
-	},
-	{
-		"timestamp": "2026-02-24T22:03:40.244Z",
-		"level": "INFO",
-		"component": "store",
-		"event": "user_registered",
-		"data": {
-			"id": "a358a726-2fe4-413a-b1eb-c8472721b5a7",
-			"name": "User"
-		}
-	},
-	{
-		"timestamp": "2026-02-24T22:03:40.244Z",
-		"level": "INFO",
-		"component": "store",
-		"event": "agent_registered",
-		"data": {
-			"id": "259eb61b-db61-486d-a273-690603444fc6",
-			"name": "Atlas - Research",
-			"skills": ["general-knowledge", "research"]
-		}
-	},
-	{
-		"timestamp": "2026-02-24T22:03:40.244Z",
-		"level": "INFO",
-		"component": "store",
-		"event": "agent_registered",
-		"data": {
-			"id": "6ffb56a8-8e7c-4053-88d1-1097ea9c1da5",
-			"name": "Sage - Creative",
-			"skills": ["creative-writing", "brainstorming"]
-		}
-	},
-	{
-		"timestamp": "2026-02-24T22:03:40.244Z",
-		"level": "INFO",
-		"component": "store",
-		"event": "agent_registered",
-		"data": {
-			"id": "943cd07b-0e4b-4400-9056-4b47ced44fc5",
-			"name": "Bolt - Technical",
-			"skills": ["coding", "technical"]
-		}
-	},
-	{
-		"timestamp": "2026-02-24T22:03:40.244Z",
-		"level": "INFO",
-		"component": "init",
-		"event": "agents_ready",
-		"data": {
-			"agents": [
-				{
-					"name": "Atlas - Research",
-					"skills": ["general-knowledge", "research"]
-				},
-				{
-					"name": "Sage - Creative",
-					"skills": ["creative-writing", "brainstorming"]
-				},
-				{
-					"name": "Bolt - Technical",
-					"skills": ["coding", "technical"]
-				}
-			]
-		}
-	},
-	{
-		"timestamp": "2026-02-24T22:03:44.214Z",
-		"level": "DEBUG",
-		"component": "store",
-		"event": "message_stored",
-		"data": {
-			"chainId": "81cd9b59-1ef8-4aba-a9c8-acfa2d9d779e",
-			"type": "REQUEST",
-			"payload": "why are we heree?",
-			"from": "a358a726-2fe4-413a-b1eb-c8472721b5a7",
-			"to": "*",
-			"id": "b7caab9c-5eae-4f3f-9ee1-50716ee7b1f8",
-			"timestamp": "2026-02-24T22:03:44.213Z"
-		}
-	},
-	{
-		"timestamp": "2026-02-24T22:03:44.214Z",
-		"level": "INFO",
-		"component": "protocol",
-		"event": "broadcast_start",
-		"data": {
-			"chainId": "81cd9b59-1ef8-4aba-a9c8-acfa2d9d779e",
-			"userId": "a358a726-2fe4-413a-b1eb-c8472721b5a7",
-			"payload": "why are we heree?",
-			"agentCount": 3
-		}
-	},
-	{
-		"timestamp": "2026-02-24T22:03:44.215Z",
-		"level": "DEBUG",
-		"component": "agent:Atlas - Research",
-		"event": "skill_eval_start",
-		"data": {
-			"requestPayload": "why are we heree?",
-			"agentSkills": ["general-knowledge", "research"],
-			"allSkills": [
-				"general-knowledge",
-				"research",
-				"creative-writing",
-				"brainstorming",
-				"coding",
-				"technical"
-			]
-		}
-	},
-	{
-		"timestamp": "2026-02-24T22:03:44.218Z",
-		"level": "DEBUG",
-		"component": "agent:Sage - Creative",
-		"event": "skill_eval_start",
-		"data": {
-			"requestPayload": "why are we heree?",
-			"agentSkills": ["creative-writing", "brainstorming"],
-			"allSkills": [
-				"general-knowledge",
-				"research",
-				"creative-writing",
-				"brainstorming",
-				"coding",
-				"technical"
-			]
-		}
-	},
-	{
-		"timestamp": "2026-02-24T22:03:44.218Z",
-		"level": "DEBUG",
-		"component": "agent:Bolt - Technical",
-		"event": "skill_eval_start",
-		"data": {
-			"requestPayload": "why are we heree?",
-			"agentSkills": ["coding", "technical"],
-			"allSkills": [
-				"general-knowledge",
-				"research",
-				"creative-writing",
-				"brainstorming",
-				"coding",
-				"technical"
-			]
-		}
-	},
-	{
-		"timestamp": "2026-02-24T22:03:44.890Z",
-		"level": "DEBUG",
-		"component": "agent:Bolt - Technical",
-		"event": "skill_eval_result",
-		"data": {
-			"llmResponse": "general-knowledge",
-			"neededSkills": ["general-knowledge"],
-			"matchingAgentIds": ["259eb61b-db61-486d-a273-690603444fc6"],
-			"decision": "decline"
-		}
-	},
-	{
-		"timestamp": "2026-02-24T22:03:44.890Z",
-		"level": "INFO",
-		"component": "agent:Bolt - Technical",
-		"event": "request_declined",
-		"data": {
-			"requestId": "b7caab9c-5eae-4f3f-9ee1-50716ee7b1f8",
-			"chainId": "81cd9b59-1ef8-4aba-a9c8-acfa2d9d779e",
-			"reason": "no matching skills"
-		}
-	},
-	{
-		"timestamp": "2026-02-24T22:03:44.891Z",
-		"level": "DEBUG",
-		"component": "agent:Sage - Creative",
-		"event": "skill_eval_result",
-		"data": {
-			"llmResponse": "general-knowledge, brainstorming",
-			"neededSkills": ["general-knowledge", "brainstorming"],
-			"matchingAgentIds": [
-				"259eb61b-db61-486d-a273-690603444fc6",
-				"6ffb56a8-8e7c-4053-88d1-1097ea9c1da5"
-			],
-			"decision": "handle"
-		}
-	},
-	{
-		"timestamp": "2026-02-24T22:03:44.891Z",
-		"level": "DEBUG",
-		"component": "store",
-		"event": "message_stored",
-		"data": {
-			"chainId": "81cd9b59-1ef8-4aba-a9c8-acfa2d9d779e",
-			"replyTo": "b7caab9c-5eae-4f3f-9ee1-50716ee7b1f8",
-			"type": "ACK",
-			"payload": "Sage - Creative acknowledged request",
-			"from": "6ffb56a8-8e7c-4053-88d1-1097ea9c1da5",
-			"to": "a358a726-2fe4-413a-b1eb-c8472721b5a7",
-			"id": "aa9cf299-586d-45c1-be5b-f3c5cf1d92f1",
-			"timestamp": "2026-02-24T22:03:44.891Z"
-		}
-	},
-	{
-		"timestamp": "2026-02-24T22:03:44.891Z",
-		"level": "INFO",
-		"component": "agent:Sage - Creative",
-		"event": "ack_sent",
-		"data": {
-			"chainId": "81cd9b59-1ef8-4aba-a9c8-acfa2d9d779e",
-			"requestId": "b7caab9c-5eae-4f3f-9ee1-50716ee7b1f8"
-		}
-	},
-	{
-		"timestamp": "2026-02-24T22:03:44.891Z",
-		"level": "DEBUG",
-		"component": "store",
-		"event": "message_stored",
-		"data": {
-			"chainId": "81cd9b59-1ef8-4aba-a9c8-acfa2d9d779e",
-			"replyTo": "b7caab9c-5eae-4f3f-9ee1-50716ee7b1f8",
-			"type": "PROCESS",
-			"payload": "Sage - Creative is processing request",
-			"from": "6ffb56a8-8e7c-4053-88d1-1097ea9c1da5",
-			"to": "a358a726-2fe4-413a-b1eb-c8472721b5a7",
-			"id": "db87739a-83fe-474c-9e75-7095ba9ea2e4",
-			"timestamp": "2026-02-24T22:03:44.891Z"
-		}
-	},
-	{
-		"timestamp": "2026-02-24T22:03:44.891Z",
-		"level": "INFO",
-		"component": "agent:Sage - Creative",
-		"event": "process_sent",
-		"data": {
-			"chainId": "81cd9b59-1ef8-4aba-a9c8-acfa2d9d779e",
-			"requestId": "b7caab9c-5eae-4f3f-9ee1-50716ee7b1f8"
-		}
-	},
-	{
-		"timestamp": "2026-02-24T22:03:44.891Z",
-		"level": "DEBUG",
-		"component": "agent:Sage - Creative",
-		"event": "llm_call_start",
-		"data": {
-			"model": "claude-haiku-4-5-20251001",
-			"requestPayload": "why are we heree?"
-		}
-	},
-	{
-		"timestamp": "2026-02-24T22:03:44.892Z",
-		"level": "DEBUG",
-		"component": "agent:Atlas - Research",
-		"event": "skill_eval_result",
-		"data": {
-			"llmResponse": "general-knowledge, brainstorming",
-			"neededSkills": ["general-knowledge", "brainstorming"],
-			"matchingAgentIds": [
-				"259eb61b-db61-486d-a273-690603444fc6",
-				"6ffb56a8-8e7c-4053-88d1-1097ea9c1da5"
-			],
-			"decision": "handle"
-		}
-	},
-	{
-		"timestamp": "2026-02-24T22:03:44.892Z",
-		"level": "DEBUG",
-		"component": "store",
-		"event": "message_stored",
-		"data": {
-			"chainId": "81cd9b59-1ef8-4aba-a9c8-acfa2d9d779e",
-			"replyTo": "b7caab9c-5eae-4f3f-9ee1-50716ee7b1f8",
-			"type": "ACK",
-			"payload": "Atlas - Research acknowledged request",
-			"from": "259eb61b-db61-486d-a273-690603444fc6",
-			"to": "a358a726-2fe4-413a-b1eb-c8472721b5a7",
-			"id": "102936f9-7671-46d0-9b0b-df629c96bf4d",
-			"timestamp": "2026-02-24T22:03:44.892Z"
-		}
-	},
-	{
-		"timestamp": "2026-02-24T22:03:44.892Z",
-		"level": "INFO",
-		"component": "agent:Atlas - Research",
-		"event": "ack_sent",
-		"data": {
-			"chainId": "81cd9b59-1ef8-4aba-a9c8-acfa2d9d779e",
-			"requestId": "b7caab9c-5eae-4f3f-9ee1-50716ee7b1f8"
-		}
-	},
-	{
-		"timestamp": "2026-02-24T22:03:44.892Z",
-		"level": "DEBUG",
-		"component": "store",
-		"event": "message_stored",
-		"data": {
-			"chainId": "81cd9b59-1ef8-4aba-a9c8-acfa2d9d779e",
-			"replyTo": "b7caab9c-5eae-4f3f-9ee1-50716ee7b1f8",
-			"type": "PROCESS",
-			"payload": "Atlas - Research is processing request",
-			"from": "259eb61b-db61-486d-a273-690603444fc6",
-			"to": "a358a726-2fe4-413a-b1eb-c8472721b5a7",
-			"id": "d1a521e7-65ff-4f07-b810-4c370b904f98",
-			"timestamp": "2026-02-24T22:03:44.892Z"
-		}
-	},
-	{
-		"timestamp": "2026-02-24T22:03:44.893Z",
-		"level": "INFO",
-		"component": "agent:Atlas - Research",
-		"event": "process_sent",
-		"data": {
-			"chainId": "81cd9b59-1ef8-4aba-a9c8-acfa2d9d779e",
-			"requestId": "b7caab9c-5eae-4f3f-9ee1-50716ee7b1f8"
-		}
-	},
-	{
-		"timestamp": "2026-02-24T22:03:44.893Z",
-		"level": "DEBUG",
-		"component": "agent:Atlas - Research",
-		"event": "llm_call_start",
-		"data": {
-			"model": "claude-haiku-4-5-20251001",
-			"requestPayload": "why are we heree?"
-		}
-	},
-	{
-		"timestamp": "2026-02-24T22:03:47.006Z",
-		"level": "DEBUG",
-		"component": "agent:Atlas - Research",
-		"event": "llm_call_complete",
-		"data": {
-			"model": "claude-haiku-4-5-20251001",
-			"durationMs": 2113.5039579999993,
-			"usage": {
-				"inputTokens": 42,
-				"outputTokens": 153
-			},
-			"rawResponse": "That's a profound philosophical question with different answers depending on your perspective:\n\n**Philosophical views:**\n- **Existentialism**: We create our own meaning and purpose\n- **Religious perspectives**: To fulfill a divine purpose or spiritual growth\n- **Secular humanism**: To improve wellbeing, reduce suffering, and help others\n\n**Biological view:**\n- From an evolutionary standpoint, life exists to survive and reproduce\n\n**Practical perspective:**\n- Many find meaning through relationships, work, learning, creativity, or helping others\n\nIf you meant something more specific—like why humans evolved, why we exist individually, or the purpose of life—I'm happy to explore that further. What aspect interests you most?"
-		}
-	},
-	{
-		"timestamp": "2026-02-24T22:03:47.009Z",
-		"level": "DEBUG",
-		"component": "store",
-		"event": "message_stored",
-		"data": {
-			"chainId": "81cd9b59-1ef8-4aba-a9c8-acfa2d9d779e",
-			"replyTo": "b7caab9c-5eae-4f3f-9ee1-50716ee7b1f8",
-			"type": "RESPONSE",
-			"payload": "That's a profound philosophical question with different answers depending on your perspective:\n\n**Philosophical views:**\n- **Existentialism**: We create our own meaning and purpose\n- **Religious perspectives**: To fulfill a divine purpose or spiritual growth\n- **Secular humanism**: To improve wellbeing, reduce suffering, and help others\n\n**Biological view:**\n- From an evolutionary standpoint, life exists to survive and reproduce\n\n**Practical perspective:**\n- Many find meaning through relationships, work, learning, creativity, or helping others\n\nIf you meant something more specific—like why humans evolved, why we exist individually, or the purpose of life—I'm happy to explore that further. What aspect interests you most?",
-			"from": "259eb61b-db61-486d-a273-690603444fc6",
-			"to": "a358a726-2fe4-413a-b1eb-c8472721b5a7",
-			"id": "4f431309-5377-45fb-8df6-4d6da2349140",
-			"timestamp": "2026-02-24T22:03:47.009Z"
-		}
-	},
-	{
-		"timestamp": "2026-02-24T22:03:47.010Z",
-		"level": "INFO",
-		"component": "agent:Atlas - Research",
-		"event": "response_sent",
-		"data": {
-			"chainId": "81cd9b59-1ef8-4aba-a9c8-acfa2d9d779e",
-			"requestId": "b7caab9c-5eae-4f3f-9ee1-50716ee7b1f8",
-			"responseId": "4f431309-5377-45fb-8df6-4d6da2349140",
-			"payloadLength": 729
-		}
-	},
-	{
-		"timestamp": "2026-02-24T22:03:47.930Z",
-		"level": "DEBUG",
-		"component": "agent:Sage - Creative",
-		"event": "llm_call_complete",
-		"data": {
-			"model": "claude-haiku-4-5-20251001",
-			"durationMs": 3038.385083,
-			"usage": {
-				"inputTokens": 50,
-				"outputTokens": 216
-			},
-			"rawResponse": "# Why We're Here\n\nThat question echoes through every human heart—and its beauty lies partly in the *not-knowing*.\n\nSome possibilities:\n\n**To create meaning** rather than discover it—like artists painting on a blank canvas. Meaning might be something we *forge* through connection, work, and love.\n\n**To experience** what it feels like to be conscious and alive. We're the universe knowing itself, briefly, through these strange vessels.\n\n**To alleviate suffering**—our own and others'. Perhaps purpose crystallizes in the gap between how things are and how they could be better.\n\n**To ask this very question.** The asking itself—the wondering, the reaching—might be more essential than the answer.\n\nThe honest answer? Nobody knows for certain. But that uncertainty isn't a flaw. It's the space where freedom lives. You get to decide what \"here\" is *for*.\n\nWhat draws you to ask right now? Sometimes the context matters more than the cosmic answer."
-		}
-	},
-	{
-		"timestamp": "2026-02-24T22:03:47.930Z",
-		"level": "DEBUG",
-		"component": "store",
-		"event": "message_stored",
-		"data": {
-			"chainId": "81cd9b59-1ef8-4aba-a9c8-acfa2d9d779e",
-			"replyTo": "b7caab9c-5eae-4f3f-9ee1-50716ee7b1f8",
-			"type": "RESPONSE",
-			"payload": "# Why We're Here\n\nThat question echoes through every human heart—and its beauty lies partly in the *not-knowing*.\n\nSome possibilities:\n\n**To create meaning** rather than discover it—like artists painting on a blank canvas. Meaning might be something we *forge* through connection, work, and love.\n\n**To experience** what it feels like to be conscious and alive. We're the universe knowing itself, briefly, through these strange vessels.\n\n**To alleviate suffering**—our own and others'. Perhaps purpose crystallizes in the gap between how things are and how they could be better.\n\n**To ask this very question.** The asking itself—the wondering, the reaching—might be more essential than the answer.\n\nThe honest answer? Nobody knows for certain. But that uncertainty isn't a flaw. It's the space where freedom lives. You get to decide what \"here\" is *for*.\n\nWhat draws you to ask right now? Sometimes the context matters more than the cosmic answer.",
-			"from": "6ffb56a8-8e7c-4053-88d1-1097ea9c1da5",
-			"to": "a358a726-2fe4-413a-b1eb-c8472721b5a7",
-			"id": "02949126-df77-4aa6-9753-b3d8266f4335",
-			"timestamp": "2026-02-24T22:03:47.930Z"
-		}
-	},
-	{
-		"timestamp": "2026-02-24T22:03:47.930Z",
-		"level": "INFO",
-		"component": "agent:Sage - Creative",
-		"event": "response_sent",
-		"data": {
-			"chainId": "81cd9b59-1ef8-4aba-a9c8-acfa2d9d779e",
-			"requestId": "b7caab9c-5eae-4f3f-9ee1-50716ee7b1f8",
-			"responseId": "02949126-df77-4aa6-9753-b3d8266f4335",
-			"payloadLength": 947
-		}
-	},
-	{
-		"timestamp": "2026-02-24T22:03:47.931Z",
-		"level": "INFO",
-		"component": "protocol",
-		"event": "broadcast_complete",
-		"data": {
-			"chainId": "81cd9b59-1ef8-4aba-a9c8-acfa2d9d779e",
-			"respondedAgents": ["Atlas - Research", "Sage - Creative"],
-			"declinedAgents": ["Bolt - Technical"],
-			"totalDurationMs": 3717.096584
-		}
-	}
+  {
+    "timestamp": "2026-02-24T22:19:31.737Z",
+    "level": "INFO",
+    "component": "init",
+    "event": "session_start",
+    "data": {
+      "logFile": "./protocol.json",
+      "logLevel": "DEBUG"
+    }
+  },
+  {
+    "timestamp": "2026-02-24T22:19:31.745Z",
+    "level": "INFO",
+    "component": "store",
+    "event": "user_registered",
+    "data": {
+      "id": "d5d5ee00-b470-4797-b793-bcc20da41110",
+      "name": "User"
+    }
+  },
+  {
+    "timestamp": "2026-02-24T22:19:31.745Z",
+    "level": "INFO",
+    "component": "store",
+    "event": "agent_registered",
+    "data": {
+      "id": "04f1584b-5a12-4a5f-a5b6-4aa7ba36f449",
+      "name": "Atlas - Research",
+      "skills": [
+        "general-knowledge",
+        "research"
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-02-24T22:19:31.745Z",
+    "level": "INFO",
+    "component": "store",
+    "event": "agent_registered",
+    "data": {
+      "id": "cc920405-b2ff-4f0d-a3f6-90848a4818a6",
+      "name": "Sage - Creative",
+      "skills": [
+        "creative-writing",
+        "brainstorming"
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-02-24T22:19:31.745Z",
+    "level": "INFO",
+    "component": "store",
+    "event": "agent_registered",
+    "data": {
+      "id": "74a7584c-ca33-4dfd-b6cb-daa0118c37fa",
+      "name": "Bolt - Technical",
+      "skills": [
+        "coding",
+        "technical"
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-02-24T22:19:31.745Z",
+    "level": "INFO",
+    "component": "init",
+    "event": "agents_ready",
+    "data": {
+      "agents": [
+        {
+          "name": "Atlas - Research",
+          "skills": [
+            "general-knowledge",
+            "research"
+          ]
+        },
+        {
+          "name": "Sage - Creative",
+          "skills": [
+            "creative-writing",
+            "brainstorming"
+          ]
+        },
+        {
+          "name": "Bolt - Technical",
+          "skills": [
+            "coding",
+            "technical"
+          ]
+        }
+      ]
+    }
+  }
 ]

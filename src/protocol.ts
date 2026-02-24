@@ -22,7 +22,7 @@ export async function broadcastRequest(
 		type: "REQUEST",
 		payload: message,
 		from: userId,
-		to: "*",
+		to: ["*"],
 	});
 
 	log.info("protocol", "broadcast_start", {

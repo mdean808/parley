@@ -19,15 +19,18 @@ export interface Message {
 	type: MessageType;
 	payload: string;
 	from: string;
-	to: string;
+	to: string[];
 }
 
 export interface MessageFilter {
 	id?: string;
 	chainId?: string;
+	replyTo?: string;
+	timestamp?: string;
 	from?: string;
 	to?: string;
 	type?: MessageType;
+	payload?: string;
 }
 
 export interface AgentPersona {
