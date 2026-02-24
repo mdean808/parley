@@ -1,15 +1,20 @@
 {
-  "name": "simple-implementation",
-  "module": "index.ts",
-  "type": "module",
-  "devDependencies": {
-    "@types/bun": "latest"
-  },
-  "peerDependencies": {
-    "typescript": "^5.0.0"
-  },
-  "dependencies": {
-    "@anthropic-ai/sdk": "^0.78.0",
-    "@toon-format/toon": "^2.1.0"
-  }
+	"name": "simple-implementation",
+	"module": "index.ts",
+	"type": "module",
+	"devDependencies": {
+		"@biomejs/biome": "2.4.4",
+		"@types/bun": "latest",
+		"@types/marked-terminal": "^6.1.1"
+	},
+	"peerDependencies": {
+		"typescript": "^5.0.0"
+	},
+	"dependencies": {
+		"@anthropic-ai/sdk": "^0.78.0",
+		"@toon-format/toon": "^2.1.0",
+		"chalk": "^5.6.2",
+		"marked": "^17.0.3",
+		"marked-terminal": "^7.3.0"
+	}
 }
