@@ -122,7 +122,7 @@ export class Store {
 		const completeToon = encodeMessage(message);
 
 		this.messages.push(message);
-		log.debug("store", "message_stored", { ...message });
+		log.debug("store", "message_stored", { toon: completeToon });
 
 		// Notify subscribers via queueMicrotask to prevent re-entrant issues
 		const senderId = message.from;

@@ -1,4 +1,4 @@
-import { writeFileSync } from "node:fs";
+import { mkdir } from "node:fs/promises";
 
 type LogLevel = "DEBUG" | "INFO" | "WARN" | "ERROR";
 
@@ -10,11 +10,16 @@ const LEVELS: Record<LogLevel, number> = {
 	ERROR: 3,
 };
 
-const LOG_FILE: string = process.env.LOG_FILE || "./logs/protocol.json";
+const LOG_DIR: string = process.env.LOG_DIR || "./logs";
+const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+const LOG_FILE = `${LOG_DIR}/${timestamp}.json`;
 const LOG_LEVEL: LogLevel =
 	(process.env.LOG_LEVEL as LogLevel) in LEVELS
 		? (process.env.LOG_LEVEL as LogLevel)
 		: "DEBUG";
+
+// Ensure log directory exists
+await mkdir(LOG_DIR, { recursive: true });
 
 /** A structured log entry written to the protocol JSON log file. */
 interface LogEntry {
@@ -29,7 +34,7 @@ const entries: LogEntry[] = [];
 
 /** Writes all accumulated log entries to the log file. */
 function flush(): void {
-	writeFileSync(LOG_FILE, `${JSON.stringify(entries, null, 2)}\n`);
+	Bun.write(LOG_FILE, `${JSON.stringify(entries, null, 2)}\n`);
 }
 
 /**
