@@ -4,20 +4,26 @@ import { store } from "./store.ts";
 import { encodeOutbound } from "./toon.ts";
 import type { Agent, Message } from "./types.ts";
 
-const MODEL = process.env.MODEL || "claude-haiku-4-5-20251001";
-const client = new Anthropic();
+const MODEL: string = process.env.MODEL || "claude-haiku-4-5-20251001";
+const client: Anthropic = new Anthropic();
 
+/**
+ * An event-driven protocol agent that subscribes to the store, evaluates
+ * incoming REQUESTs against its skills via an LLM call, and follows the
+ * ACK → PROCESS → RESPONSE state machine for relevant requests.
+ */
 export class ProtocolAgent {
-	agent: Agent;
-	systemPrompt: string;
+	readonly agent: Agent;
+	readonly systemPrompt: string;
 
 	constructor(agent: Agent, systemPrompt: string) {
 		this.agent = agent;
 		this.systemPrompt = systemPrompt;
 	}
 
+	/** Subscribes this agent to the store to begin receiving messages. */
 	start(): void {
-		store.subscribe(this.agent.id, (toonMessage, message) =>
+		store.subscribe(this.agent.id, (toonMessage: string, message: Message) =>
 			this.onMessage(toonMessage, message),
 		);
 		log.info(`agent:${this.agent.name}`, "subscribed", {
@@ -25,6 +31,7 @@ export class ProtocolAgent {
 		});
 	}
 
+	/** Unsubscribes this agent from the store, stopping message delivery. */
 	stop(): void {
 		store.unsubscribe(this.agent.id);
 		log.info(`agent:${this.agent.name}`, "unsubscribed", {
@@ -32,15 +39,23 @@ export class ProtocolAgent {
 		});
 	}
 
+	/**
+	 * Handles an incoming message from the store. Ignores non-REQUEST messages.
+	 * For REQUESTs, evaluates skill relevance, then sends ACK → PROCESS → RESPONSE
+	 * via `store.sendMessage()`. Stores LLM metadata on the RESPONSE.
+	 * If the LLM call fails after ACK, still sends an error RESPONSE to fulfill the ACK contract.
+	 * @param toonMessage - The TOON-encoded message string (passed to the LLM).
+	 * @param message - The decoded Message object.
+	 */
 	private async onMessage(
 		toonMessage: string,
 		message: Message,
 	): Promise<void> {
 		if (message.type !== "REQUEST") return;
 
-		const component = `agent:${this.agent.name}`;
+		const component: string = `agent:${this.agent.name}`;
 
-		const relevant = await this.shouldHandle(message);
+		const relevant: boolean = await this.shouldHandle(message);
 		if (!relevant) {
 			log.info(component, "request_declined", {
 				requestId: message.id,
@@ -88,16 +103,16 @@ export class ProtocolAgent {
 				model: MODEL,
 				requestPayload: message.payload,
 			});
-			const start = performance.now();
+			const start: number = performance.now();
 			const completion = await client.messages.create({
 				model: MODEL,
 				max_tokens: 1024,
 				system: this.systemPrompt,
 				messages: [{ role: "user", content: toonMessage }],
 			});
-			const durationMs = performance.now() - start;
+			const durationMs: number = performance.now() - start;
 
-			const responseText =
+			const responseText: string =
 				completion.content[0].type === "text" ? completion.content[0].text : "";
 
 			log.debug(component, "llm_call_complete", {
@@ -111,7 +126,7 @@ export class ProtocolAgent {
 			});
 
 			// RESPONSE
-			const response = store.sendMessage(
+			const response: Message = store.sendMessage(
 				encodeOutbound({
 					chainId: message.chainId,
 					replyTo: message.id,
@@ -136,8 +151,8 @@ export class ProtocolAgent {
 				model: MODEL,
 				durationMs,
 			});
-		} catch (error) {
-			const errorMessage =
+		} catch (error: unknown) {
+			const errorMessage: string =
 				error instanceof Error ? error.message : String(error);
 			log.error(component, "llm_call_failed", {
 				chainId: message.chainId,
@@ -159,9 +174,16 @@ export class ProtocolAgent {
 		}
 	}
 
+	/**
+	 * Uses an LLM call to determine which skills from across all agents are relevant
+	 * to the request, then checks whether this agent holds any of those skills.
+	 * Returns true if no skills are identified (fallback: handle everything).
+	 * @param request - The incoming REQUEST message to evaluate.
+	 * @returns Whether this agent should handle the request.
+	 */
 	private async shouldHandle(request: Message): Promise<boolean> {
-		const component = `agent:${this.agent.name}`;
-		const allSkills = [
+		const component: string = `agent:${this.agent.name}`;
+		const allSkills: string[] = [
 			...new Set(store.getAllAgents().flatMap((a) => a.skills)),
 		];
 
@@ -186,9 +208,9 @@ Reply with ONLY the relevant skill names, comma-separated. If none match, reply 
 			],
 		});
 
-		const responseText =
+		const responseText: string =
 			completion.content[0].type === "text" ? completion.content[0].text : "";
-		const neededSkills = responseText
+		const neededSkills: string[] = responseText
 			.toLowerCase()
 			.split(",")
 			.map((s) => s.trim())
@@ -203,8 +225,10 @@ Reply with ONLY the relevant skill names, comma-separated. If none match, reply 
 			return true;
 		}
 
-		const matchingAgents = store.queryAgents(neededSkills);
-		const shouldHandle = matchingAgents.some((a) => a.id === this.agent.id);
+		const matchingAgents: Agent[] = store.queryAgents(neededSkills);
+		const shouldHandle: boolean = matchingAgents.some(
+			(a) => a.id === this.agent.id,
+		);
 
 		log.debug(component, "skill_eval_result", {
 			llmResponse: responseText,

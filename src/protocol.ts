@@ -10,30 +10,48 @@ import { store } from "./store.ts";
 import { encodeOutbound } from "./toon.ts";
 import type { AgentResult, Message } from "./types.ts";
 
-const ACK_WINDOW_MS = 5_000;
-const HARD_TIMEOUT_MS = 30_000;
+/** Maximum time (ms) to wait for agents to send ACKs before assuming they declined. */
+const ACK_WINDOW_MS: number = 5_000;
 
+/** Maximum time (ms) to wait for all responses before resolving with whatever has arrived. */
+const HARD_TIMEOUT_MS: number = 30_000;
+
+/**
+ * Sends a user's request to all agents via the store's pub/sub system and
+ * collects responses. Subscribes the user as a response collector, encodes
+ * the REQUEST as TOON, and waits using a two-phase timeout:
+ *
+ * 1. ACK window (5s): if no agent ACKs within this period, resolves immediately.
+ * 2. Hard timeout (30s): resolves with whatever responses have arrived.
+ * 3. Early resolve: completes as soon as all ACKed agents have sent RESPONSE.
+ *
+ * Displays agent responses and a summary block to the terminal.
+ *
+ * @param userId - The ID of the user sending the request.
+ * @param message - The user's request text.
+ */
 export async function sendUserRequest(
 	userId: string,
 	message: string,
 ): Promise<void> {
-	const chainId = crypto.randomUUID();
+	const chainId: string = crypto.randomUUID();
 
-	const ackedAgentIds = new Set<string>();
+	const ackedAgentIds: Set<string> = new Set<string>();
 	const responses: Map<string, Message> = new Map();
 
 	let resolveCollector: () => void;
-	const collectorDone = new Promise<void>((resolve) => {
+	const collectorDone: Promise<void> = new Promise<void>((resolve) => {
 		resolveCollector = resolve;
 	});
 
+	/** Resolves the collector promise once all ACKed agents have responded. */
 	function checkComplete(): void {
 		if (ackedAgentIds.size > 0 && ackedAgentIds.size === responses.size) {
 			resolveCollector();
 		}
 	}
 
-	store.subscribe(userId, (_toonMessage, msg) => {
+	store.subscribe(userId, (_toonMessage: string, msg: Message) => {
 		if (msg.chainId !== chainId) return;
 
 		if (msg.type === "ACK") {
@@ -44,7 +62,7 @@ export async function sendUserRequest(
 		}
 	});
 
-	const request = store.sendMessage(
+	const request: Message = store.sendMessage(
 		encodeOutbound({
 			chainId,
 			replyTo: undefined,
@@ -62,18 +80,18 @@ export async function sendUserRequest(
 		requestId: request.id,
 	});
 
-	const broadcastStart = performance.now();
+	const broadcastStart: number = performance.now();
 	const spinner = createSpinner("Waiting for agents...");
 
 	// Wait for ACK window, then hard timeout, or early resolve
-	const ackWindowTimeout = setTimeout(() => {
+	const ackWindowTimeout: ReturnType<typeof setTimeout> = setTimeout(() => {
 		// After ACK window, if no agents ACKed, resolve immediately
 		if (ackedAgentIds.size === 0) {
 			resolveCollector();
 		}
 	}, ACK_WINDOW_MS);
 
-	const hardTimeout = setTimeout(() => {
+	const hardTimeout: ReturnType<typeof setTimeout> = setTimeout(() => {
 		resolveCollector();
 	}, HARD_TIMEOUT_MS);
 
@@ -84,7 +102,7 @@ export async function sendUserRequest(
 	spinner.stop();
 	store.unsubscribe(userId);
 
-	const totalDurationMs = performance.now() - broadcastStart;
+	const totalDurationMs: number = performance.now() - broadcastStart;
 
 	if (responses.size === 0) {
 		log.warn("protocol", "no_agents_matched", {
@@ -112,7 +130,7 @@ export async function sendUserRequest(
 		});
 	}
 
-	const respondedAgents = results.map((r) => r.agentName);
+	const respondedAgents: string[] = results.map((r) => r.agentName);
 	log.info("protocol", "request_complete", {
 		chainId,
 		respondedAgents,

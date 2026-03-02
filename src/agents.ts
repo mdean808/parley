@@ -2,7 +2,7 @@ import { ProtocolAgent } from "./agent.ts";
 import { store } from "./store.ts";
 import type { AgentPersona } from "./types.ts";
 
-const TOON_NOTE =
+const TOON_NOTE: string =
 	" You receive messages encoded in TOON (Token Object Over Network) format. Extract the payload field from the TOON message to understand the user's request, and respond with plain text.";
 
 const personas: AgentPersona[] = [
@@ -29,8 +29,13 @@ const personas: AgentPersona[] = [
 	},
 ];
 
+/**
+ * Creates and starts all pre-configured agent personas.
+ * Each agent is registered in the store and subscribed to receive messages.
+ * @returns The array of started ProtocolAgent instances.
+ */
 export function createAgents(): ProtocolAgent[] {
-	return personas.map((persona) => {
+	return personas.map((persona: AgentPersona) => {
 		const agent = store.registerAgent(persona.name, persona.skills);
 		const protocolAgent = new ProtocolAgent(agent, persona.systemPrompt);
 		protocolAgent.start();

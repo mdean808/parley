@@ -9,6 +9,10 @@ import type {
 	User,
 } from "./types.ts";
 
+/**
+ * Central store for users, agents, and messages.
+ * Provides pub/sub message delivery and metadata side-channel for LLM stats.
+ */
 export class Store {
 	private users: User[] = [];
 	private agents: Agent[] = [];
@@ -16,6 +20,11 @@ export class Store {
 	private subscribers: Map<string, MessageHandler> = new Map();
 	private messageMeta: Map<string, MessageMeta> = new Map();
 
+	/**
+	 * Registers a new user with a generated UUID.
+	 * @param name - Display name for the user.
+	 * @returns The created User.
+	 */
 	registerUser(name: string): User {
 		const user: User = { id: crypto.randomUUID(), name };
 		this.users.push(user);
@@ -23,10 +32,21 @@ export class Store {
 		return user;
 	}
 
+	/**
+	 * Retrieves users by their IDs.
+	 * @param ids - Array of user IDs to look up.
+	 * @returns Matching users.
+	 */
 	getUser(ids: string[]): User[] {
 		return this.users.filter((u) => ids.includes(u.id));
 	}
 
+	/**
+	 * Registers a new agent with a generated UUID.
+	 * @param name - Display name for the agent.
+	 * @param skills - List of skill identifiers the agent can handle.
+	 * @returns The created Agent.
+	 */
 	registerAgent(name: string, skills: string[]): Agent {
 		const agent: Agent = { id: crypto.randomUUID(), name, skills };
 		this.agents.push(agent);
@@ -34,38 +54,78 @@ export class Store {
 		return agent;
 	}
 
+	/**
+	 * Retrieves agents by their IDs.
+	 * @param ids - Array of agent IDs to look up.
+	 * @returns Matching agents.
+	 */
 	getAgent(ids: string[]): Agent[] {
 		return this.agents.filter((a) => ids.includes(a.id));
 	}
 
+	/** Returns a shallow copy of all registered agents. */
 	getAllAgents(): Agent[] {
 		return [...this.agents];
 	}
 
+	/**
+	 * Finds agents that have at least one of the given skills.
+	 * @param skills - Skill identifiers to match against.
+	 * @returns Agents with at least one matching skill.
+	 */
 	queryAgents(skills: string[]): Agent[] {
 		return this.agents.filter((a) =>
 			skills.some((skill) => a.skills.includes(skill)),
 		);
 	}
 
+	/**
+	 * Subscribes an entity (agent or user) to receive messages addressed to it.
+	 * @param entityId - The subscriber's ID (agent or user UUID).
+	 * @param handler - Callback invoked with the TOON string and decoded message.
+	 */
 	subscribe(entityId: string, handler: MessageHandler): void {
 		this.subscribers.set(entityId, handler);
 		log.debug("store", "subscribed", { entityId });
 	}
 
+	/**
+	 * Removes an entity's subscription.
+	 * @param entityId - The subscriber's ID to remove.
+	 */
 	unsubscribe(entityId: string): void {
 		this.subscribers.delete(entityId);
 		log.debug("store", "unsubscribed", { entityId });
 	}
 
+	/**
+	 * Stores LLM usage/timing metadata for a message (side-channel, not part of TOON).
+	 * @param messageId - The message ID to associate metadata with.
+	 * @param meta - The metadata to store.
+	 */
 	setMessageMeta(messageId: string, meta: MessageMeta): void {
 		this.messageMeta.set(messageId, meta);
 	}
 
+	/**
+	 * Retrieves LLM usage/timing metadata for a message.
+	 * @param messageId - The message ID to look up.
+	 * @returns The metadata, or undefined if not set.
+	 */
 	getMessageMeta(messageId: string): MessageMeta | undefined {
 		return this.messageMeta.get(messageId);
 	}
 
+	/**
+	 * Decodes a TOON-encoded message, assigns an id and timestamp, persists it,
+	 * and notifies matching subscribers via `queueMicrotask`.
+	 *
+	 * Broadcast messages (`to: ["*"]`) are delivered to all subscribers except the sender.
+	 * Targeted messages are delivered only to listed recipients.
+	 *
+	 * @param toonString - The TOON-encoded message string (id/timestamp may be placeholders).
+	 * @returns The persisted Message with assigned id and timestamp.
+	 */
 	sendMessage(toonString: string): Message {
 		const decoded = decodeMessage(toonString);
 
@@ -95,6 +155,13 @@ export class Store {
 		return message;
 	}
 
+	/**
+	 * Queries stored messages matching the given filter criteria.
+	 * All specified fields are ANDed together. The `to` field matches if the
+	 * message's recipient list includes the given value.
+	 * @param filter - Partial message fields to match against.
+	 * @returns Messages matching all filter criteria.
+	 */
 	getMessages(filter: MessageFilter): Message[] {
 		return this.messages.filter((m) => {
 			for (const [key, value] of Object.entries(filter)) {
