@@ -1,24 +1,22 @@
-import { log } from "./logger.ts";
-import { decodeMessage, encodeMessage } from "./toon.ts";
 import type {
 	Agent,
 	Message,
 	MessageFilter,
 	MessageHandler,
-	MessageMeta,
 	User,
-} from "./types.ts";
+} from "../../types.ts";
+import { log } from "./logger.ts";
+import { decodeMessage, encodeMessage } from "./toon.ts";
 
 /**
  * Central store for users, agents, and messages.
- * Provides pub/sub message delivery and metadata side-channel for LLM stats.
+ * Provides pub/sub message delivery.
  */
 export class Store {
 	private users: User[] = [];
 	private agents: Agent[] = [];
 	private messages: Message[] = [];
 	private subscribers: Map<string, MessageHandler> = new Map();
-	private messageMeta: Map<string, MessageMeta> = new Map();
 
 	/**
 	 * Registers a new user with a generated UUID.
@@ -63,22 +61,6 @@ export class Store {
 		return this.agents.filter((a) => ids.includes(a.id));
 	}
 
-	/** Returns a shallow copy of all registered agents. */
-	getAllAgents(): Agent[] {
-		return [...this.agents];
-	}
-
-	/**
-	 * Finds agents that have at least one of the given skills.
-	 * @param skills - Skill identifiers to match against.
-	 * @returns Agents with at least one matching skill.
-	 */
-	queryAgents(skills: string[]): Agent[] {
-		return this.agents.filter((a) =>
-			skills.some((skill) => a.skills.includes(skill)),
-		);
-	}
-
 	/**
 	 * Subscribes an entity (agent or user) to receive messages addressed to it.
 	 * @param entityId - The subscriber's ID (agent or user UUID).
@@ -96,24 +78,6 @@ export class Store {
 	unsubscribe(entityId: string): void {
 		this.subscribers.delete(entityId);
 		log.debug("store", "unsubscribed", { entityId });
-	}
-
-	/**
-	 * Stores LLM usage/timing metadata for a message (side-channel, not part of TOON).
-	 * @param messageId - The message ID to associate metadata with.
-	 * @param meta - The metadata to store.
-	 */
-	setMessageMeta(messageId: string, meta: MessageMeta): void {
-		this.messageMeta.set(messageId, meta);
-	}
-
-	/**
-	 * Retrieves LLM usage/timing metadata for a message.
-	 * @param messageId - The message ID to look up.
-	 * @returns The metadata, or undefined if not set.
-	 */
-	getMessageMeta(messageId: string): MessageMeta | undefined {
-		return this.messageMeta.get(messageId);
 	}
 
 	/**

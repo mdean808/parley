@@ -33,30 +33,33 @@ No test runner is configured yet.
 ## Project Structure
 
 ```
-index.ts          — Entry point: REPL loop, user registration, agent init
+index.ts                              — Entry point: wires personas + brain into protocol
 src/
-  types.ts        — Type definitions (User, Agent, Message, AgentPersona, etc.)
-  store.ts        — Central Store: in-memory state for users, agents, messages
-  toon.ts         — TOON format encoding/decoding via @toon-format/toon
-  agent.ts        — ProtocolAgent class: LLM-based request handling + state machine
-  agents.ts       — Agent persona factory (Atlas, Sage, Bolt)
-  protocol.ts     — broadcastRequest(): parallel agent invocation + result collection
-  logger.ts       — Structured JSON event logging to protocol.json
-  display.ts      — Terminal UI: markdown rendering, stats, spinners, cost tracking
+  types.ts                            — Shared types (User, Agent, Message, AgentBrain, etc.)
+  agents.ts                           — Agent persona definitions (Atlas, Sage, Bolt)
+  brain.ts                            — ClaudeBrain: LLM logic (Anthropic SDK calls)
+  chat/
+    display.ts                        — Terminal UI: markdown rendering, stats, spinners, cost tracking
+  protocols/
+    default/
+      index.ts                        — Barrel file, re-exports DefaultProtocol
+      protocol.ts                     — DefaultProtocol: accepts config, manages routing + collection
+      agent.ts                        — ProtocolAgent: pure state machine, delegates to AgentBrain
+      store.ts                        — Central Store: in-memory state for users, agents, messages
+      toon.ts                         — TOON format encoding/decoding via @toon-format/toon
+      logger.ts                       — Structured JSON event logging to protocol.json
 ```
 
 ## Architecture
 
 ### Core Components
 
-- **Central Store** (`src/store.ts`): In-memory state management for users, agents, and messages. Operations: registerUser, getUser, registerAgent, getAgent, getAllAgents, queryAgents, storeMessage, getMessages.
-- **ProtocolAgent** (`src/agent.ts`): AI agent that evaluates incoming requests against its skills using an LLM call, then follows the protocol state machine (ACK → PROCESS → RESPONSE). Silently declines irrelevant requests by returning null.
-- **Agent Personas** (`src/agents.ts`): Three pre-configured agents:
-  - **Atlas** — Research (skills: general-knowledge, research)
-  - **Sage** — Creative (skills: creative-writing, brainstorming)
-  - **Bolt** — Technical (skills: coding, technical)
-- **Protocol** (`src/protocol.ts`): `broadcastRequest()` sends a user's request to all agents in parallel, collects responses, logs events, and displays results.
-- **TOON** (`src/toon.ts`): Encodes/decodes messages using the TOON format.
+- **AgentBrain** (`src/brain.ts`): `ClaudeBrain` class implementing the `AgentBrain` interface. Contains all LLM logic (skill evaluation via `shouldHandle()`, response generation via `generateResponse()`). Zero protocol dependencies — imports only `@anthropic-ai/sdk` and `src/types.ts`.
+- **Agent Personas** (`src/agents.ts`): Three pre-configured agent persona definitions (Atlas, Sage, Bolt). Pure data — no protocol or LLM dependencies.
+- **Central Store** (`src/protocols/default/store.ts`): In-memory state management for users, agents, and messages. Operations: registerUser, getUser, registerAgent, getAgent, sendMessage, getMessages.
+- **ProtocolAgent** (`src/protocols/default/agent.ts`): Pure protocol state machine (ACK → PROCESS → RESPONSE). Delegates skill evaluation and response generation to an injected `AgentBrain`.
+- **Protocol** (`src/protocols/default/protocol.ts`): `DefaultProtocol` accepts a config with personas and a `createBrain` factory. Owns wire-format instructions (TOON_NOTE). Manages brain metadata collection.
+- **TOON** (`src/protocols/default/toon.ts`): Encodes/decodes messages using the TOON format.
 
 ### Message State Machine
 

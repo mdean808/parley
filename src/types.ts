@@ -48,8 +48,25 @@ export interface AgentPersona {
 /** Callback invoked when a subscriber receives a message from the store. */
 export type MessageHandler = (toonMessage: string, message: Message) => void;
 
-/** LLM usage and timing metadata stored as a side-channel alongside TOON messages. */
-export interface MessageMeta {
+/** Application-level brain injected into the protocol. */
+export interface AgentBrain {
+	shouldHandle(request: BrainRequest): Promise<boolean>;
+	generateResponse(request: BrainRequest): Promise<BrainResponse>;
+}
+
+export interface BrainRequest {
+	agent: Agent;
+	payload: string;
+	rawMessage: string;
+	allSkills: string[];
+}
+
+export interface BrainResponse {
+	text: string;
+	meta: BrainMeta;
+}
+
+export interface BrainMeta {
 	usage: { inputTokens: number; outputTokens: number };
 	model: string;
 	durationMs: number;
@@ -60,7 +77,31 @@ export interface AgentResult {
 	agentName: string;
 	skills: string[];
 	response: Message;
-	usage: { inputTokens: number; outputTokens: number };
-	model: string;
-	durationMs: number;
+	usage?: { inputTokens: number; outputTokens: number };
+	model?: string;
+	durationMs?: number;
+}
+
+/** Summary info about an agent exposed to the chat application layer. */
+export interface ProtocolAgentInfo {
+	name: string;
+	skills: string[];
+}
+
+/** Returned by Protocol.initialize() with the registered user and agent list. */
+export interface ProtocolInit {
+	userId: string;
+	userName: string;
+	agents: ProtocolAgentInfo[];
+}
+
+/** Returned by Protocol.sendRequest() with the collected agent results. */
+export interface ProtocolResponse {
+	results: AgentResult[];
+}
+
+/** Abstraction over the agent-to-agent protocol so the chat app can swap implementations. */
+export interface Protocol {
+	initialize(userName: string): ProtocolInit | Promise<ProtocolInit>;
+	sendRequest(userId: string, message: string): Promise<ProtocolResponse>;
 }

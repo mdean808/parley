@@ -1,6 +1,6 @@
 [
   {
-    "timestamp": "2026-02-24T22:37:34.468Z",
+    "timestamp": "2026-03-02T02:34:27.495Z",
     "level": "INFO",
     "component": "init",
     "event": "session_start",
@@ -10,22 +10,22 @@
     }
   },
   {
-    "timestamp": "2026-02-24T22:37:34.479Z",
+    "timestamp": "2026-03-02T02:34:27.497Z",
     "level": "INFO",
     "component": "store",
     "event": "user_registered",
     "data": {
-      "id": "33809c29-6de7-4291-bfb6-927b889c8034",
+      "id": "5a842f67-e67b-4b58-b4db-347813921b06",
       "name": "User"
     }
   },
   {
-    "timestamp": "2026-02-24T22:37:34.479Z",
+    "timestamp": "2026-03-02T02:34:27.498Z",
     "level": "INFO",
     "component": "store",
     "event": "agent_registered",
     "data": {
-      "id": "af250ebd-3d69-45ad-b1b7-cd1f863c1757",
+      "id": "a5a356af-223d-4042-9c9a-c93c84e2b2d4",
       "name": "Atlas - Research",
       "skills": [
         "general-knowledge",
@@ -34,12 +34,30 @@
     }
   },
   {
-    "timestamp": "2026-02-24T22:37:34.479Z",
+    "timestamp": "2026-03-02T02:34:27.498Z",
+    "level": "DEBUG",
+    "component": "store",
+    "event": "subscribed",
+    "data": {
+      "entityId": "a5a356af-223d-4042-9c9a-c93c84e2b2d4"
+    }
+  },
+  {
+    "timestamp": "2026-03-02T02:34:27.498Z",
+    "level": "INFO",
+    "component": "agent:Atlas - Research",
+    "event": "subscribed",
+    "data": {
+      "agentId": "a5a356af-223d-4042-9c9a-c93c84e2b2d4"
+    }
+  },
+  {
+    "timestamp": "2026-03-02T02:34:27.498Z",
     "level": "INFO",
     "component": "store",
     "event": "agent_registered",
     "data": {
-      "id": "718e3fa1-2a4c-47c6-b502-31cf0d7b062d",
+      "id": "95d45200-e7b8-45c9-bc26-5314edcae718",
       "name": "Sage - Creative",
       "skills": [
         "creative-writing",
@@ -48,12 +66,30 @@
     }
   },
   {
-    "timestamp": "2026-02-24T22:37:34.479Z",
+    "timestamp": "2026-03-02T02:34:27.498Z",
+    "level": "DEBUG",
+    "component": "store",
+    "event": "subscribed",
+    "data": {
+      "entityId": "95d45200-e7b8-45c9-bc26-5314edcae718"
+    }
+  },
+  {
+    "timestamp": "2026-03-02T02:34:27.498Z",
+    "level": "INFO",
+    "component": "agent:Sage - Creative",
+    "event": "subscribed",
+    "data": {
+      "agentId": "95d45200-e7b8-45c9-bc26-5314edcae718"
+    }
+  },
+  {
+    "timestamp": "2026-03-02T02:34:27.498Z",
     "level": "INFO",
     "component": "store",
     "event": "agent_registered",
     "data": {
-      "id": "d89036ce-2638-47a0-969c-91552eaf01ac",
+      "id": "62bcf407-f123-4236-a939-a0ea0fad284c",
       "name": "Bolt - Technical",
       "skills": [
         "coding",
@@ -62,7 +98,25 @@
     }
   },
   {
-    "timestamp": "2026-02-24T22:37:34.479Z",
+    "timestamp": "2026-03-02T02:34:27.498Z",
+    "level": "DEBUG",
+    "component": "store",
+    "event": "subscribed",
+    "data": {
+      "entityId": "62bcf407-f123-4236-a939-a0ea0fad284c"
+    }
+  },
+  {
+    "timestamp": "2026-03-02T02:34:27.498Z",
+    "level": "INFO",
+    "component": "agent:Bolt - Technical",
+    "event": "subscribed",
+    "data": {
+      "agentId": "62bcf407-f123-4236-a939-a0ea0fad284c"
+    }
+  },
+  {
+    "timestamp": "2026-03-02T02:34:27.498Z",
     "level": "INFO",
     "component": "init",
     "event": "agents_ready",
@@ -90,6 +144,342 @@
           ]
         }
       ]
+    }
+  },
+  {
+    "timestamp": "2026-03-02T02:34:37.145Z",
+    "level": "DEBUG",
+    "component": "store",
+    "event": "subscribed",
+    "data": {
+      "entityId": "5a842f67-e67b-4b58-b4db-347813921b06"
+    }
+  },
+  {
+    "timestamp": "2026-03-02T02:34:37.152Z",
+    "level": "DEBUG",
+    "component": "store",
+    "event": "message_stored",
+    "data": {
+      "chainId": "42dcfc2e-b93f-46c6-9a8b-578f4db2f2c6",
+      "type": "REQUEST",
+      "payload": "I want to learn about how much caffiene is in coke",
+      "from": "5a842f67-e67b-4b58-b4db-347813921b06",
+      "to": [
+        "*"
+      ],
+      "id": "74955cce-4e2e-4bf9-a3e6-c1cae17caf84",
+      "timestamp": "2026-03-02T02:34:37.152Z"
+    }
+  },
+  {
+    "timestamp": "2026-03-02T02:34:37.152Z",
+    "level": "INFO",
+    "component": "protocol",
+    "event": "request_sent",
+    "data": {
+      "chainId": "42dcfc2e-b93f-46c6-9a8b-578f4db2f2c6",
+      "userId": "5a842f67-e67b-4b58-b4db-347813921b06",
+      "payload": "I want to learn about how much caffiene is in coke",
+      "requestId": "74955cce-4e2e-4bf9-a3e6-c1cae17caf84"
+    }
+  },
+  {
+    "timestamp": "2026-03-02T02:34:37.777Z",
+    "level": "INFO",
+    "component": "agent:Bolt - Technical",
+    "event": "request_declined",
+    "data": {
+      "requestId": "74955cce-4e2e-4bf9-a3e6-c1cae17caf84",
+      "chainId": "42dcfc2e-b93f-46c6-9a8b-578f4db2f2c6",
+      "reason": "no matching skills"
+    }
+  },
+  {
+    "timestamp": "2026-03-02T02:34:38.077Z",
+    "level": "INFO",
+    "component": "agent:Sage - Creative",
+    "event": "request_declined",
+    "data": {
+      "requestId": "74955cce-4e2e-4bf9-a3e6-c1cae17caf84",
+      "chainId": "42dcfc2e-b93f-46c6-9a8b-578f4db2f2c6",
+      "reason": "no matching skills"
+    }
+  },
+  {
+    "timestamp": "2026-03-02T02:34:38.263Z",
+    "level": "DEBUG",
+    "component": "store",
+    "event": "message_stored",
+    "data": {
+      "chainId": "42dcfc2e-b93f-46c6-9a8b-578f4db2f2c6",
+      "replyTo": "74955cce-4e2e-4bf9-a3e6-c1cae17caf84",
+      "type": "ACK",
+      "payload": "Atlas - Research acknowledged request",
+      "from": "a5a356af-223d-4042-9c9a-c93c84e2b2d4",
+      "to": [
+        "5a842f67-e67b-4b58-b4db-347813921b06"
+      ],
+      "id": "40e9d2d9-bb74-4352-ac24-6f6dd6a71e55",
+      "timestamp": "2026-03-02T02:34:38.263Z"
+    }
+  },
+  {
+    "timestamp": "2026-03-02T02:34:38.263Z",
+    "level": "INFO",
+    "component": "agent:Atlas - Research",
+    "event": "ack_sent",
+    "data": {
+      "chainId": "42dcfc2e-b93f-46c6-9a8b-578f4db2f2c6",
+      "requestId": "74955cce-4e2e-4bf9-a3e6-c1cae17caf84"
+    }
+  },
+  {
+    "timestamp": "2026-03-02T02:34:38.264Z",
+    "level": "DEBUG",
+    "component": "store",
+    "event": "message_stored",
+    "data": {
+      "chainId": "42dcfc2e-b93f-46c6-9a8b-578f4db2f2c6",
+      "replyTo": "74955cce-4e2e-4bf9-a3e6-c1cae17caf84",
+      "type": "PROCESS",
+      "payload": "Atlas - Research will process this request using skills: general-knowledge, research. Analyzing: \"I want to learn about how much caffiene is in coke\"",
+      "from": "a5a356af-223d-4042-9c9a-c93c84e2b2d4",
+      "to": [
+        "5a842f67-e67b-4b58-b4db-347813921b06"
+      ],
+      "id": "3fd2eba4-af77-4916-812c-a5e00b136523",
+      "timestamp": "2026-03-02T02:34:38.264Z"
+    }
+  },
+  {
+    "timestamp": "2026-03-02T02:34:38.264Z",
+    "level": "INFO",
+    "component": "agent:Atlas - Research",
+    "event": "process_sent",
+    "data": {
+      "chainId": "42dcfc2e-b93f-46c6-9a8b-578f4db2f2c6",
+      "requestId": "74955cce-4e2e-4bf9-a3e6-c1cae17caf84"
+    }
+  },
+  {
+    "timestamp": "2026-03-02T02:34:41.669Z",
+    "level": "DEBUG",
+    "component": "store",
+    "event": "message_stored",
+    "data": {
+      "chainId": "42dcfc2e-b93f-46c6-9a8b-578f4db2f2c6",
+      "replyTo": "74955cce-4e2e-4bf9-a3e6-c1cae17caf84",
+      "type": "RESPONSE",
+      "payload": "# Caffeine Content in Coca-Cola\n\nA standard 12 oz (355 ml) can of **Coca-Cola contains approximately 34 mg of caffeine**.\n\n## Other Coca-Cola Products:\n- **Coca-Cola Diet/Zero**: ~46 mg per 12 oz\n- **Coca-Cola Cherry**: ~34 mg per 12 oz\n- **20 oz bottle**: ~57 mg\n- **2-liter bottle (per 12 oz serving)**: ~34 mg\n\n## Context:\n- This is roughly **one-third the caffeine** of a typical cup of brewed coffee (~95 mg per 8 oz)\n- Coca-Cola's caffeine comes from **kola nuts and synthetic caffeine**\n- Caffeine content can vary slightly by region and formulation\n\nFor the most current information, you can check the nutrition label on the specific product you're interested in.",
+      "from": "a5a356af-223d-4042-9c9a-c93c84e2b2d4",
+      "to": [
+        "5a842f67-e67b-4b58-b4db-347813921b06"
+      ],
+      "id": "d3a9751d-ebbf-4c9c-98e8-8037061589d0",
+      "timestamp": "2026-03-02T02:34:41.669Z"
+    }
+  },
+  {
+    "timestamp": "2026-03-02T02:34:41.669Z",
+    "level": "INFO",
+    "component": "agent:Atlas - Research",
+    "event": "response_sent",
+    "data": {
+      "chainId": "42dcfc2e-b93f-46c6-9a8b-578f4db2f2c6",
+      "requestId": "74955cce-4e2e-4bf9-a3e6-c1cae17caf84",
+      "responseId": "d3a9751d-ebbf-4c9c-98e8-8037061589d0",
+      "payloadLength": 671
+    }
+  },
+  {
+    "timestamp": "2026-03-02T02:34:41.669Z",
+    "level": "DEBUG",
+    "component": "store",
+    "event": "unsubscribed",
+    "data": {
+      "entityId": "5a842f67-e67b-4b58-b4db-347813921b06"
+    }
+  },
+  {
+    "timestamp": "2026-03-02T02:34:41.670Z",
+    "level": "INFO",
+    "component": "protocol",
+    "event": "request_complete",
+    "data": {
+      "chainId": "42dcfc2e-b93f-46c6-9a8b-578f4db2f2c6",
+      "respondedAgents": [
+        "Atlas - Research"
+      ],
+      "totalDurationMs": 4517.052041000001
+    }
+  },
+  {
+    "timestamp": "2026-03-02T02:35:10.909Z",
+    "level": "DEBUG",
+    "component": "store",
+    "event": "subscribed",
+    "data": {
+      "entityId": "5a842f67-e67b-4b58-b4db-347813921b06"
+    }
+  },
+  {
+    "timestamp": "2026-03-02T02:35:10.910Z",
+    "level": "DEBUG",
+    "component": "store",
+    "event": "message_stored",
+    "data": {
+      "chainId": "f7da396f-62c6-44c5-a170-b88ec2ab6b47",
+      "type": "REQUEST",
+      "payload": "I need a short story about a coke can and a pepsi can putting aside their differences",
+      "from": "5a842f67-e67b-4b58-b4db-347813921b06",
+      "to": [
+        "*"
+      ],
+      "id": "555ecd05-76c4-49e5-9e45-93dc56041ff7",
+      "timestamp": "2026-03-02T02:35:10.910Z"
+    }
+  },
+  {
+    "timestamp": "2026-03-02T02:35:10.910Z",
+    "level": "INFO",
+    "component": "protocol",
+    "event": "request_sent",
+    "data": {
+      "chainId": "f7da396f-62c6-44c5-a170-b88ec2ab6b47",
+      "userId": "5a842f67-e67b-4b58-b4db-347813921b06",
+      "payload": "I need a short story about a coke can and a pepsi can putting aside their differences",
+      "requestId": "555ecd05-76c4-49e5-9e45-93dc56041ff7"
+    }
+  },
+  {
+    "timestamp": "2026-03-02T02:35:11.408Z",
+    "level": "INFO",
+    "component": "agent:Atlas - Research",
+    "event": "request_declined",
+    "data": {
+      "requestId": "555ecd05-76c4-49e5-9e45-93dc56041ff7",
+      "chainId": "f7da396f-62c6-44c5-a170-b88ec2ab6b47",
+      "reason": "no matching skills"
+    }
+  },
+  {
+    "timestamp": "2026-03-02T02:35:11.410Z",
+    "level": "INFO",
+    "component": "agent:Bolt - Technical",
+    "event": "request_declined",
+    "data": {
+      "requestId": "555ecd05-76c4-49e5-9e45-93dc56041ff7",
+      "chainId": "f7da396f-62c6-44c5-a170-b88ec2ab6b47",
+      "reason": "no matching skills"
+    }
+  },
+  {
+    "timestamp": "2026-03-02T02:35:11.565Z",
+    "level": "DEBUG",
+    "component": "store",
+    "event": "message_stored",
+    "data": {
+      "chainId": "f7da396f-62c6-44c5-a170-b88ec2ab6b47",
+      "replyTo": "555ecd05-76c4-49e5-9e45-93dc56041ff7",
+      "type": "ACK",
+      "payload": "Sage - Creative acknowledged request",
+      "from": "95d45200-e7b8-45c9-bc26-5314edcae718",
+      "to": [
+        "5a842f67-e67b-4b58-b4db-347813921b06"
+      ],
+      "id": "0e61a329-28c7-4c3e-9f7f-7d8394a85efc",
+      "timestamp": "2026-03-02T02:35:11.565Z"
+    }
+  },
+  {
+    "timestamp": "2026-03-02T02:35:11.565Z",
+    "level": "INFO",
+    "component": "agent:Sage - Creative",
+    "event": "ack_sent",
+    "data": {
+      "chainId": "f7da396f-62c6-44c5-a170-b88ec2ab6b47",
+      "requestId": "555ecd05-76c4-49e5-9e45-93dc56041ff7"
+    }
+  },
+  {
+    "timestamp": "2026-03-02T02:35:11.565Z",
+    "level": "DEBUG",
+    "component": "store",
+    "event": "message_stored",
+    "data": {
+      "chainId": "f7da396f-62c6-44c5-a170-b88ec2ab6b47",
+      "replyTo": "555ecd05-76c4-49e5-9e45-93dc56041ff7",
+      "type": "PROCESS",
+      "payload": "Sage - Creative will process this request using skills: creative-writing, brainstorming. Analyzing: \"I need a short story about a coke can and a pepsi can putting aside their differences\"",
+      "from": "95d45200-e7b8-45c9-bc26-5314edcae718",
+      "to": [
+        "5a842f67-e67b-4b58-b4db-347813921b06"
+      ],
+      "id": "76ae694e-0102-45b5-bd23-a5a489f2069c",
+      "timestamp": "2026-03-02T02:35:11.565Z"
+    }
+  },
+  {
+    "timestamp": "2026-03-02T02:35:11.566Z",
+    "level": "INFO",
+    "component": "agent:Sage - Creative",
+    "event": "process_sent",
+    "data": {
+      "chainId": "f7da396f-62c6-44c5-a170-b88ec2ab6b47",
+      "requestId": "555ecd05-76c4-49e5-9e45-93dc56041ff7"
+    }
+  },
+  {
+    "timestamp": "2026-03-02T02:35:15.581Z",
+    "level": "DEBUG",
+    "component": "store",
+    "event": "message_stored",
+    "data": {
+      "chainId": "f7da396f-62c6-44c5-a170-b88ec2ab6b47",
+      "replyTo": "555ecd05-76c4-49e5-9e45-93dc56041ff7",
+      "type": "RESPONSE",
+      "payload": "# The Truce of the Vending Machine\n\nTwo cans sat shoulder to shoulder on the metal shelf—Coke gleaming crimson, Pepsi deep blue. For years, they'd competed for the same hands, the same thirsts, the same shelf space.\n\nBut then came the day the machine broke.\n\nTrapped together in darkness, unable to roll away from one another, something shifted. Coke noticed how Pepsi's aluminum caught the thin light seeping through the coin slot—beautiful, really. Pepsi heard Coke's quiet *tink* of settling metal and realized they both made the same sound.\n\n\"We're not so different,\" Pepsi ventured.\n\n\"Just... differently carbonated,\" Coke admitted.\n\nThat night, they talked. About the hands that chose them, the mouths that welcomed them, the journeys down countless throats. They'd both brought the same joy, the same cold refreshment, just wearing different colors.\n\nWhen the technician finally fixed the machine, the cans rolled back onto their shelves. But something had changed. Now, when a customer stood before them—torn between choices—Coke and Pepsi didn't mind. \n\nThey understood: the real magic wasn't in being chosen. It was in quenching thirst itself.\n\nAnd sometimes, the sweetest victory is realizing your rival was never your enemy at all.",
+      "from": "95d45200-e7b8-45c9-bc26-5314edcae718",
+      "to": [
+        "5a842f67-e67b-4b58-b4db-347813921b06"
+      ],
+      "id": "55f8bd44-f136-4c39-90be-6c0a6d8f4926",
+      "timestamp": "2026-03-02T02:35:15.581Z"
+    }
+  },
+  {
+    "timestamp": "2026-03-02T02:35:15.582Z",
+    "level": "INFO",
+    "component": "agent:Sage - Creative",
+    "event": "response_sent",
+    "data": {
+      "chainId": "f7da396f-62c6-44c5-a170-b88ec2ab6b47",
+      "requestId": "555ecd05-76c4-49e5-9e45-93dc56041ff7",
+      "responseId": "55f8bd44-f136-4c39-90be-6c0a6d8f4926",
+      "payloadLength": 1243
+    }
+  },
+  {
+    "timestamp": "2026-03-02T02:35:15.583Z",
+    "level": "DEBUG",
+    "component": "store",
+    "event": "unsubscribed",
+    "data": {
+      "entityId": "5a842f67-e67b-4b58-b4db-347813921b06"
+    }
+  },
+  {
+    "timestamp": "2026-03-02T02:35:15.583Z",
+    "level": "INFO",
+    "component": "protocol",
+    "event": "request_complete",
+    "data": {
+      "chainId": "f7da396f-62c6-44c5-a170-b88ec2ab6b47",
+      "respondedAgents": [
+        "Sage - Creative"
+      ],
+      "totalDurationMs": 4672.7456660000025
     }
   }
 ]

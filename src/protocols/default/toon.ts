@@ -1,5 +1,5 @@
 import { decode, encode } from "@toon-format/toon";
-import type { Message } from "./types.ts";
+import type { Message } from "../../types.ts";
 
 /**
  * Encodes a complete protocol message as a TOON string.

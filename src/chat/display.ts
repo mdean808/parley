@@ -1,7 +1,7 @@
 import chalk from "chalk";
 import { Marked, type MarkedExtension } from "marked";
 import { markedTerminal } from "marked-terminal";
-import type { AgentResult } from "./types.ts";
+import type { AgentResult } from "../types.ts";
 
 const marked = new Marked(markedTerminal() as unknown as MarkedExtension);
 
@@ -49,18 +49,21 @@ export function agentHeader(name: string, skills: string[]): string {
  * @returns Formatted stats string.
  */
 export function agentStats(
-	usage: { inputTokens: number; outputTokens: number },
-	durationMs: number,
-	model: string,
+	usage: { inputTokens: number; outputTokens: number } | undefined,
+	durationMs: number | undefined,
+	model: string | undefined,
 ): string {
-	const tokens: string = `${usage.inputTokens} in · ${usage.outputTokens} out tokens`;
-	const duration: string = `${(durationMs / 1000).toFixed(1)}s`;
+	const u = usage ?? { inputTokens: 0, outputTokens: 0 };
+	const d = durationMs ?? 0;
+	const m = model ?? "";
 
-	const pricing = PRICING[model];
+	const tokens: string = `${u.inputTokens} in · ${u.outputTokens} out tokens`;
+	const duration: string = `${(d / 1000).toFixed(1)}s`;
+
+	const pricing = PRICING[m];
 	if (pricing) {
 		const cost: number =
-			(usage.inputTokens * pricing.input +
-				usage.outputTokens * pricing.output) /
+			(u.inputTokens * pricing.input + u.outputTokens * pricing.output) /
 			1_000_000;
 		return chalk.dim(`  ${tokens}  |  $${cost.toFixed(4)}  |  ${duration}`);
 	}
@@ -75,15 +78,15 @@ export function agentStats(
  */
 export function summaryBlock(results: AgentResult[]): string {
 	const totalIn: number = results.reduce(
-		(s: number, r: AgentResult) => s + r.usage.inputTokens,
+		(s: number, r: AgentResult) => s + (r.usage?.inputTokens ?? 0),
 		0,
 	);
 	const totalOut: number = results.reduce(
-		(s: number, r: AgentResult) => s + r.usage.outputTokens,
+		(s: number, r: AgentResult) => s + (r.usage?.outputTokens ?? 0),
 		0,
 	);
 	const totalMs: number = results.reduce(
-		(s: number, r: AgentResult) => s + r.durationMs,
+		(s: number, r: AgentResult) => s + (r.durationMs ?? 0),
 		0,
 	);
 
