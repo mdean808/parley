@@ -10,7 +10,7 @@ const LEVELS: Record<LogLevel, number> = {
 	ERROR: 3,
 };
 
-const LOG_FILE: string = process.env.LOG_FILE || "./protocol.json";
+const LOG_FILE: string = process.env.LOG_FILE || "./logs/protocol.json";
 const LOG_LEVEL: LogLevel =
 	(process.env.LOG_LEVEL as LogLevel) in LEVELS
 		? (process.env.LOG_LEVEL as LogLevel)
