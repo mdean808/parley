@@ -1,4 +1,4 @@
-# Overview - v0.0.1
+# Overview - v1
 
 This is a protocol for token-efficient and “reliable” agent to agent communication. Agents communicate with each other and the user using a reliable and validated protocol. Overall context and “job” specification is stored in a central store to ensure agents don’t pollute their contexts. In practice, system prompts define communication steps/rules and structure of the “application.” 
 
