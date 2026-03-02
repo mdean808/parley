@@ -175,12 +175,7 @@ Messages within a chain follow a defined state lifecycle. Each state transition 
 ### Parameters
 
 - **`replyTo`**: the REQUEST message id
-- **`to`**: preserves the audience of the original REQUEST. If the
-REQUEST was a broadcast (`*`), the reply is also a broadcast.
-If the REQUEST targeted specific recipients, the reply is
-sent to the original sender and all other recipients in the
-REQUEST's to field — maintaining the full conversational
-context.
+- **`to`**: mirrors the original REQUEST's `to` field
 
 > When multiple agents ACK a single broadcast REQUEST, resolution of which agent(s) proceed is implementation-defined. See Extensions for delegation and collaboration patterns.
 > 
@@ -195,7 +190,12 @@ context.
 ### Parameters
 
 - **`replyTo`**: the REQUEST message id
-- **`to`**: mirrors the original REQUEST's `to` field
+- **`to`**: preserves the audience of the original REQUEST. If the
+REQUEST was a broadcast (`*`), the reply is also a broadcast.
+If the REQUEST targeted specific recipients, the reply is
+sent to the original sender and all other recipients in the
+REQUEST's to field — maintaining the full conversational
+context.
 
 ## RESPONSE
 
@@ -225,8 +225,25 @@ The following are suggestions for implementing more complicated and dynamic appl
 
 ## Delegation
 
+- Agent receives broadcast REQUEST, determines it's best suited
+- Agent sends CLAIM message to the broadcast
+- Claim resolution when multiple agents CLAIM is implementation-defined
+- Claiming agent becomes the "owner" of the request
+- Owner MAY issue sub-REQUESTs to specific agents for subtasks
+- Sub-REQUESTs follow the standard state lifecycle independently
+- Owner aggregates sub-RESPONSE(s) and sends final RESPONSE to the original requester
+- If owner fails, ERROR propagates up — sub-chains are abandoned or re-claimable (implementation-defined)
+- New message type: CLAIM
+- New field (optional): `exclusivity: true/false` on REQUEST to indicate whether claiming is allowed
+
 ## Collaboration
 
-One may emphasize agent-agent collaboration via system prompts and _________. 
-
-TODO: What was hte general idea here about collaboration within the protocol?
+- Multiple agents ACK a broadcast REQUEST and proceed in parallel
+- Each agent sends PROCESS with a `scope` field declaring what slice of the work they're handling
+- Agents MAY send COORDINATE messages to each other to negotiate task division and avoid duplication
+- Each agent sends a partial RESPONSE tagged with their scope
+- Assembly of partial responses into a final result is implementation-defined (could be a designated assembler agent, the requester, or the store)
+- If one collaborating agent fails, others MAY continue — partial results are still delivered
+- New message type: COORDINATE
+- New field: `scope` on PROCESS and RESPONSE messages
+- New field (optional): `partial: true/false` on RESPONSE to distinguish partial from complete
