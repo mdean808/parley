@@ -118,7 +118,7 @@ export class DefaultProtocol implements Protocol {
 
 			if (msg.type === "ACK") {
 				ackedAgentIds.add(msg.from);
-			} else if (msg.type === "RESPONSE") {
+			} else if (msg.type === "RESPONSE" || msg.type === "ERROR") {
 				responses.set(msg.from, msg);
 				checkComplete();
 			}

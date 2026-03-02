@@ -62,6 +62,25 @@ export class Store {
 	}
 
 	/**
+	 * Queries agents whose skills match any of the given skill terms.
+	 * Uses case-insensitive substring containment in both directions
+	 * (query term in skill, or skill in query term).
+	 * @param skills - Skill terms to match against.
+	 * @returns Agents with at least one matching skill.
+	 */
+	queryAgents(skills: string[]): Agent[] {
+		const lowerSkills = skills.map((s) => s.toLowerCase());
+		return this.agents.filter((agent) =>
+			agent.skills.some((agentSkill) => {
+				const lower = agentSkill.toLowerCase();
+				return lowerSkills.some(
+					(qs) => lower.includes(qs) || qs.includes(lower),
+				);
+			}),
+		);
+	}
+
+	/**
 	 * Subscribes an entity (agent or user) to receive messages addressed to it.
 	 * @param entityId - The subscriber's ID (agent or user UUID).
 	 * @param handler - Callback invoked with the TOON string and decoded message.

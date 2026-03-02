@@ -12,7 +12,7 @@ export interface Agent {
 }
 
 /** Protocol message types following the REQUEST → ACK → PROCESS → RESPONSE state machine. */
-export type MessageType = "REQUEST" | "ACK" | "PROCESS" | "RESPONSE";
+export type MessageType = "REQUEST" | "ACK" | "PROCESS" | "RESPONSE" | "ERROR";
 
 /** A protocol message exchanged between users and agents via the store. */
 export interface Message {
@@ -52,6 +52,23 @@ export type MessageHandler = (toonMessage: string, message: Message) => void;
 export interface AgentBrain {
 	shouldHandle(request: BrainRequest): Promise<boolean>;
 	generateResponse(request: BrainRequest): Promise<BrainResponse>;
+	shouldDelegate?(request: BrainRequest): Promise<DelegationRequest | null>;
+	generateDelegatedResponse?(
+		request: BrainRequest,
+		delegationResults: DelegationResult[],
+	): Promise<BrainResponse>;
+}
+
+export interface DelegationRequest {
+	payload: string;
+	targetSkills: string[];
+}
+
+export interface DelegationResult {
+	agentName: string;
+	agentId: string;
+	payload: string;
+	type: MessageType;
 }
 
 export interface BrainRequest {
