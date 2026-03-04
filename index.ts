@@ -9,6 +9,7 @@ import {
 	summaryBlock,
 } from "./src/chat/display.ts";
 import { DefaultProtocol } from "./src/protocols/default/index.ts";
+import { SimpleProtocol } from "./src/protocols/simple/index.ts";
 import type { Protocol } from "./src/types.ts";
 
 if (!process.env.ANTHROPIC_API_KEY) {
@@ -16,12 +17,88 @@ if (!process.env.ANTHROPIC_API_KEY) {
 	process.exit(1);
 }
 
-console.log("\n=== Agent-to-Agent Protocol Demo ===\n");
+/** Arrow-key menu for selecting a protocol. Returns the chosen index. */
+async function selectProtocol(
+	options: { label: string; description: string }[],
+): Promise<number> {
+	let selected = 0;
 
-const protocol: Protocol = new DefaultProtocol({
-	personas: createAgentPersonas(),
-	createBrain: (_agent, systemPrompt) => new ClaudeBrain(systemPrompt),
-});
+	const render = () => {
+		// Move cursor up to overwrite previous render (skip on first render)
+		process.stdout.write(`\x1b[${options.length}A`);
+		for (let i = 0; i < options.length; i++) {
+			const prefix = i === selected ? "❯ " : "  ";
+			const label =
+				i === selected ? `\x1b[1m${options[i].label}\x1b[0m` : options[i].label;
+			process.stdout.write(
+				`\r\x1b[K${prefix}${label} \x1b[2m— ${options[i].description}\x1b[0m\n`,
+			);
+		}
+	};
+
+	// Initial render
+	console.log("\n=== Agent-to-Agent Protocol Demo ===\n");
+	console.log("Select a protocol:\n");
+	for (let i = 0; i < options.length; i++) {
+		process.stdout.write("\n");
+	}
+	render();
+
+	return new Promise<number>((resolve) => {
+		const stdin = process.stdin;
+		stdin.setRawMode(true);
+		stdin.resume();
+		stdin.setEncoding("utf8");
+
+		const onData = (key: string) => {
+			if (key === "\x1b[A") {
+				// Up arrow
+				selected = (selected - 1 + options.length) % options.length;
+				render();
+			} else if (key === "\x1b[B") {
+				// Down arrow
+				selected = (selected + 1) % options.length;
+				render();
+			} else if (key === "\r" || key === "\n") {
+				// Enter
+				stdin.removeListener("data", onData);
+				stdin.setRawMode(false);
+				resolve(selected);
+			} else if (key === "\x03") {
+				// Ctrl+C
+				process.exit(0);
+			}
+		};
+
+		stdin.on("data", onData);
+	});
+}
+
+const protocolOptions = [
+	{
+		label: "Default Protocol",
+		description: "full state machine, TOON, multi-agent",
+	},
+	{
+		label: "Simple Protocol",
+		description: "direct chat, multi-agent, no overhead",
+	},
+];
+
+const choice = await selectProtocol(protocolOptions);
+
+let protocol: Protocol;
+if (choice === 0) {
+	protocol = new DefaultProtocol({
+		personas: createAgentPersonas(),
+		createBrain: (_agent, systemPrompt) => new ClaudeBrain(systemPrompt),
+	});
+} else {
+	protocol = new SimpleProtocol(createAgentPersonas());
+}
+
+console.log(`\nUsing: ${protocolOptions[choice].label}\n`);
+
 const { userId, agents } = await protocol.initialize("User");
 
 console.log("Registered user: User");
