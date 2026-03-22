@@ -1,3 +1,4 @@
+import { log } from "../../logger.ts";
 import type {
 	Agent,
 	AgentBrain,
@@ -7,7 +8,6 @@ import type {
 	DelegationResult,
 	Message,
 } from "../../types.ts";
-import { log } from "./logger.ts";
 import { store } from "./store.ts";
 import { encodeOutbound } from "./toon.ts";
 

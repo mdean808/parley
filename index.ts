@@ -8,7 +8,8 @@ import {
 	renderMarkdown,
 	summaryBlock,
 } from "./src/chat/display.ts";
-import { DefaultProtocol } from "./src/protocols/default/index.ts";
+import { DefaultProtocol } from "./src/protocols/default_v1/index.ts";
+import { DefaultProtocolV2 } from "./src/protocols/default_v2/index.ts";
 import { SimpleProtocol } from "./src/protocols/simple/index.ts";
 import type { Protocol } from "./src/types.ts";
 
@@ -76,8 +77,12 @@ async function selectProtocol(
 
 const protocolOptions = [
 	{
-		label: "Default Protocol",
-		description: "full state machine, TOON, multi-agent",
+		label: "Default Protocol (v1)",
+		description: "programmatic state machine, TOON, multi-agent",
+	},
+	{
+		label: "Default Protocol (v2)",
+		description: "agentic tool-use, chains, channels, TOON",
 	},
 	{
 		label: "Simple Protocol",
@@ -92,6 +97,10 @@ if (choice === 0) {
 	protocol = new DefaultProtocol({
 		personas: createAgentPersonas(),
 		createBrain: (_agent, systemPrompt) => new ClaudeBrain(systemPrompt),
+	});
+} else if (choice === 1) {
+	protocol = new DefaultProtocolV2({
+		personas: createAgentPersonas(),
 	});
 } else {
 	protocol = new SimpleProtocol(createAgentPersonas());

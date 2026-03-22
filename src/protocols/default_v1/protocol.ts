@@ -1,3 +1,4 @@
+import { log } from "../../logger.ts";
 import type {
 	Agent,
 	AgentBrain,
@@ -10,7 +11,6 @@ import type {
 	ProtocolResponse,
 } from "../../types.ts";
 import { ProtocolAgent } from "./agent.ts";
-import { log } from "./logger.ts";
 import { store } from "./store.ts";
 import { encodeOutbound } from "./toon.ts";
 

@@ -1,3 +1,4 @@
+import { log } from "../../logger.ts";
 import type {
 	Agent,
 	Message,
@@ -5,7 +6,6 @@ import type {
 	MessageHandler,
 	User,
 } from "../../types.ts";
-import { log } from "./logger.ts";
 import { decodeMessage, encodeMessage } from "./toon.ts";
 
 /**
