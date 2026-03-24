@@ -61,8 +61,9 @@ export class DefaultProtocolV2 implements Protocol {
 	async sendRequest(
 		userId: string,
 		message: string,
+		providedChainId?: string,
 	): Promise<ProtocolResponse> {
-		const chainId = crypto.randomUUID();
+		const chainId = providedChainId ?? crypto.randomUUID();
 		const ackWindowMs = this.config.ackWindowMs ?? ACK_WINDOW_MS;
 		const hardTimeoutMs = this.config.hardTimeoutMs ?? HARD_TIMEOUT_MS;
 

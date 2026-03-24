@@ -95,6 +95,7 @@ export class DefaultProtocol implements Protocol {
 	async sendRequest(
 		userId: string,
 		message: string,
+		_chainId?: string,
 	): Promise<ProtocolResponse> {
 		const chainId: string = crypto.randomUUID();
 

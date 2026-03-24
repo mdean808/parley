@@ -120,5 +120,9 @@ export interface ProtocolResponse {
 /** Abstraction over the agent-to-agent protocol so the chat app can swap implementations. */
 export interface Protocol {
 	initialize(userName: string): ProtocolInit | Promise<ProtocolInit>;
-	sendRequest(userId: string, message: string): Promise<ProtocolResponse>;
+	sendRequest(
+		userId: string,
+		message: string,
+		chainId?: string,
+	): Promise<ProtocolResponse>;
 }

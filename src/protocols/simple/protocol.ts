@@ -41,6 +41,7 @@ export class SimpleProtocol implements Protocol {
 	async sendRequest(
 		_userId: string,
 		message: string,
+		_chainId?: string,
 	): Promise<ProtocolResponse> {
 		const results = await Promise.all(
 			this.personas.map(async (persona): Promise<AgentResult> => {

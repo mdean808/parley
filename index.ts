@@ -109,6 +109,7 @@ if (choice === 0) {
 console.log(`\nUsing: ${protocolOptions[choice].label}\n`);
 
 const { userId, agents } = await protocol.initialize("User");
+const conversationChainId = crypto.randomUUID();
 
 console.log("Registered user: User");
 const agentSummary = agents
@@ -134,7 +135,11 @@ while (true) {
 	if (!trimmed) continue;
 
 	const spinner = createSpinner("Waiting for agents...");
-	const { results } = await protocol.sendRequest(userId, trimmed);
+	const { results } = await protocol.sendRequest(
+		userId,
+		trimmed,
+		conversationChainId,
+	);
 	spinner.stop();
 
 	if (results.length === 0) {
