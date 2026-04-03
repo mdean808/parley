@@ -1,0 +1,17 @@
+{
+	"id": "coding-focused",
+	"name": "Coding Focused",
+	"category": "technical",
+	"topic": "LRU cache implementation",
+	"rounds": [
+		{
+			"message": "How would you implement an LRU cache in TypeScript?"
+		},
+		{
+			"message": "What's the time complexity of each operation, and how would you test it?"
+		},
+		{
+			"message": "Make it thread-safe for a concurrent environment. What changes?"
+		}
+	]
+}

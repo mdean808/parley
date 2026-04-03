@@ -98,9 +98,9 @@ export class DefaultProtocol implements Protocol {
 	async sendRequest(
 		userId: string,
 		message: string,
-		_chainId?: string,
+		providedChainId?: string,
 	): Promise<ProtocolResponse> {
-		const chainId: string = crypto.randomUUID();
+		const chainId: string = providedChainId ?? crypto.randomUUID();
 
 		const ackedAgentIds: Set<string> = new Set<string>();
 		const responses: Map<string, Message> = new Map();

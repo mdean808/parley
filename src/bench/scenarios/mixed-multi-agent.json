@@ -1,0 +1,20 @@
+{
+	"id": "mixed-multi-agent",
+	"name": "Mixed Multi-Agent",
+	"category": "mixed",
+	"topic": "RAG systems",
+	"rounds": [
+		{
+			"message": "What is RAG and why is it useful?"
+		},
+		{
+			"message": "Brainstorm creative, unconventional uses of RAG beyond chatbots."
+		},
+		{
+			"message": "Pick the most promising idea and sketch a TypeScript implementation."
+		},
+		{
+			"message": "Summarize everything we discussed in a concise paragraph."
+		}
+	]
+}
