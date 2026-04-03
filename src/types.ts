@@ -48,9 +48,28 @@ export interface AgentPersona {
 /** Callback invoked when a subscriber receives a message from the store. */
 export type MessageHandler = (toonMessage: string, message: Message) => void;
 
+export interface ProtocolEvent {
+	agentName: string;
+	type:
+		| "skill_eval"
+		| "state_change"
+		| "decline"
+		| "delegation"
+		| "tool_use"
+		| "error";
+	detail: string;
+}
+
+export type ProtocolEventHandler = (event: ProtocolEvent) => void;
+
+export interface SkillEvalResult {
+	relevant: boolean;
+	neededSkills: string[];
+}
+
 /** Application-level brain injected into the protocol. */
 export interface AgentBrain {
-	shouldHandle(request: BrainRequest): Promise<boolean>;
+	shouldHandle(request: BrainRequest): Promise<SkillEvalResult>;
 	generateResponse(request: BrainRequest): Promise<BrainResponse>;
 	shouldDelegate?(request: BrainRequest): Promise<DelegationRequest | null>;
 	generateDelegatedResponse?(

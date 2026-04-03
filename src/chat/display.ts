@@ -1,15 +1,10 @@
 import chalk from "chalk";
 import { Marked, type MarkedExtension } from "marked";
 import { markedTerminal } from "marked-terminal";
-import type { AgentResult } from "../types.ts";
+import { computeCost } from "../cost.ts";
+import type { AgentResult, ProtocolEvent } from "../types.ts";
 
 const marked = new Marked(markedTerminal() as unknown as MarkedExtension);
-
-/** Per-million-token pricing for supported models. */
-const PRICING: Record<string, { input: number; output: number }> = {
-	"claude-haiku-4-5-20251001": { input: 0.8, output: 4 },
-	"claude-sonnet-4-5-20250929": { input: 3, output: 15 },
-};
 
 const TERM_WIDTH: number = process.stdout.columns || 72;
 
@@ -60,11 +55,8 @@ export function agentStats(
 	const tokens: string = `${u.inputTokens} in · ${u.outputTokens} out tokens`;
 	const duration: string = `${(d / 1000).toFixed(1)}s`;
 
-	const pricing = PRICING[m];
-	if (pricing) {
-		const cost: number =
-			(u.inputTokens * pricing.input + u.outputTokens * pricing.output) /
-			1_000_000;
+	const cost = computeCost(u.inputTokens, u.outputTokens, m);
+	if (cost > 0) {
 		return chalk.dim(`  ${tokens}  |  $${cost.toFixed(4)}  |  ${duration}`);
 	}
 
@@ -91,16 +83,14 @@ export function summaryBlock(results: AgentResult[]): string {
 	);
 
 	const model: string = results[0]?.model ?? "";
-	const pricing = PRICING[model];
 
 	const agents: string = `${results.length} agents`;
 	const tokens: string = `${totalIn} in · ${totalOut} out tokens`;
 	const duration: string = `${(totalMs / 1000).toFixed(1)}s`;
 
+	const cost = computeCost(totalIn, totalOut, model);
 	let inner: string;
-	if (pricing) {
-		const cost: number =
-			(totalIn * pricing.input + totalOut * pricing.output) / 1_000_000;
+	if (cost > 0) {
 		inner = `${agents}  |  ${tokens}  |  $${cost.toFixed(4)}  |  ${duration}`;
 	} else {
 		inner = `${agents}  |  ${tokens}  |  ${duration}`;
@@ -127,6 +117,23 @@ export function summaryBlock(results: AgentResult[]): string {
  */
 export function separator(): string {
 	return chalk.dim("─".repeat(TERM_WIDTH));
+}
+
+const EVENT_ICONS: Record<ProtocolEvent["type"], string> = {
+	skill_eval: "?",
+	state_change: ">",
+	decline: "x",
+	delegation: "~",
+	tool_use: "#",
+	error: "!",
+};
+
+export function agentThought(event: ProtocolEvent): void {
+	const icon = EVENT_ICONS[event.type];
+	const line = chalk.dim.magenta(
+		`  ${icon} [${event.agentName}] ${event.detail}`,
+	);
+	process.stdout.write(`\r\x1b[K${line}\n`);
 }
 
 const SPINNER_FRAMES: string[] = [

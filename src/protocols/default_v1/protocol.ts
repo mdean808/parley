@@ -7,6 +7,7 @@ import type {
 	BrainMeta,
 	Message,
 	Protocol,
+	ProtocolEventHandler,
 	ProtocolInit,
 	ProtocolResponse,
 } from "../../types.ts";
@@ -27,6 +28,7 @@ const TOON_NOTE: string =
 export interface DefaultProtocolConfig {
 	personas: AgentPersona[];
 	createBrain: (agent: Agent, systemPrompt: string) => AgentBrain;
+	onEvent?: ProtocolEventHandler;
 }
 
 /**
@@ -70,6 +72,7 @@ export class DefaultProtocol implements Protocol {
 				(responseId: string, meta: BrainMeta) => {
 					this.brainMeta.set(responseId, meta);
 				},
+				this.config.onEvent,
 			);
 			protocolAgent.start();
 			return { name: agent.name, skills: agent.skills };

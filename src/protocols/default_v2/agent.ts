@@ -1,16 +1,15 @@
-import Anthropic from "@anthropic-ai/sdk";
+import type Anthropic from "@anthropic-ai/sdk";
+import { client, MODEL } from "../../config.ts";
 import { log } from "../../logger.ts";
+import type { ProtocolEventHandler } from "../../types.ts";
 import { assembleSystemPrompt } from "./prompt.ts";
 import type { StoreV2 } from "./store.ts";
 import { createToolDefinitions, executeToolCall } from "./tools.ts";
 import { encodeOutboundV2 } from "./toon.ts";
 import type { AgentMeta, AgentV2, MessageV2 } from "./types.ts";
 
-const MODEL: string = process.env.MODEL || "claude-haiku-4-5-20251001";
 const MAX_ITERATIONS = 15;
 const MAX_VALIDATION_RETRIES = 3;
-
-const client = new Anthropic();
 
 interface AgentConfig {
 	agent: AgentV2;
@@ -18,6 +17,7 @@ interface AgentConfig {
 	customInstructions?: string;
 	customTools?: Anthropic.Messages.Tool[];
 	onMeta?: (chainId: string, meta: AgentMeta) => void;
+	onEvent?: ProtocolEventHandler;
 }
 
 export class ProtocolAgentV2 {
@@ -26,6 +26,7 @@ export class ProtocolAgentV2 {
 	private readonly systemPrompt: string;
 	private readonly tools: Anthropic.Messages.Tool[];
 	private readonly onMeta?: (chainId: string, meta: AgentMeta) => void;
+	private readonly onEvent?: ProtocolEventHandler;
 	private readonly chainHistory: Map<
 		string,
 		Anthropic.Messages.MessageParam[]
@@ -34,6 +35,7 @@ export class ProtocolAgentV2 {
 	constructor(store: StoreV2, config: AgentConfig) {
 		this.agent = config.agent;
 		this.store = store;
+		this.onEvent = config.onEvent;
 		this.systemPrompt = assembleSystemPrompt({
 			agentName: config.agent.name,
 			agentId: config.agent.id,
@@ -127,6 +129,11 @@ export class ProtocolAgentV2 {
 						chainId: message.chainId,
 						requestId: message.id,
 					});
+					this.onEvent?.({
+						agentName: this.agent.name,
+						type: "decline",
+						detail: `SKIP — ${text.trim()}`,
+					});
 					break;
 				}
 			}
@@ -147,12 +154,30 @@ export class ProtocolAgentV2 {
 			for (const block of toolUseBlocks) {
 				if (block.type !== "tool_use") continue;
 
+				this.onEvent?.({
+					agentName: this.agent.name,
+					type: "tool_use",
+					detail: `${block.name}(${JSON.stringify(block.input).slice(0, 100)})`,
+				});
+
 				const result = executeToolCall(
 					block.name,
 					block.input as Record<string, unknown>,
 					this.store,
 					this.agent.id,
 				);
+
+				// Emit events for store_message tool calls
+				if (block.name === "store_message" && result.success && result.data) {
+					const msgType = (result.data as { type?: string }).type;
+					if (msgType) {
+						this.onEvent?.({
+							agentName: this.agent.name,
+							type: "state_change",
+							detail: `${msgType} sent`,
+						});
+					}
+				}
 
 				// Log store_message failures — the error result gets fed back
 				// to the LLM so it can retry on the next iteration

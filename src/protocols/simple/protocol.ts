@@ -1,14 +1,13 @@
-import Anthropic from "@anthropic-ai/sdk";
+import type Anthropic from "@anthropic-ai/sdk";
+import { client, MODEL } from "../../config.ts";
 import type {
 	AgentPersona,
 	AgentResult,
 	Protocol,
+	ProtocolEventHandler,
 	ProtocolInit,
 	ProtocolResponse,
 } from "../../types.ts";
-
-const MODEL: string = process.env.MODEL || "claude-haiku-4-5-20251001";
-const client: Anthropic = new Anthropic();
 
 /**
  * Bare-bones protocol that calls Claude directly with no state machine,
@@ -19,9 +18,11 @@ const client: Anthropic = new Anthropic();
 export class SimpleProtocol implements Protocol {
 	private readonly personas: AgentPersona[];
 	private readonly histories: Map<string, Anthropic.MessageParam[]> = new Map();
+	private readonly onEvent?: ProtocolEventHandler;
 
-	constructor(personas: AgentPersona[]) {
+	constructor(personas: AgentPersona[], onEvent?: ProtocolEventHandler) {
 		this.personas = personas;
+		this.onEvent = onEvent;
 		for (const persona of personas) {
 			this.histories.set(persona.name, []);
 		}
@@ -45,6 +46,11 @@ export class SimpleProtocol implements Protocol {
 	): Promise<ProtocolResponse> {
 		const results = await Promise.all(
 			this.personas.map(async (persona): Promise<AgentResult> => {
+				this.onEvent?.({
+					agentName: persona.name,
+					type: "state_change",
+					detail: `generating response using skills: [${persona.skills.join(", ")}]`,
+				});
 				const history = this.histories.get(persona.name) ?? [];
 				history.push({ role: "user", content: message });
 

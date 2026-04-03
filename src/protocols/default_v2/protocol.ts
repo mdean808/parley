@@ -5,6 +5,7 @@ import type {
 	AgentResult,
 	Message,
 	Protocol,
+	ProtocolEventHandler,
 	ProtocolInit,
 	ProtocolResponse,
 } from "../../types.ts";
@@ -21,6 +22,7 @@ export interface DefaultProtocolV2Config {
 	customTools?: Anthropic.Messages.Tool[];
 	ackWindowMs?: number;
 	hardTimeoutMs?: number;
+	onEvent?: ProtocolEventHandler;
 }
 
 export class DefaultProtocolV2 implements Protocol {
@@ -43,6 +45,7 @@ export class DefaultProtocolV2 implements Protocol {
 				systemPrompt: persona.systemPrompt,
 				customInstructions: persona.systemPrompt,
 				customTools: this.config.customTools,
+				onEvent: this.config.onEvent,
 				onMeta: (chainId: string, meta: AgentMeta) => {
 					// Key by agentId:chainId for per-agent per-chain tracking
 					this.agentMeta.set(`${agent.id}:${chainId}`, meta);

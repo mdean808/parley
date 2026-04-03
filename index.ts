@@ -1,17 +1,13 @@
 import * as readline from "node:readline/promises";
-import { createAgentPersonas } from "./src/agents.ts";
-import { ClaudeBrain } from "./src/brain.ts";
 import {
 	agentHeader,
 	agentStats,
-	createSpinner,
+	agentThought,
 	renderMarkdown,
 	summaryBlock,
 } from "./src/chat/display.ts";
-import { DefaultProtocol } from "./src/protocols/default_v1/index.ts";
-import { DefaultProtocolV2 } from "./src/protocols/default_v2/index.ts";
-import { SimpleProtocol } from "./src/protocols/simple/index.ts";
-import type { Protocol } from "./src/types.ts";
+import { createProtocol, type ProtocolId } from "./src/factory.ts";
+import type { ProtocolEvent } from "./src/types.ts";
 
 if (!process.env.ANTHROPIC_API_KEY) {
 	console.error("Error: ANTHROPIC_API_KEY environment variable is required.");
@@ -92,19 +88,10 @@ const protocolOptions = [
 
 const choice = await selectProtocol(protocolOptions);
 
-let protocol: Protocol;
-if (choice === 0) {
-	protocol = new DefaultProtocol({
-		personas: createAgentPersonas(),
-		createBrain: (_agent, systemPrompt) => new ClaudeBrain(systemPrompt),
-	});
-} else if (choice === 1) {
-	protocol = new DefaultProtocolV2({
-		personas: createAgentPersonas(),
-	});
-} else {
-	protocol = new SimpleProtocol(createAgentPersonas());
-}
+const onEvent = (event: ProtocolEvent) => agentThought(event);
+
+const protocolIds: ProtocolId[] = ["v1", "v2", "simple"];
+const protocol = createProtocol(protocolIds[choice], { onEvent });
 
 console.log(`\nUsing: ${protocolOptions[choice].label}\n`);
 
@@ -134,13 +121,11 @@ while (true) {
 
 	if (!trimmed) continue;
 
-	const spinner = createSpinner("Waiting for agents...");
 	const { results } = await protocol.sendRequest(
 		userId,
 		trimmed,
 		conversationChainId,
 	);
-	spinner.stop();
 
 	if (results.length === 0) {
 		console.log("\nNo agents had relevant skills for this request.\n");

@@ -7,6 +7,7 @@ import type {
 	BrainResponse,
 	DelegationResult,
 	Message,
+	ProtocolEventHandler,
 } from "../../types.ts";
 import { store } from "./store.ts";
 import { encodeOutbound } from "./toon.ts";
@@ -32,6 +33,7 @@ export class ProtocolAgent {
 	private readonly brain: AgentBrain;
 	private readonly allSkills: string[];
 	private readonly onMeta: (responseId: string, meta: BrainMeta) => void;
+	private readonly onEvent?: ProtocolEventHandler;
 	private readonly pendingDelegations: Map<string, PendingDelegation> =
 		new Map();
 	constructor(
@@ -39,11 +41,13 @@ export class ProtocolAgent {
 		brain: AgentBrain,
 		allSkills: string[],
 		onMeta: (responseId: string, meta: BrainMeta) => void,
+		onEvent?: ProtocolEventHandler,
 	) {
 		this.agent = agent;
 		this.brain = brain;
 		this.allSkills = allSkills;
 		this.onMeta = onMeta;
+		this.onEvent = onEvent;
 	}
 
 	/** Subscribes this agent to the store to begin receiving messages. */
@@ -92,12 +96,30 @@ export class ProtocolAgent {
 			allSkills: this.allSkills,
 		};
 
-		const relevant: boolean = await this.brain.shouldHandle(brainRequest);
-		if (!relevant) {
+		const evalResult = await this.brain.shouldHandle(brainRequest);
+
+		const neededStr =
+			evalResult.neededSkills.length > 0
+				? evalResult.neededSkills.join(", ")
+				: "none identified (fallback)";
+		const agentSkillStr = this.agent.skills.join(", ");
+
+		this.onEvent?.({
+			agentName: this.agent.name,
+			type: "skill_eval",
+			detail: `needed: [${neededStr}] | has: [${agentSkillStr}] => ${evalResult.relevant ? "ACCEPT" : "DECLINE"}`,
+		});
+
+		if (!evalResult.relevant) {
 			log.info(component, "request_declined", {
 				requestId: message.id,
 				chainId: message.chainId,
 				reason: "no matching skills",
+			});
+			this.onEvent?.({
+				agentName: this.agent.name,
+				type: "decline",
+				detail: `declining — skills [${neededStr}] not matched by [${agentSkillStr}]`,
 			});
 			return;
 		}
@@ -117,6 +139,11 @@ export class ProtocolAgent {
 			chainId: message.chainId,
 			requestId: message.id,
 		});
+		this.onEvent?.({
+			agentName: this.agent.name,
+			type: "state_change",
+			detail: "ACK sent",
+		});
 
 		// PROCESS
 		store.sendMessage(
@@ -133,6 +160,11 @@ export class ProtocolAgent {
 			chainId: message.chainId,
 			requestId: message.id,
 		});
+		this.onEvent?.({
+			agentName: this.agent.name,
+			type: "state_change",
+			detail: "PROCESS sent — generating response",
+		});
 
 		// Delegation: if brain supports it and sender is not another agent (recursion guard)
 		const senderIsAgent = store.getAgent([message.from]).length > 0;
@@ -142,6 +174,11 @@ export class ProtocolAgent {
 				log.info(component, "delegation_requested", {
 					chainId: message.chainId,
 					targetSkills: delegationReq.targetSkills,
+				});
+				this.onEvent?.({
+					agentName: this.agent.name,
+					type: "delegation",
+					detail: `delegating to agents with skills: [${delegationReq.targetSkills.join(", ")}]`,
 				});
 
 				const targets = store
@@ -225,6 +262,11 @@ export class ProtocolAgent {
 				});
 
 				this.onMeta(response.id, result.meta);
+				this.onEvent?.({
+					agentName: this.agent.name,
+					type: "state_change",
+					detail: "RESPONSE sent",
+				});
 				return;
 			} catch (error: unknown) {
 				const errorMessage =

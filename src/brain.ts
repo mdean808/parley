@@ -1,14 +1,12 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { client, MODEL } from "./config.ts";
 import type {
 	AgentBrain,
 	BrainRequest,
 	BrainResponse,
 	DelegationRequest,
 	DelegationResult,
+	SkillEvalResult,
 } from "./types.ts";
-
-const MODEL: string = process.env.MODEL || "claude-haiku-4-5-20251001";
-const client: Anthropic = new Anthropic();
 
 /**
  * LLM-powered brain that evaluates skill relevance and generates responses
@@ -27,7 +25,7 @@ export class ClaudeBrain implements AgentBrain {
 	 * to the request, then checks whether the requesting agent holds any of those skills.
 	 * Returns true if no skills are identified (fallback: handle everything).
 	 */
-	async shouldHandle(request: BrainRequest): Promise<boolean> {
+	async shouldHandle(request: BrainRequest): Promise<SkillEvalResult> {
 		const completion = await client.messages.create({
 			model: MODEL,
 			max_tokens: 100,
@@ -51,9 +49,12 @@ Reply with ONLY the relevant skill names, comma-separated. If none match, reply 
 			.map((s) => s.trim())
 			.filter((s) => request.allSkills.includes(s));
 
-		if (neededSkills.length === 0) return true;
+		if (neededSkills.length === 0) return { relevant: true, neededSkills: [] };
 
-		return neededSkills.some((skill) => request.agent.skills.includes(skill));
+		const relevant = neededSkills.some((skill) =>
+			request.agent.skills.includes(skill),
+		);
+		return { relevant, neededSkills };
 	}
 
 	/**
