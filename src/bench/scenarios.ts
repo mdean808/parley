@@ -1,4 +1,3 @@
-import { debateSynthesizer } from "./synthesizers.ts";
 import type { ScenarioConfig } from "./types.ts";
 
 export const DEFAULT_SCENARIOS: ScenarioConfig[] = [
@@ -83,7 +82,9 @@ export const MULTI_ROUND_SCENARIOS: ScenarioConfig[] = [
 		],
 		multiRound: {
 			rounds: 4,
-			synthesizer: debateSynthesizer,
+			followUpInstruction:
+				"Respond to the other agents' points and provide your updated analysis.",
+			crossAgentContext: true,
 		},
 	},
 	{

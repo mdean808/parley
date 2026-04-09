@@ -1,6 +1,5 @@
 import { computeCost } from "../cost.ts";
 import type { Protocol } from "../types.ts";
-import { concatenateSynthesizer } from "./synthesizers.ts";
 import type {
 	MultiRoundResult,
 	RoundMetrics,
@@ -14,7 +13,9 @@ export async function runMultiRound(
 	chainId: string,
 ): Promise<MultiRoundResult> {
 	const config = scenario.multiRound as NonNullable<typeof scenario.multiRound>;
-	const synthesizer = config.synthesizer ?? concatenateSynthesizer;
+	const followUp =
+		config.followUpInstruction ??
+		"Continue the conversation, building on your previous response.";
 	const totalRounds = config.rounds;
 
 	const rounds: RoundMetrics[] = [];
@@ -23,16 +24,15 @@ export async function runMultiRound(
 	for (let i = 0; i < totalRounds; i++) {
 		let prompt: string;
 		if (i === 0) {
-			// First round uses the first scenario round prompt
 			prompt = scenario.rounds[0]?.prompt ?? scenario.topic;
-		} else {
-			// Subsequent rounds use synthesizer to build prompt from previous results
+		} else if (config.crossAgentContext) {
 			const prevResults = rounds[i - 1].results;
-			prompt = synthesizer(
-				i,
-				prevResults,
-				scenario.rounds[0]?.prompt ?? scenario.topic,
-			);
+			const agentSummary = prevResults
+				.map((r) => `[${r.agentName}]: ${r.response.payload}`)
+				.join("\n\n");
+			prompt = `Other agents said:\n${agentSummary}\n\n${followUp}`;
+		} else {
+			prompt = followUp;
 		}
 
 		const roundStart = performance.now();

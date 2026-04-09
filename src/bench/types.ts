@@ -6,15 +6,10 @@ export type { ProtocolId };
 
 // --- Multi-round types (Plan 02) ---
 
-export type RoundSynthesizer = (
-	roundIndex: number,
-	previousResults: AgentResult[],
-	originalPrompt: string,
-) => string;
-
 export interface MultiRoundConfig {
 	rounds: number;
-	synthesizer?: RoundSynthesizer;
+	followUpInstruction?: string;
+	crossAgentContext?: boolean;
 	stopCondition?: (roundIndex: number, results: AgentResult[]) => boolean;
 }
 
