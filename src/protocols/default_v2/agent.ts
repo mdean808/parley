@@ -86,16 +86,27 @@ export class ProtocolAgentV2 {
 		// REQUEST: run the agentic loop
 		this.store.updateAgentStatus(this.agent.id, "working");
 
+		// Send immediate programmatic ACK so the collector knows we're evaluating
+		this.safeStoreMessage(component, {
+			chainId: message.chainId,
+			replyTo: message.id,
+			type: "ACK",
+			payload: `${this.agent.name} evaluating`,
+			from: this.agent.id,
+			to: [message.from],
+		});
+
 		const history = this.chainHistory.get(message.chainId) ?? [];
 
 		// Present the incoming request to the LLM
 		history.push({
 			role: "user",
-			content: `You received a new REQUEST message:\n\nid: ${message.id}\nversion: ${message.version}\nchainId: ${message.chainId}\nsequence: ${message.sequence}\nreplyTo: ${message.replyTo ?? "undefined"}\ntimestamp: ${message.timestamp}\ntype: ${message.type}\npayload: ${message.payload}\nheaders: ${JSON.stringify(message.headers)}\nfrom: ${message.from}\nto: ${message.to.join(", ")}\n\nFollow the protocol: ACK if relevant to your skills, then PROCESS, then RESPONSE. If this request doesn't match your skills, do nothing (respond with a single text message saying "SKIP").`,
+			content: `You received a new REQUEST message:\n\nid: ${message.id}\nversion: ${message.version}\nchainId: ${message.chainId}\nsequence: ${message.sequence}\nreplyTo: ${message.replyTo ?? "undefined"}\ntimestamp: ${message.timestamp}\ntype: ${message.type}\npayload: ${message.payload}\nheaders: ${JSON.stringify(message.headers)}\nfrom: ${message.from}\nto: ${message.to.join(", ")}\n\nAn ACK has been sent automatically. If this request doesn't match your skills, respond with a single text message saying "SKIP". Otherwise, proceed directly with PROCESS then RESPONSE. Set replyTo to "${message.id}" on all messages you send.`,
 		});
 
 		let totalInputTokens = 0;
 		let totalOutputTokens = 0;
+		let sentResponse = false;
 		const startTime = performance.now();
 
 		for (let iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
@@ -176,6 +187,7 @@ export class ProtocolAgentV2 {
 							type: "state_change",
 							detail: `${msgType} sent`,
 						});
+						if (msgType === "RESPONSE") sentResponse = true;
 					}
 				}
 
@@ -197,9 +209,33 @@ export class ProtocolAgentV2 {
 
 			history.push({ role: "user", content: toolResults });
 
+			// Update meta incrementally so it's available before the next await
+			if (this.onMeta) {
+				this.onMeta(message.chainId, {
+					usage: {
+						inputTokens: totalInputTokens,
+						outputTokens: totalOutputTokens,
+					},
+					model: MODEL,
+					durationMs: performance.now() - startTime,
+				});
+			}
+
 			if (response.stop_reason === "end_turn") {
 				break;
 			}
+		}
+
+		// Send DECLINED if agent didn't produce a RESPONSE (e.g., SKIP)
+		if (!sentResponse) {
+			this.safeStoreMessage(component, {
+				chainId: message.chainId,
+				replyTo: message.id,
+				type: "ERROR",
+				payload: "DECLINED",
+				from: this.agent.id,
+				to: [message.from],
+			});
 		}
 
 		const durationMs = performance.now() - startTime;

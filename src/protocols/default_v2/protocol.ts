@@ -84,12 +84,18 @@ export class DefaultProtocolV2 implements Protocol {
 			}
 		}
 
+		let requestId: string;
+
 		this.store.subscribe(userId, (_toon: string, msg: MessageV2) => {
 			if (msg.chainId !== chainId) return;
 
-			if (msg.type === "ACK") {
+			// Only accept ACKs that reference THIS specific request
+			if (msg.type === "ACK" && msg.replyTo === requestId) {
 				ackedAgentIds.add(msg.from);
-			} else if (msg.type === "RESPONSE" || msg.type === "ERROR") {
+			} else if (
+				(msg.type === "RESPONSE" || msg.type === "ERROR") &&
+				ackedAgentIds.has(msg.from)
+			) {
 				responses.set(msg.from, msg);
 				checkComplete();
 			}
@@ -105,6 +111,7 @@ export class DefaultProtocolV2 implements Protocol {
 				to: ["*"],
 			}),
 		);
+		requestId = request.id;
 
 		log.info("protocol_v2", "request_sent", {
 			chainId,
@@ -144,6 +151,10 @@ export class DefaultProtocolV2 implements Protocol {
 		// Map MessageV2 → shared Message type for AgentResult compatibility
 		const results: AgentResult[] = [];
 		for (const [agentId, response] of responses) {
+			// Skip agents that declined (SKIP)
+			if (response.type === "ERROR" && response.payload === "DECLINED")
+				continue;
+
 			const [agent] = this.store.getAgent([agentId]);
 			if (!agent) continue;
 
