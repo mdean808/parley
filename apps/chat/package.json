@@ -12,7 +12,7 @@
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch"
 	},
 	"dependencies": {
-		"simple-implementation": "workspace:*",
+		"simple-implementation": "file:../../",
 		"marked": "^17.0.0"
 	},
 	"devDependencies": {
