@@ -156,11 +156,21 @@ function parseJudgeResponse(
 
 	if (toolUse) {
 		const input = toolUse.input as {
-			dimensions?: { dimension: string; score: number; reasoning: string }[];
+			dimensions?: unknown;
 			summary?: string;
 		};
 
-		parsedDimensions = (input.dimensions ?? []).map((d) => ({
+		let rawDims: { dimension: string; score: number; reasoning: string }[] = [];
+		if (Array.isArray(input.dimensions)) {
+			rawDims = input.dimensions;
+		} else if (typeof input.dimensions === "string") {
+			try {
+				const parsed = JSON.parse(input.dimensions);
+				if (Array.isArray(parsed)) rawDims = parsed;
+			} catch {}
+		}
+
+		parsedDimensions = rawDims.map((d) => ({
 			dimension: d.dimension,
 			score: Math.min(5, Math.max(1, Math.round(d.score))),
 			reasoning: d.reasoning ?? "",
