@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { MODEL } from "../../config.ts";
 import type {
 	AgentResult,
@@ -68,13 +69,13 @@ export class ClaudeCodeProtocol implements Protocol {
 			args.push("--resume", sessionId);
 		}
 
-		const proc = Bun.spawnSync(args);
-		const stdout = proc.stdout.toString();
+		const proc = spawnSync(args[0], args.slice(1), { encoding: "utf-8" });
+		const stdout = proc.stdout ?? "";
 
-		if (proc.exitCode !== 0) {
-			const stderr = proc.stderr.toString();
+		if (proc.status !== 0) {
+			const stderr = proc.stderr ?? "";
 			const detail = stderr || stdout || "(no output)";
-			throw new Error(`claude CLI failed (exit ${proc.exitCode}): ${detail}`);
+			throw new Error(`claude CLI failed (exit ${proc.status}): ${detail}`);
 		}
 
 		const output: ClaudeCodeOutput = JSON.parse(stdout);

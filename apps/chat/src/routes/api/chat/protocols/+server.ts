@@ -5,9 +5,11 @@ import {
 } from "simple-implementation/factory";
 
 export function GET() {
+	console.log("[chat] GET /api/chat/protocols");
 	const protocols = getProtocolIds().map((id) => {
 		const reg = getProtocolRegistration(id)!;
 		return { id, label: reg.label, description: reg.description };
 	});
+	console.log("[chat] available protocols:", protocols.map((p) => p.id).join(", "));
 	return json({ protocols });
 }

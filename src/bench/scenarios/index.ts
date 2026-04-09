@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 
 export interface ScenarioRound {
@@ -22,8 +22,8 @@ export interface Scenario {
 
 const SCENARIOS_DIR = new URL(".", import.meta.url).pathname;
 
-function parseScenarioFile(filePath: string): Scenario {
-	const raw = readFileSync(filePath, "utf-8");
+async function parseScenarioFile(filePath: string): Promise<Scenario> {
+	const raw = await readFile(filePath, "utf-8");
 	const data = JSON.parse(raw) as Scenario;
 
 	if (!data.id || typeof data.id !== "string") {
@@ -41,16 +41,17 @@ function parseScenarioFile(filePath: string): Scenario {
 	return data;
 }
 
-export function loadScenario(id: string): Scenario {
+export async function loadScenario(id: string): Promise<Scenario> {
 	const filePath = join(SCENARIOS_DIR, `${id}.json`);
 	return parseScenarioFile(filePath);
 }
 
-export function loadAllScenarios(): Scenario[] {
-	const files = readdirSync(SCENARIOS_DIR).filter((f) => f.endsWith(".json"));
-	return files.map((f) => parseScenarioFile(join(SCENARIOS_DIR, f)));
+export async function loadAllScenarios(): Promise<Scenario[]> {
+	const files = (await readdir(SCENARIOS_DIR)).filter((f) => f.endsWith(".json"));
+	return Promise.all(files.map((f) => parseScenarioFile(join(SCENARIOS_DIR, f))));
 }
 
-export function loadScenariosByCategory(category: string): Scenario[] {
-	return loadAllScenarios().filter((s) => s.category === category);
+export async function loadScenariosByCategory(category: string): Promise<Scenario[]> {
+	const all = await loadAllScenarios();
+	return all.filter((s) => s.category === category);
 }

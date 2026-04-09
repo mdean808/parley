@@ -1,5 +1,6 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { client, MODEL } from "../../config.ts";
+import { log } from "../../logger.ts";
 import type {
 	AgentPersona,
 	AgentResult,
@@ -46,6 +47,10 @@ export class SimpleProtocol implements Protocol {
 	): Promise<ProtocolResponse> {
 		const results = await Promise.all(
 			this.personas.map(async (persona): Promise<AgentResult> => {
+				log.info("simple", "agent_start", {
+					agent: persona.name,
+					skills: persona.skills,
+				});
 				this.onEvent?.({
 					agentName: persona.name,
 					type: "state_change",
@@ -62,6 +67,13 @@ export class SimpleProtocol implements Protocol {
 					messages: history,
 				});
 				const durationMs: number = performance.now() - start;
+
+				log.info("simple", "agent_complete", {
+					agent: persona.name,
+					inputTokens: completion.usage.input_tokens,
+					outputTokens: completion.usage.output_tokens,
+					durationMs: Math.round(durationMs),
+				});
 
 				const text: string =
 					completion.content[0].type === "text"

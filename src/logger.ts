@@ -1,4 +1,4 @@
-import { mkdir } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 
 type LogLevel = "DEBUG" | "INFO" | "WARN" | "ERROR";
 
@@ -33,8 +33,8 @@ interface LogEntry {
 const entries: LogEntry[] = [];
 
 /** Writes all accumulated log entries to the log file. */
-function flush(): void {
-	Bun.write(LOG_FILE, `${JSON.stringify(entries, null, 2)}\n`);
+async function flush(): Promise<void> {
+	await writeFile(LOG_FILE, `${JSON.stringify(entries, null, 2)}\n`);
 }
 
 /**

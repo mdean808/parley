@@ -1,5 +1,5 @@
 import { createProtocol } from "simple-implementation/factory";
-import type { Protocol, ProtocolAgentInfo } from "simple-implementation/types";
+import type { Protocol, ProtocolAgentInfo, ProtocolEvent } from "simple-implementation/types";
 
 export interface Session {
 	id: string;
@@ -17,7 +17,10 @@ export async function createSession(
 	protocolId: string,
 	userName: string,
 ): Promise<Session> {
-	const protocol = createProtocol(protocolId);
+	const onEvent = (event: ProtocolEvent) => {
+		console.log(`[chat] [${event.agentName}] ${event.type}: ${event.detail}`);
+	};
+	const protocol = createProtocol(protocolId, { onEvent });
 	const { userId, agents } = await protocol.initialize(userName);
 	const session: Session = {
 		id: crypto.randomUUID(),
