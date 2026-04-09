@@ -19,7 +19,6 @@ export async function runMultiRound(
 	const totalRounds = config.rounds;
 
 	const rounds: RoundMetrics[] = [];
-	let stoppedEarly = false;
 
 	for (let i = 0; i < totalRounds; i++) {
 		let prompt: string;
@@ -59,12 +58,6 @@ export async function runMultiRound(
 			totalDurationMs: roundDurationMs,
 			cost,
 		});
-
-		// Check stop condition
-		if (config.stopCondition?.(i, results)) {
-			stoppedEarly = true;
-			break;
-		}
 	}
 
 	return {
@@ -77,7 +70,7 @@ export async function runMultiRound(
 			totalDurationMs: rounds.reduce((s, r) => s + r.totalDurationMs, 0),
 			totalCost: rounds.reduce((s, r) => s + r.cost, 0),
 			roundCount: rounds.length,
-			stoppedEarly,
+			stoppedEarly: false,
 		},
 	};
 }

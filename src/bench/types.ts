@@ -10,7 +10,6 @@ export interface MultiRoundConfig {
 	rounds: number;
 	followUpInstruction?: string;
 	crossAgentContext?: boolean;
-	stopCondition?: (roundIndex: number, results: AgentResult[]) => boolean;
 }
 
 export interface RoundMetrics {

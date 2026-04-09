@@ -3,9 +3,10 @@ import { createProtocol, getProtocolIds } from "../factory.ts";
 import type { JudgeConfig } from "./judge-types.ts";
 import { runScenario } from "./runner.ts";
 import {
-	type ComparisonScenario,
 	loadAllScenarios,
 	loadScenario,
+	loadScenariosByCategory,
+	type Scenario,
 } from "./scenarios/index.ts";
 import type { ProtocolRunResult, ScenarioConfig } from "./types.ts";
 
@@ -22,7 +23,7 @@ export interface OverheadMetrics {
 export type ProtocolOverhead = Record<string, OverheadMetrics>;
 
 export interface ScenarioComparison {
-	scenario: ComparisonScenario;
+	scenario: Scenario;
 	results: Record<string, ProtocolRunResult>;
 	protocolOverhead: ProtocolOverhead;
 }
@@ -44,6 +45,7 @@ export interface ComparisonReport {
 
 export interface ComparisonOptions {
 	scenarios?: string[];
+	categories?: string[];
 	protocols?: string[];
 	baseline?: string;
 	model?: string;
@@ -77,11 +79,18 @@ function computeOverhead(
 	};
 }
 
-function toScenarioConfig(cs: ComparisonScenario): ScenarioConfig {
+function toScenarioConfig(s: Scenario): ScenarioConfig {
 	return {
-		name: cs.name,
-		topic: cs.topic,
-		rounds: cs.rounds.map((r) => ({ prompt: r.message })),
+		name: s.name,
+		topic: s.topic,
+		rounds: s.rounds.map((r) => ({ prompt: r.prompt })),
+		multiRound: s.multiRound
+			? {
+					rounds: s.multiRound.rounds,
+					followUpInstruction: s.multiRound.followUpInstruction,
+					crossAgentContext: s.multiRound.crossAgentContext,
+				}
+			: undefined,
 	};
 }
 
@@ -96,26 +105,29 @@ export async function runComparison(
 	};
 
 	// Load scenarios
-	const comparisonScenarios: ComparisonScenario[] = options.scenarios
-		? options.scenarios.map((id) => loadScenario(id))
-		: loadAllScenarios();
+	let scenarios: Scenario[];
+	if (options.scenarios) {
+		scenarios = options.scenarios.map((id) => loadScenario(id));
+	} else if (options.categories) {
+		scenarios = options.categories.flatMap((c) => loadScenariosByCategory(c));
+	} else {
+		scenarios = loadAllScenarios();
+	}
 
 	const scenarioComparisons: ScenarioComparison[] = [];
 
-	for (let si = 0; si < comparisonScenarios.length; si++) {
-		const cs = comparisonScenarios[si];
-		const scenarioConfig = toScenarioConfig(cs);
+	for (let si = 0; si < scenarios.length; si++) {
+		const scenario = scenarios[si];
+		const scenarioConfig = toScenarioConfig(scenario);
 		const results: Record<string, ProtocolRunResult> = {};
 
 		for (const pid of protocolIds) {
-			progress(
-				`[${si + 1}/${comparisonScenarios.length}] ${cs.name} -- ${pid}...`,
-			);
+			progress(`[${si + 1}/${scenarios.length}] ${scenario.name} -- ${pid}...`);
 
 			const protocol = createProtocol(pid);
 			if (judgeConfig.enabled) {
 				progress(
-					`[${si + 1}/${comparisonScenarios.length}] ${cs.name} -- ${pid} judging...`,
+					`[${si + 1}/${scenarios.length}] ${scenario.name} -- ${pid} judging...`,
 				);
 			}
 			const result = await runScenario(
@@ -140,7 +152,7 @@ export async function runComparison(
 		}
 
 		scenarioComparisons.push({
-			scenario: cs,
+			scenario,
 			results,
 			protocolOverhead,
 		});

@@ -10,8 +10,7 @@ Implementation of an agent-to-agent communication protocol with two active proto
 
 - **Install**: `bun install`
 - **Run (interactive REPL)**: `bun run index.ts`
-- **Benchmark**: `bun run bench.ts [--protocols v2,simple] [--output path] [--no-judge] [--judge-model model]`
-- **Comparison report**: `bun run compare.ts [--scenarios id1,id2] [--no-judge] [--judge-model model] [--output dir]`
+- **Benchmark**: `bun run bench.ts [--protocols v2,simple] [--scenarios id1,id2] [--category general] [--baseline simple] [--output dir] [--no-judge] [--judge-model model] [--no-report]`
 - **Lint**: `bunx biome lint ./src`
 - **Format**: `bunx biome format ./src`
 - **Check**: `bunx biome check ./src` (lint + format)
@@ -37,8 +36,7 @@ No test runner is configured yet.
 
 ```
 index.ts                              — Interactive REPL: protocol selection + chat loop
-bench.ts                              — Benchmark runner CLI: runs scenarios across protocols
-compare.ts                            — Comparison CLI: runs all protocols, generates reports
+bench.ts                              — Benchmark CLI: runs scenarios across protocols, generates reports
 src/
   types.ts                            — Shared types (User, Agent, Message, Protocol, etc.)
   agents.ts                           — Agent persona definitions (Atlas, Sage, Bolt)
@@ -58,21 +56,16 @@ src/
   bench/
     types.ts                          — Benchmark + multi-round + judge result types
     runner.ts                         — Core runner: executes scenarios, delegates multi-round
-    scenarios.ts                      — Built-in scenario definitions (single + multi-round)
-    multi-round.ts                    — Multi-round conversation loop with synthesizers
-    synthesizers.ts                   — Prompt synthesizers (concatenate, summary, debate)
+    multi-round.ts                    — Multi-round conversation loop
     judge.ts                          — LLM-as-judge: forced tool-use evaluation
     judge-types.ts                    — Judge type definitions
     judge-prompt.ts                   — Judge system prompt, rubric, user prompt builder
     comparison.ts                     — Comparison engine: all protocols x all scenarios
     report-terminal.ts                — Terminal report renderer (chalk tables)
     report-markdown.ts                — Markdown report generator
-    scenarios/                        — JSON scenario files for comparison runs
-      index.ts                        — Scenario loader + validation
-      general-knowledge.json
-      coding-focused.json
-      creative-philosophical.json
-      mixed-multi-agent.json
+    scenarios/                        — JSON scenario definitions (single + multi-round)
+      index.ts                        — Scenario loader + validation + types
+      *.json                          — Individual scenario files (id, category, rounds, optional multiRound)
 ```
 
 ## Architecture
@@ -91,7 +84,7 @@ Legacy (not wired into factory/benchmarks/REPL):
 
 - **`src/config.ts`**: Shared `MODEL` string and Anthropic `client` singleton. Used by simple protocol and v2 agents.
 - **`src/cost.ts`**: `PRICING` map + `computeCost()`. Used by display, runner, and reports.
-- **`src/factory.ts`**: `createProtocol(id)` factory. Used by index.ts, bench.ts, compare.ts, and comparison engine.
+- **`src/factory.ts`**: `createProtocol(id)` factory. Used by index.ts, bench.ts, and comparison engine.
 
 ### Benchmark System
 

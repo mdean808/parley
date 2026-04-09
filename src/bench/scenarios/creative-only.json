@@ -1,0 +1,14 @@
+{
+	"id": "creative-only",
+	"name": "Creative Only",
+	"category": "creative",
+	"topic": "Haiku writing",
+	"rounds": [
+		{
+			"prompt": "Write a haiku about the silence between musical notes."
+		},
+		{
+			"prompt": "Now rewrite that haiku from the perspective of the instrument itself."
+		}
+	]
+}

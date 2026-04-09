@@ -1,0 +1,14 @@
+{
+	"id": "technical-only",
+	"name": "Technical Only",
+	"category": "technical",
+	"topic": "Hash maps",
+	"rounds": [
+		{
+			"prompt": "Explain how a hash map works internally, including collision resolution strategies."
+		},
+		{
+			"prompt": "Implement a basic hash map in TypeScript with separate chaining for collision resolution."
+		}
+	]
+}

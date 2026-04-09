@@ -1,0 +1,14 @@
+{
+	"id": "multi-round-deepening",
+	"name": "Multi-Round Deepening",
+	"category": "multi-round",
+	"topic": "Climate change solutions",
+	"rounds": [
+		{
+			"prompt": "What are the most promising approaches to addressing climate change?"
+		}
+	],
+	"multiRound": {
+		"rounds": 3
+	}
+}

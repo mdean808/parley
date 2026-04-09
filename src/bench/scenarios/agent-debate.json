@@ -1,0 +1,16 @@
+{
+	"id": "agent-debate",
+	"name": "Agent Debate",
+	"category": "multi-round",
+	"topic": "AI consciousness",
+	"rounds": [
+		{
+			"prompt": "Is it possible for an artificial intelligence to be truly conscious? Why or why not?"
+		}
+	],
+	"multiRound": {
+		"rounds": 4,
+		"followUpInstruction": "Respond to the other agents' points and provide your updated analysis.",
+		"crossAgentContext": true
+	}
+}

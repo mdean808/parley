@@ -1,0 +1,14 @@
+{
+	"id": "follow-up-chain",
+	"name": "Follow-Up Chain",
+	"category": "technical",
+	"topic": "REST API design",
+	"rounds": [
+		{
+			"prompt": "What are the key principles of good REST API design?"
+		}
+	],
+	"multiRound": {
+		"rounds": 2
+	}
+}

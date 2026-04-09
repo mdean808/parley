@@ -5,13 +5,13 @@
 	"topic": "Machine dreams and consciousness",
 	"rounds": [
 		{
-			"message": "If a machine could dream, what would it dream about?"
+			"prompt": "If a machine could dream, what would it dream about?"
 		},
 		{
-			"message": "Write a short poem from the perspective of that dreaming machine."
+			"prompt": "Write a short poem from the perspective of that dreaming machine."
 		},
 		{
-			"message": "What does that poem reveal about the boundary between simulation and experience?"
+			"prompt": "What does that poem reveal about the boundary between simulation and experience?"
 		}
 	]
 }
