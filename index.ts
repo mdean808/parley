@@ -6,7 +6,11 @@ import {
 	renderMarkdown,
 	summaryBlock,
 } from "./src/chat/display.ts";
-import { createProtocol, type ProtocolId } from "./src/factory.ts";
+import {
+	createProtocol,
+	getProtocolIds,
+	getProtocolRegistration,
+} from "./src/factory.ts";
 import type { ProtocolEvent } from "./src/types.ts";
 
 if (!process.env.ANTHROPIC_API_KEY) {
@@ -71,26 +75,19 @@ async function selectProtocol(
 	});
 }
 
-const protocolOptions = [
-	{
-		label: "Default Protocol (v1)",
-		description: "programmatic state machine, TOON, multi-agent",
-	},
-	{
-		label: "Default Protocol (v2)",
-		description: "agentic tool-use, chains, channels, TOON",
-	},
-	{
-		label: "Simple Protocol",
-		description: "direct chat, multi-agent, no overhead",
-	},
-];
+const protocolIds = getProtocolIds();
+const protocolOptions = protocolIds.map((id) => {
+	const reg = getProtocolRegistration(id);
+	return {
+		label: reg?.label ?? id,
+		description: reg?.description ?? "",
+	};
+});
 
 const choice = await selectProtocol(protocolOptions);
 
 const onEvent = (event: ProtocolEvent) => agentThought(event);
 
-const protocolIds: ProtocolId[] = ["v1", "v2", "simple"];
 const protocol = createProtocol(protocolIds[choice], { onEvent });
 
 console.log(`\nUsing: ${protocolOptions[choice].label}\n`);

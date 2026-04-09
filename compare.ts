@@ -13,6 +13,8 @@ if (!process.env.ANTHROPIC_API_KEY) {
 // Parse CLI args
 const args = process.argv.slice(2);
 let scenarioIds: string[] | undefined;
+let protocolIds: string[] | undefined;
+let baseline: string | undefined;
 let outputDir = "results";
 let judgeEnabled = true;
 let judgeModel: string | undefined;
@@ -20,6 +22,12 @@ let judgeModel: string | undefined;
 for (let i = 0; i < args.length; i++) {
 	if (args[i] === "--scenarios" && args[i + 1]) {
 		scenarioIds = args[i + 1].split(",");
+		i++;
+	} else if (args[i] === "--protocols" && args[i + 1]) {
+		protocolIds = args[i + 1].split(",");
+		i++;
+	} else if (args[i] === "--baseline" && args[i + 1]) {
+		baseline = args[i + 1];
 		i++;
 	} else if (args[i] === "--output" && args[i + 1]) {
 		outputDir = args[i + 1];
@@ -48,12 +56,18 @@ const judgeConfig: JudgeConfig = {
 console.log(chalk.bold("\nRunning comparison benchmarks...\n"));
 console.log(`Model: ${chalk.cyan(MODEL)}`);
 console.log(
+	`Protocols: ${chalk.cyan(protocolIds ? protocolIds.join(", ") : "all registered")}`,
+);
+if (baseline) console.log(`Baseline: ${chalk.cyan(baseline)}`);
+console.log(
 	`Scenarios: ${chalk.cyan(scenarioIds ? scenarioIds.join(", ") : "all")}`,
 );
 console.log(`Judge: ${chalk.cyan(judgeEnabled ? "enabled" : "disabled")}\n`);
 
 const report = await runComparison({
 	scenarios: scenarioIds,
+	protocols: protocolIds,
+	baseline,
 	outputDir,
 	judgeConfig,
 	onProgress: (msg) => {

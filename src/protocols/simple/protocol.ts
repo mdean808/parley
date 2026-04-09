@@ -13,7 +13,7 @@ import type {
  * Bare-bones protocol that calls Claude directly with no state machine,
  * TOON encoding, or multi-agent routing. Maintains per-agent conversation
  * history for multi-turn chat. Useful as a baseline comparison against
- * DefaultProtocol.
+ * DefaultProtocolV2.
  */
 export class SimpleProtocol implements Protocol {
 	private readonly personas: AgentPersona[];

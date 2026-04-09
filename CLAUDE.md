@@ -4,13 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Implementation of an agent-to-agent communication protocol with three protocol variants (v1 state-machine, v2 tool-use, simple direct). The system runs multiple AI agents (powered by Claude) that receive user requests, evaluate relevance based on their skills, and respond. Includes a benchmarking system that compares protocol performance with LLM-as-judge evaluation.
+Implementation of an agent-to-agent communication protocol with two active protocol variants (v2 tool-use, simple direct) and a legacy v1 state-machine implementation kept for posterity. The system runs multiple AI agents (powered by Claude) that receive user requests, evaluate relevance based on their skills, and respond. Includes a benchmarking system that compares protocol performance with LLM-as-judge evaluation.
 
 ## Commands
 
 - **Install**: `bun install`
 - **Run (interactive REPL)**: `bun run index.ts`
-- **Benchmark**: `bun run bench.ts [--protocols v1,v2,simple] [--output path] [--no-judge] [--judge-model model]`
+- **Benchmark**: `bun run bench.ts [--protocols v2,simple] [--output path] [--no-judge] [--judge-model model]`
 - **Comparison report**: `bun run compare.ts [--scenarios id1,id2] [--no-judge] [--judge-model model] [--output dir]`
 - **Lint**: `bunx biome lint ./src`
 - **Format**: `bunx biome format ./src`
@@ -49,7 +49,7 @@ src/
   chat/
     display.ts                        — Terminal UI: markdown rendering, stats, spinners
   protocols/
-    default_v1/                       — v1: programmatic state machine + TOON encoding
+    default_v1/                       — v1: legacy state machine + TOON (kept for posterity, not active)
       protocol.ts, agent.ts, store.ts, toon.ts
     default_v2/                       — v2: agentic tool-use + chain history + TOON
       protocol.ts, agent.ts, store.ts, toon.ts, tools.ts, prompt.ts
@@ -79,15 +79,17 @@ src/
 
 ### Protocol Implementations
 
-All three implement the `Protocol` interface (`initialize()` + `sendRequest()`):
+Two active protocols implement the `Protocol` interface (`initialize()` + `sendRequest()`):
 
-- **v1 (DefaultProtocol)**: Programmatic state machine (ACK/PROCESS/RESPONSE), TOON wire format, injected `AgentBrain`, central store with pub/sub. `ClaudeBrain` handles skill evaluation + response generation.
 - **v2 (DefaultProtocolV2)**: Agentic tool-use approach. Agents have tools (`send_message`, `get_message`, `evaluate_skills`). Per-chain LLM conversation history. Richer multi-round support.
 - **simple (SimpleProtocol)**: Direct Claude SDK calls, no protocol overhead. Per-agent conversation history. All agents always respond (no skill filtering). Baseline for comparison.
 
+Legacy (not wired into factory/benchmarks/REPL):
+- **v1 (DefaultProtocol)**: Programmatic state machine (ACK/PROCESS/RESPONSE), TOON wire format, injected `AgentBrain`, central store with pub/sub. Code kept for reference.
+
 ### Shared Utilities
 
-- **`src/config.ts`**: Shared `MODEL` string and Anthropic `client` singleton. Used by brain, simple protocol, and v2 agents.
+- **`src/config.ts`**: Shared `MODEL` string and Anthropic `client` singleton. Used by simple protocol and v2 agents.
 - **`src/cost.ts`**: `PRICING` map + `computeCost()`. Used by display, runner, and reports.
 - **`src/factory.ts`**: `createProtocol(id)` factory. Used by index.ts, bench.ts, compare.ts, and comparison engine.
 
@@ -96,17 +98,8 @@ All three implement the `Protocol` interface (`initialize()` + `sendRequest()`):
 - **Runner** (`src/bench/runner.ts`): Executes `ScenarioConfig` against a protocol. Detects `multiRound` config and delegates to `runMultiRound()`.
 - **Multi-round** (`src/bench/multi-round.ts`): Runs N rounds where agent responses feed into a synthesizer to produce the next prompt. Same `chainId` across rounds for context continuity.
 - **Judge** (`src/bench/judge.ts`): Independent LLM evaluation. Scores on relevance, information_density, redundancy, summarization_quality, and coherence (multi-round only). Uses forced tool-use for structured output. Separate Anthropic client from agents.
-- **Comparison** (`src/bench/comparison.ts`): Runs all 3 protocols across all scenarios, computes overhead metrics (token/cost/latency deltas vs simple baseline), generates aggregate scores.
-
-### Message State Machine (v1)
-
-Messages follow: `REQUEST → ACK → PROCESS → RESPONSE`
-
-Key constraints:
-- No RESPONSE without preceding ACK and PROCESS in the same chain
-- After ACK, agent MUST eventually send RESPONSE or error
-- Agents may silently decline a REQUEST (LLM-evaluated skill matching)
+- **Comparison** (`src/bench/comparison.ts`): Runs v2 and simple protocols across all scenarios, computes overhead metrics (token/cost/latency deltas vs simple baseline), generates aggregate scores.
 
 ### TOON Format
 
-v1 and v2 communication uses TOON (Token Object Over Network). Reference: https://github.com/toon-format/toon
+v2 communication uses TOON (Token Object Over Network). Reference: https://github.com/toon-format/toon

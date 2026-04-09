@@ -8,7 +8,7 @@ import {
 } from "./src/bench/scenarios.ts";
 import type { BenchmarkOutput, ProtocolRunResult } from "./src/bench/types.ts";
 import { MODEL } from "./src/config.ts";
-import { createProtocol, type ProtocolId } from "./src/factory.ts";
+import { createProtocol, getProtocolIds } from "./src/factory.ts";
 
 if (!process.env.ANTHROPIC_API_KEY) {
 	console.error("Error: ANTHROPIC_API_KEY environment variable is required.");
@@ -18,13 +18,13 @@ if (!process.env.ANTHROPIC_API_KEY) {
 // Parse CLI args
 const args = process.argv.slice(2);
 let outputPath = "results/benchmark.json";
-let protocols: ProtocolId[] = ["v1", "v2", "simple"];
+let protocols: string[] = getProtocolIds();
 let judgeEnabled = true;
 let judgeModel: string | undefined;
 
 for (let i = 0; i < args.length; i++) {
 	if (args[i] === "--protocols" && args[i + 1]) {
-		protocols = args[i + 1].split(",") as ProtocolId[];
+		protocols = args[i + 1].split(",");
 		i++;
 	} else if (args[i] === "--output" && args[i + 1]) {
 		outputPath = args[i + 1];

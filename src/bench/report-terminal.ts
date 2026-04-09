@@ -1,12 +1,5 @@
 import chalk from "chalk";
 import type { ComparisonReport, OverheadMetrics } from "./comparison.ts";
-import type { ProtocolId } from "./types.ts";
-
-const PROTOCOL_LABELS: Record<ProtocolId, string> = {
-	v1: "v1 (state)",
-	v2: "v2 (tools)",
-	simple: "simple",
-};
 
 function pad(str: string, len: number): string {
 	return str.padEnd(len);
@@ -27,12 +20,13 @@ function fmtOverhead(n: number): string {
 }
 
 export function printTerminalReport(report: ComparisonReport): void {
-	const protocolIds: ProtocolId[] = ["v1", "v2", "simple"];
+	const { protocolIds, baseline } = report;
 
 	console.log(chalk.bold("\n=== Protocol Comparison Report ===\n"));
 	console.log(`Model: ${chalk.cyan(report.model)}`);
 	console.log(`Generated: ${chalk.dim(report.generatedAt)}`);
-	console.log(`Scenarios: ${chalk.cyan(String(report.scenarios.length))}\n`);
+	console.log(`Scenarios: ${chalk.cyan(String(report.scenarios.length))}`);
+	console.log(`Baseline: ${chalk.cyan(baseline)}\n`);
 
 	// Protocol Summary Table
 	console.log(chalk.bold("Protocol Summary"));
@@ -70,7 +64,7 @@ export function printTerminalReport(report: ComparisonReport): void {
 
 		const judgeAvg = judgeCount > 0 ? (judgeSum / judgeCount).toFixed(1) : "—";
 		const row = [
-			pad(PROTOCOL_LABELS[pid], cols[0]),
+			pad(pid, cols[0]),
 			pad(fmtNum(totalIn), cols[1]),
 			pad(fmtNum(totalOut), cols[2]),
 			pad(`$${totalCost.toFixed(4)}`, cols[3]),
@@ -80,44 +74,48 @@ export function printTerminalReport(report: ComparisonReport): void {
 		console.log(row);
 	}
 
-	// Overhead Table
-	console.log(chalk.bold("\nOverhead vs Simple"));
-	const oCols = [12, 14, 15, 12, 12];
-	const oHdr = [
-		pad("vs Simple", oCols[0]),
-		pad("+Input Tok", oCols[1]),
-		pad("+Output Tok", oCols[2]),
-		pad("+Cost", oCols[3]),
-		pad("+Duration", oCols[4]),
-	].join(" | ");
-	console.log(oHdr);
-	console.log(chalk.dim("─".repeat(oHdr.length)));
-
-	function printOverheadRow(label: string, o: OverheadMetrics): void {
-		const row = [
-			pad(label, oCols[0]),
-			pad(fmtOverhead(o.extraInputTokens), oCols[1]),
-			pad(fmtOverhead(o.extraOutputTokens), oCols[2]),
-			pad(
-				`$${(o.extraInputTokens * 0 + o.extraOutputTokens * 0).toFixed(4)}`,
-				oCols[3],
-			),
-			pad(`${(o.extraDurationMs / 1000).toFixed(1)}s`, oCols[4]),
+	// Overhead Table (non-baseline protocols vs baseline)
+	const nonBaseline = protocolIds.filter((p) => p !== baseline);
+	if (nonBaseline.length > 0) {
+		console.log(chalk.bold(`\nOverhead vs ${baseline}`));
+		const oCols = [12, 14, 15, 12, 12];
+		const oHdr = [
+			pad(`vs ${baseline}`, oCols[0]),
+			pad("+Input Tok", oCols[1]),
+			pad("+Output Tok", oCols[2]),
+			pad("+Cost", oCols[3]),
+			pad("+Duration", oCols[4]),
 		].join(" | ");
-		console.log(row);
+		console.log(oHdr);
+		console.log(chalk.dim("─".repeat(oHdr.length)));
 
-		const pctRow = [
-			pad("", oCols[0]),
-			pad(`(${fmtPct(o.extraInputPercent)})`, oCols[1]),
-			pad(`(${fmtPct(o.extraOutputPercent)})`, oCols[2]),
-			pad("", oCols[3]),
-			pad(`(${fmtPct(o.extraDurationPercent)})`, oCols[4]),
-		].join(" | ");
-		console.log(chalk.dim(pctRow));
+		function printOverheadRow(label: string, o: OverheadMetrics): void {
+			const row = [
+				pad(label, oCols[0]),
+				pad(fmtOverhead(o.extraInputTokens), oCols[1]),
+				pad(fmtOverhead(o.extraOutputTokens), oCols[2]),
+				pad(
+					`$${(o.extraInputTokens * 0 + o.extraOutputTokens * 0).toFixed(4)}`,
+					oCols[3],
+				),
+				pad(`${(o.extraDurationMs / 1000).toFixed(1)}s`, oCols[4]),
+			].join(" | ");
+			console.log(row);
+
+			const pctRow = [
+				pad("", oCols[0]),
+				pad(`(${fmtPct(o.extraInputPercent)})`, oCols[1]),
+				pad(`(${fmtPct(o.extraOutputPercent)})`, oCols[2]),
+				pad("", oCols[3]),
+				pad(`(${fmtPct(o.extraDurationPercent)})`, oCols[4]),
+			].join(" | ");
+			console.log(chalk.dim(pctRow));
+		}
+
+		for (const pid of nonBaseline) {
+			printOverheadRow(pid, report.aggregate.avgOverhead[pid]);
+		}
 	}
-
-	printOverheadRow("v1", report.aggregate.avgOverhead.v1VsSimple);
-	printOverheadRow("v2", report.aggregate.avgOverhead.v2VsSimple);
 
 	// Per-Scenario Judge Scores
 	const hasJudge = report.scenarios.some((sc) =>
@@ -126,34 +124,32 @@ export function printTerminalReport(report: ComparisonReport): void {
 
 	if (hasJudge) {
 		console.log(chalk.bold("\nPer-Scenario Judge Scores"));
-		const sCols = [24, 6, 6, 8, 6];
+		const colWidth = 8;
+		const sCols = [24, ...protocolIds.map(() => colWidth), 6];
 		const sHdr = [
 			pad("Scenario", sCols[0]),
-			pad("v1", sCols[1]),
-			pad("v2", sCols[2]),
-			pad("simple", sCols[3]),
-			pad("Best", sCols[4]),
+			...protocolIds.map((pid, i) => pad(pid, sCols[i + 1])),
+			pad("Best", sCols[sCols.length - 1]),
 		].join(" | ");
 		console.log(sHdr);
 		console.log(chalk.dim("─".repeat(sHdr.length)));
 
 		for (const sc of report.scenarios) {
-			const scores: Record<ProtocolId, number> = {
-				v1: sc.results.v1?.judge?.aggregate.overall ?? 0,
-				v2: sc.results.v2?.judge?.aggregate.overall ?? 0,
-				simple: sc.results.simple?.judge?.aggregate.overall ?? 0,
-			};
+			const scores: Record<string, number> = {};
+			for (const pid of protocolIds) {
+				scores[pid] = sc.results[pid]?.judge?.aggregate.overall ?? 0;
+			}
 
-			const best = (Object.entries(scores) as [ProtocolId, number][]).reduce(
-				(a, b) => (b[1] > a[1] ? b : a),
+			const best = Object.entries(scores).reduce((a, b) =>
+				b[1] > a[1] ? b : a,
 			)[0];
 
 			const row = [
 				pad(sc.scenario.name, sCols[0]),
-				pad(scores.v1.toFixed(1), sCols[1]),
-				pad(scores.v2.toFixed(1), sCols[2]),
-				pad(scores.simple.toFixed(1), sCols[3]),
-				pad(best, sCols[4]),
+				...protocolIds.map((pid, i) =>
+					pad(scores[pid].toFixed(1), sCols[i + 1]),
+				),
+				pad(best, sCols[sCols.length - 1]),
 			].join(" | ");
 			console.log(row);
 		}

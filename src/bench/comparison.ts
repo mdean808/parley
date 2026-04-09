@@ -1,6 +1,5 @@
 import { MODEL } from "../config.ts";
-import type { ProtocolId } from "../factory.ts";
-import { createProtocol } from "../factory.ts";
+import { createProtocol, getProtocolIds } from "../factory.ts";
 import { evaluateScenario } from "./judge.ts";
 import type { JudgeConfig } from "./judge-types.ts";
 import { runScenario } from "./runner.ts";
@@ -20,32 +19,34 @@ export interface OverheadMetrics {
 	extraDurationPercent: number;
 }
 
-export interface ProtocolOverhead {
-	v1VsSimple: OverheadMetrics;
-	v2VsSimple: OverheadMetrics;
-}
+/** Maps non-baseline protocol IDs to their overhead vs the baseline. */
+export type ProtocolOverhead = Record<string, OverheadMetrics>;
 
 export interface ScenarioComparison {
 	scenario: ComparisonScenario;
-	results: Record<ProtocolId, ProtocolRunResult>;
+	results: Record<string, ProtocolRunResult>;
 	protocolOverhead: ProtocolOverhead;
 }
 
 export interface AggregateComparison {
-	avgScores: Record<ProtocolId, number>;
+	avgScores: Record<string, number>;
 	avgOverhead: ProtocolOverhead;
-	agentParticipation: Record<string, Record<ProtocolId, number>>;
+	agentParticipation: Record<string, Record<string, number>>;
 }
 
 export interface ComparisonReport {
 	generatedAt: string;
 	model: string;
+	protocolIds: string[];
+	baseline: string;
 	scenarios: ScenarioComparison[];
 	aggregate: AggregateComparison;
 }
 
 export interface ComparisonOptions {
 	scenarios?: string[];
+	protocols?: string[];
+	baseline?: string;
 	model?: string;
 	outputDir?: string;
 	judgeConfig?: JudgeConfig;
@@ -89,7 +90,8 @@ export async function runComparison(
 	options: ComparisonOptions = {},
 ): Promise<ComparisonReport> {
 	const progress = options.onProgress ?? (() => {});
-	const protocolIds: ProtocolId[] = ["v1", "v2", "simple"];
+	const protocolIds = options.protocols ?? getProtocolIds();
+	const baseline = options.baseline ?? protocolIds[0];
 	const judgeConfig: JudgeConfig = options.judgeConfig ?? {
 		enabled: true,
 	};
@@ -148,21 +150,29 @@ export async function runComparison(
 			results[pid] = result;
 		}
 
-		const protocolOverhead: ProtocolOverhead = {
-			v1VsSimple: computeOverhead(results.v1, results.simple),
-			v2VsSimple: computeOverhead(results.v2, results.simple),
-		};
+		// Compute overhead for each non-baseline protocol
+		const protocolOverhead: ProtocolOverhead = {};
+		for (const pid of protocolIds) {
+			if (pid !== baseline) {
+				protocolOverhead[pid] = computeOverhead(
+					results[pid],
+					results[baseline],
+				);
+			}
+		}
 
 		scenarioComparisons.push({
 			scenario: cs,
-			results: results as Record<ProtocolId, ProtocolRunResult>,
+			results,
 			protocolOverhead,
 		});
 	}
 
 	// Compute aggregate
-	const avgScores: Record<ProtocolId, number> = { v1: 0, v2: 0, simple: 0 };
-	const agentParticipation: Record<string, Record<ProtocolId, number>> = {};
+	const avgScores: Record<string, number> = {};
+	for (const pid of protocolIds) avgScores[pid] = 0;
+
+	const agentParticipation: Record<string, Record<string, number>> = {};
 
 	for (const pid of protocolIds) {
 		let scoreSum = 0;
@@ -179,11 +189,9 @@ export async function runComparison(
 			for (const round of result.rounds) {
 				for (const agent of round.agents) {
 					if (!agentParticipation[agent.agentName]) {
-						agentParticipation[agent.agentName] = {
-							v1: 0,
-							v2: 0,
-							simple: 0,
-						};
+						agentParticipation[agent.agentName] = {};
+						for (const p of protocolIds)
+							agentParticipation[agent.agentName][p] = 0;
 					}
 					agentParticipation[agent.agentName][pid]++;
 				}
@@ -193,19 +201,21 @@ export async function runComparison(
 		avgScores[pid] = scoreCount > 0 ? scoreSum / scoreCount : 0;
 	}
 
-	// Average overhead across scenarios
-	const avgOverhead: ProtocolOverhead = {
-		v1VsSimple: averageOverhead(
-			scenarioComparisons.map((sc) => sc.protocolOverhead.v1VsSimple),
-		),
-		v2VsSimple: averageOverhead(
-			scenarioComparisons.map((sc) => sc.protocolOverhead.v2VsSimple),
-		),
-	};
+	// Average overhead across scenarios for each non-baseline protocol
+	const avgOverhead: ProtocolOverhead = {};
+	for (const pid of protocolIds) {
+		if (pid !== baseline) {
+			avgOverhead[pid] = averageOverhead(
+				scenarioComparisons.map((sc) => sc.protocolOverhead[pid]),
+			);
+		}
+	}
 
 	return {
 		generatedAt: new Date().toISOString(),
 		model: MODEL,
+		protocolIds,
+		baseline,
 		scenarios: scenarioComparisons,
 		aggregate: {
 			avgScores,

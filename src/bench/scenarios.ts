@@ -98,4 +98,17 @@ export const MULTI_ROUND_SCENARIOS: ScenarioConfig[] = [
 			rounds: 2,
 		},
 	},
+	{
+		name: "build-rest-node",
+		topic: "REST API program",
+		rounds: [
+			{
+				prompt:
+					"Provide the code for a simple REST API (GET /, POST /, GET /health) that returns the last thing POSTed (or nil if none). Use vanilla NodeJs.",
+			},
+		],
+		multiRound: {
+			rounds: 2,
+		},
+	},
 ];

@@ -1,6 +1,6 @@
 # simple-implementation
 
-A multi-protocol agent-to-agent communication system with benchmarking. Three AI agents (Atlas/Research, Sage/Creative, Bolt/Technical) collaborate to answer user requests, with three different protocol implementations compared side-by-side.
+A multi-protocol agent-to-agent communication system with benchmarking. Three AI agents (Atlas/Research, Sage/Creative, Bolt/Technical) collaborate to answer user requests, with two active protocol implementations compared side-by-side.
 
 Built for COGS 402 to study how protocol design affects multi-agent response quality, token efficiency, and latency.
 
@@ -34,7 +34,7 @@ Select a protocol from the menu, then type messages. Agents evaluate whether eac
 bun run bench.ts
 ```
 
-Runs all built-in scenarios across all three protocols, scores responses with an LLM judge, and writes results to `results/benchmark.json`.
+Runs all built-in scenarios across both protocols, scores responses with an LLM judge, and writes results to `results/benchmark.json`.
 
 ### Run Full Comparison
 
@@ -48,9 +48,10 @@ Runs all protocols against all comparison scenarios, computes overhead metrics, 
 
 | Protocol | Approach | Skill Filtering | Multi-Round Context |
 |----------|----------|-----------------|---------------------|
-| **v1** (state machine) | Programmatic ACK/PROCESS/RESPONSE cycle, TOON wire format | LLM-evaluated per request | Via chain store; synthesizer bridges rounds |
 | **v2** (tool-use) | Agentic — agents use tools (`send_message`, `get_message`, `evaluate_skills`) | Tool-based skill evaluation | Per-chain LLM history + store queries |
 | **simple** (direct) | Direct Claude API calls, no protocol overhead | None — all agents always respond | Per-agent conversation history |
+
+> **Note:** A legacy v1 state-machine protocol exists in `src/protocols/default_v1/` for reference but is not active in the REPL or benchmarks.
 
 ## Agents
 
@@ -84,7 +85,7 @@ The benchmark system measures how protocol design affects response quality and c
 
 ```bash
 # Benchmark runner
-bun run bench.ts --protocols v1,v2,simple   # select protocols (default: all)
+bun run bench.ts --protocols v2,simple      # select protocols (default: both)
 bun run bench.ts --output results/out.json  # custom output path
 bun run bench.ts --no-judge                 # skip LLM judge (cheaper)
 bun run bench.ts --judge-model claude-sonnet-4-5-20250929  # override judge model
@@ -114,7 +115,7 @@ bun run compare.ts --no-judge                                    # skip judge
 - **Runtime**: [Bun](https://bun.sh)
 - **Language**: TypeScript
 - **LLM**: Claude via `@anthropic-ai/sdk`
-- **Wire Format**: [TOON](https://github.com/toon-format/toon) (v1 and v2 protocols)
+- **Wire Format**: [TOON](https://github.com/toon-format/toon) (v2 protocol)
 - **Linter/Formatter**: [Biome](https://biomejs.dev)
 
 ## Protocol Specs
