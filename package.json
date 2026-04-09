@@ -2,6 +2,14 @@
 	"name": "simple-implementation",
 	"module": "index.ts",
 	"type": "module",
+	"workspaces": ["apps/*"],
+	"exports": {
+		"./types": "./src/types.ts",
+		"./factory": "./src/factory.ts",
+		"./config": "./src/config.ts",
+		"./cost": "./src/cost.ts",
+		"./agents": "./src/agents.ts"
+	},
 	"devDependencies": {
 		"@biomejs/biome": "2.4.4",
 		"@types/bun": "latest",

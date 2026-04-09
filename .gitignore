@@ -176,3 +176,6 @@ dist
 
 # Benchmark results
 results/
+
+# SvelteKit
+.svelte-kit/
