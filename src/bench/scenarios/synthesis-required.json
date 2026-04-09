@@ -1,0 +1,20 @@
+{
+	"id": "synthesis-required",
+	"name": "Synthesis Required",
+	"category": "multi-round",
+	"topic": "AI startup product pitch",
+	"rounds": [
+		{
+			"prompt": "A startup wants to pitch an AI-powered tool that helps architects design energy-efficient buildings. What does the competitive landscape look like and what market gap could they fill?"
+		},
+		{
+			"prompt": "Draft a compelling narrative hook for the pitch deck — something that makes investors feel the problem before they see the solution."
+		},
+		{
+			"prompt": "What's the minimum viable technical architecture? Outline the key components, models, and data pipeline."
+		},
+		{
+			"prompt": "Now synthesize all of the above into a single 60-second elevator pitch."
+		}
+	]
+}

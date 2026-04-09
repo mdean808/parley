@@ -1,0 +1,17 @@
+{
+	"id": "domain-shifting",
+	"name": "Domain Shifting",
+	"category": "mixed",
+	"topic": "CRISPR gene editing across domains",
+	"rounds": [
+		{
+			"prompt": "What is CRISPR-Cas9 and what are its most important real-world applications so far?"
+		},
+		{
+			"prompt": "Write a short fiction scene set in 2040 where a family debates whether to use CRISPR on their unborn child."
+		},
+		{
+			"prompt": "Sketch a Python simulation that models the probability of off-target edits given a guide RNA sequence length and mismatch tolerance."
+		}
+	]
+}

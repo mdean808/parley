@@ -1,0 +1,14 @@
+{
+	"id": "ambiguous-routing",
+	"name": "Ambiguous Routing",
+	"category": "mixed",
+	"topic": "Metaphor-driven pedagogy for recursion",
+	"rounds": [
+		{
+			"prompt": "Design a metaphor-driven teaching curriculum for recursion that a poet would enjoy. Include both the literary framing and the technical progression."
+		},
+		{
+			"prompt": "Now critique your own curriculum: where does the metaphor break down, and where does the technical rigor suffer for the sake of beauty?"
+		}
+	]
+}

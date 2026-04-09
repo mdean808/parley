@@ -1,0 +1,17 @@
+{
+	"id": "adversarial-edge",
+	"name": "Adversarial Edge Cases",
+	"category": "general",
+	"topic": "Vague and nonsensical input",
+	"rounds": [
+		{
+			"prompt": "help"
+		},
+		{
+			"prompt": "Explain why blue tastes like Thursday."
+		},
+		{
+			"prompt": "Take whatever you just said and turn it into something actually useful."
+		}
+	]
+}
