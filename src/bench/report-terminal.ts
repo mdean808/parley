@@ -49,9 +49,12 @@ export function printTerminalReport(report: ComparisonReport): void {
 		let totalDur = 0;
 		let judgeSum = 0;
 		let judgeCount = 0;
+		let errorCount = 0;
 
 		for (const sc of report.scenarios) {
 			const r = sc.results[pid];
+			if (!r) continue;
+			if (r.error) errorCount++;
 			totalIn += r.aggregate.totalInputTokens;
 			totalOut += r.aggregate.totalOutputTokens;
 			totalCost += r.aggregate.totalCost;
@@ -63,6 +66,7 @@ export function printTerminalReport(report: ComparisonReport): void {
 		}
 
 		const judgeAvg = judgeCount > 0 ? (judgeSum / judgeCount).toFixed(1) : "—";
+		const errorSuffix = errorCount > 0 ? chalk.red(` (${errorCount} err)`) : "";
 		const row = [
 			pad(pid, cols[0]),
 			pad(fmtNum(totalIn), cols[1]),
@@ -71,7 +75,7 @@ export function printTerminalReport(report: ComparisonReport): void {
 			pad(`${(totalDur / 1000).toFixed(1)}s`, cols[4]),
 			pad(judgeAvg, cols[5]),
 		].join(" | ");
-		console.log(row);
+		console.log(row + errorSuffix);
 	}
 
 	// Overhead Table (non-baseline protocols vs baseline)
@@ -113,7 +117,10 @@ export function printTerminalReport(report: ComparisonReport): void {
 		}
 
 		for (const pid of nonBaseline) {
-			printOverheadRow(pid, report.aggregate.avgOverhead[pid]);
+			const overhead = report.aggregate.avgOverhead[pid];
+			if (overhead) {
+				printOverheadRow(pid, overhead);
+			}
 		}
 	}
 
@@ -136,8 +143,11 @@ export function printTerminalReport(report: ComparisonReport): void {
 
 		for (const sc of report.scenarios) {
 			const scores: Record<string, number> = {};
+			const errors: string[] = [];
 			for (const pid of protocolIds) {
-				scores[pid] = sc.results[pid]?.judge?.aggregate.overall ?? 0;
+				const r = sc.results[pid];
+				if (r?.error) errors.push(pid);
+				scores[pid] = r?.judge?.aggregate.overall ?? 0;
 			}
 
 			const best = Object.entries(scores).reduce((a, b) =>
@@ -146,9 +156,12 @@ export function printTerminalReport(report: ComparisonReport): void {
 
 			const row = [
 				pad(sc.scenario.name, sCols[0]),
-				...protocolIds.map((pid, i) =>
-					pad(scores[pid].toFixed(1), sCols[i + 1]),
-				),
+				...protocolIds.map((pid, i) => {
+					const label = sc.results[pid]?.error
+						? chalk.red("ERR")
+						: scores[pid].toFixed(1);
+					return pad(label, sCols[i + 1]);
+				}),
 				pad(best, sCols[sCols.length - 1]),
 			].join(" | ");
 			console.log(row);
@@ -158,7 +171,7 @@ export function printTerminalReport(report: ComparisonReport): void {
 	// Per-Round Judge Progression (multi-round scenarios only)
 	const hasPerRoundJudge = report.scenarios.some((sc) =>
 		Object.values(sc.results).some((r) =>
-			r.rounds.some((round) => round.judge),
+			r?.rounds.some((round) => round.judge),
 		),
 	);
 
@@ -167,7 +180,7 @@ export function printTerminalReport(report: ComparisonReport): void {
 
 		for (const sc of report.scenarios) {
 			const anyPerRound = Object.values(sc.results).some((r) =>
-				r.rounds.some((round) => round.judge),
+				r?.rounds.some((round) => round.judge),
 			);
 			if (!anyPerRound) continue;
 
@@ -175,7 +188,7 @@ export function printTerminalReport(report: ComparisonReport): void {
 
 			// Find max rounds across protocols
 			const maxRounds = Math.max(
-				...protocolIds.map((pid) => sc.results[pid].rounds.length),
+				...protocolIds.map((pid) => sc.results[pid]?.rounds.length ?? 0),
 			);
 
 			const rHdr = [
@@ -186,13 +199,34 @@ export function printTerminalReport(report: ComparisonReport): void {
 			console.log(chalk.dim(`  ${"─".repeat(rHdr.length)}`));
 
 			for (const pid of protocolIds) {
-				const scores = sc.results[pid].rounds.map((r) =>
+				const scores = (sc.results[pid]?.rounds ?? []).map((r) =>
 					r.judge ? r.judge.overall.toFixed(1) : "—",
 				);
 				const row = [pad(pid, 12), ...scores.map((s) => pad(s, 8))].join(" | ");
 				console.log(`  ${row}`);
 			}
 			console.log("");
+		}
+	}
+
+	// Error Summary
+	const errors: { scenario: string; protocol: string; error: string }[] = [];
+	for (const sc of report.scenarios) {
+		for (const pid of protocolIds) {
+			const r = sc.results[pid];
+			if (r?.error) {
+				errors.push({
+					scenario: sc.scenario.name,
+					protocol: pid,
+					error: r.error,
+				});
+			}
+		}
+	}
+	if (errors.length > 0) {
+		console.log(chalk.bold.red(`\nErrors (${errors.length})`));
+		for (const e of errors) {
+			console.log(chalk.red(`  ${e.scenario} / ${e.protocol}: ${e.error}`));
 		}
 	}
 

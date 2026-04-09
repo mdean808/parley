@@ -9,10 +9,10 @@ import type {
 	ProtocolInit,
 	ProtocolResponse,
 } from "../../types.ts";
-import type { AgentBrain, BrainMeta } from "./types.ts";
 import { ProtocolAgent } from "./agent.ts";
 import { store } from "./store.ts";
 import { encodeOutbound } from "./toon.ts";
+import type { AgentBrain, BrainMeta } from "./types.ts";
 
 /** Maximum time (ms) to wait for agents to send ACKs before assuming they declined. */
 const ACK_WINDOW_MS: number = 5_000;

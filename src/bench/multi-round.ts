@@ -19,6 +19,7 @@ export async function runMultiRound(
 	const totalRounds = config.rounds;
 
 	const rounds: RoundMetrics[] = [];
+	let roundError: string | undefined;
 
 	for (let i = 0; i < totalRounds; i++) {
 		let prompt: string;
@@ -35,7 +36,13 @@ export async function runMultiRound(
 		}
 
 		const roundStart = performance.now();
-		const { results } = await protocol.sendRequest(userId, prompt, chainId);
+		let results: Awaited<ReturnType<typeof protocol.sendRequest>>["results"];
+		try {
+			({ results } = await protocol.sendRequest(userId, prompt, chainId));
+		} catch (err) {
+			roundError = `Round ${i + 1} failed: ${err instanceof Error ? err.message : String(err)}`;
+			break;
+		}
 		const roundDurationMs = performance.now() - roundStart;
 
 		const totalInputTokens = results.reduce(
@@ -73,7 +80,8 @@ export async function runMultiRound(
 			totalDurationMs: rounds.reduce((s, r) => s + r.totalDurationMs, 0),
 			totalCost: rounds.reduce((s, r) => s + r.cost, 0),
 			roundCount: rounds.length,
-			stoppedEarly: false,
+			stoppedEarly: !!roundError,
+			error: roundError,
 		},
 	};
 }

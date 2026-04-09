@@ -73,7 +73,8 @@ export class ClaudeCodeProtocol implements Protocol {
 
 		if (proc.exitCode !== 0) {
 			const stderr = proc.stderr.toString();
-			throw new Error(`claude CLI failed (exit ${proc.exitCode}): ${stderr}`);
+			const detail = stderr || stdout || "(no output)";
+			throw new Error(`claude CLI failed (exit ${proc.exitCode}): ${detail}`);
 		}
 
 		const output: ClaudeCodeOutput = JSON.parse(stdout);

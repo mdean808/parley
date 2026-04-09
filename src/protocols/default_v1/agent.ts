@@ -1,5 +1,7 @@
 import { log } from "../../logger.ts";
 import type { Agent, Message, ProtocolEventHandler } from "../../types.ts";
+import { store } from "./store.ts";
+import { encodeOutbound } from "./toon.ts";
 import type {
 	AgentBrain,
 	BrainMeta,
@@ -7,8 +9,6 @@ import type {
 	BrainResponse,
 	DelegationResult,
 } from "./types.ts";
-import { store } from "./store.ts";
-import { encodeOutbound } from "./toon.ts";
 
 const MAX_VALIDATION_ATTEMPTS = 3;
 const DELEGATION_ACK_WINDOW_MS = 5_000;

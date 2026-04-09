@@ -33,6 +33,7 @@ export interface MultiRoundResult {
 		totalCost: number;
 		roundCount: number;
 		stoppedEarly: boolean;
+		error?: string;
 	};
 }
 
@@ -84,6 +85,7 @@ export interface ProtocolRunResult {
 		roundCount: number;
 	};
 	judge?: JudgeResult;
+	error?: string;
 }
 
 export interface BenchmarkOutput {

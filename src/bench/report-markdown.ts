@@ -45,6 +45,7 @@ function generateObservations(
 	for (const pid of protocolIds) {
 		if (pid === baseline) continue;
 		const result = sc.results[pid];
+		if (!result || result.error) continue;
 		const agentCount = new Set(
 			result.rounds.flatMap((r) => r.agents.map((a) => a.agentName)),
 		).size;
@@ -107,6 +108,7 @@ export function generateMarkdownReport(report: ComparisonReport): string {
 
 		for (const sc of report.scenarios) {
 			const r = sc.results[pid];
+			if (!r) continue;
 			totalIn += r.aggregate.totalInputTokens;
 			totalOut += r.aggregate.totalOutputTokens;
 			totalCost += r.aggregate.totalCost;
@@ -135,7 +137,10 @@ export function generateMarkdownReport(report: ComparisonReport): string {
 		}
 
 		for (const pid of nonBaseline) {
-			lines.push(overheadRow(pid, report.aggregate.avgOverhead[pid]));
+			const overhead = report.aggregate.avgOverhead[pid];
+			if (overhead) {
+				lines.push(overheadRow(pid, overhead));
+			}
 		}
 		lines.push("");
 	}
@@ -148,6 +153,16 @@ export function generateMarkdownReport(report: ComparisonReport): string {
 		lines.push(`**Topic:** ${sc.scenario.topic}\n`);
 		lines.push(`**Rounds:** ${sc.scenario.rounds.length}\n`);
 
+		// Show errors for this scenario
+		const scenarioErrors = protocolIds.filter((pid) => sc.results[pid]?.error);
+		if (scenarioErrors.length > 0) {
+			lines.push("**Errors:**\n");
+			for (const pid of scenarioErrors) {
+				lines.push(`- **${pid}:** ${sc.results[pid].error}`);
+			}
+			lines.push("");
+		}
+
 		// Token Usage by Round
 		lines.push("#### Token Usage\n");
 		lines.push("| Protocol | Round | Input | Output | Duration |");
@@ -155,6 +170,7 @@ export function generateMarkdownReport(report: ComparisonReport): string {
 
 		for (const pid of protocolIds) {
 			const result = sc.results[pid];
+			if (!result) continue;
 			for (const round of result.rounds) {
 				lines.push(
 					`| ${pid} | ${round.roundIndex + 1} | ${fmtNum(round.totalInputTokens)} | ${fmtNum(round.totalOutputTokens)} | ${(round.totalDurationMs / 1000).toFixed(1)}s |`,
@@ -197,7 +213,7 @@ export function generateMarkdownReport(report: ComparisonReport): string {
 
 		// Per-Round Judge Progression
 		const hasPerRoundJudge = Object.values(sc.results).some((r) =>
-			r.rounds.some((round) => round.judge),
+			r?.rounds.some((round) => round.judge),
 		);
 		if (hasPerRoundJudge) {
 			lines.push("#### Per-Round Judge Progression\n");
@@ -205,7 +221,7 @@ export function generateMarkdownReport(report: ComparisonReport): string {
 			// Collect all dimensions across all rounds
 			const roundDims = new Set<string>();
 			for (const pid of protocolIds) {
-				for (const round of sc.results[pid].rounds) {
+				for (const round of sc.results[pid]?.rounds ?? []) {
 					if (round.judge) {
 						for (const d of round.judge.dimensions) {
 							roundDims.add(d.dimension);
@@ -221,7 +237,7 @@ export function generateMarkdownReport(report: ComparisonReport): string {
 			);
 
 			for (const pid of protocolIds) {
-				for (const round of sc.results[pid].rounds) {
+				for (const round of sc.results[pid]?.rounds ?? []) {
 					if (!round.judge) continue;
 					const scores = dimList.map((dim) => {
 						const d = round.judge?.dimensions.find(
@@ -244,7 +260,7 @@ export function generateMarkdownReport(report: ComparisonReport): string {
 
 		const agentNames = new Set<string>();
 		for (const pid of protocolIds) {
-			for (const round of sc.results[pid].rounds) {
+			for (const round of sc.results[pid]?.rounds ?? []) {
 				for (const agent of round.agents) {
 					agentNames.add(agent.agentName);
 				}
@@ -253,11 +269,12 @@ export function generateMarkdownReport(report: ComparisonReport): string {
 
 		for (const name of agentNames) {
 			const counts = protocolIds.map((pid) => {
+				const rounds = sc.results[pid]?.rounds ?? [];
 				let count = 0;
-				for (const round of sc.results[pid].rounds) {
+				for (const round of rounds) {
 					if (round.agents.some((a) => a.agentName === name)) count++;
 				}
-				return `${count}/${sc.results[pid].rounds.length}`;
+				return `${count}/${rounds.length}`;
 			});
 			lines.push(`| ${name} | ${counts.join(" | ")} |`);
 		}
@@ -294,6 +311,7 @@ export function generateMarkdownReport(report: ComparisonReport): string {
 	let findingNum = 1;
 	for (const pid of nonBaseline) {
 		const overhead = report.aggregate.avgOverhead[pid];
+		if (!overhead) continue;
 		lines.push(
 			`${findingNum}. **Protocol overhead (${pid}):** ~${fmtPct(overhead.extraInputPercent)} input tokens, ~${(overhead.extraDurationMs / 1000).toFixed(1)}s latency vs ${baseline}.`,
 		);

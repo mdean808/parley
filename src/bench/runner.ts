@@ -127,6 +127,7 @@ export async function runScenario(
 	// Delegate to multi-round runner if configured
 	if (scenario.multiRound && scenario.multiRound.rounds > 1) {
 		const mr = await runMultiRound(scenario, protocol, userId, chainId);
+		const mrError = mr.cumulative.error;
 		// Convert MultiRoundResult to ProtocolRunResult
 		const rounds: RoundResult[] = mr.rounds.map((rm) => {
 			const agents: AgentRoundResult[] = rm.results.map((r) => {
@@ -156,7 +157,7 @@ export async function runScenario(
 			};
 		});
 		// Per-round judge evaluation for multi-round scenarios
-		if (judgeConfig?.enabled) {
+		if (judgeConfig?.enabled && rounds.length > 0 && !mrError) {
 			const roundData = toJudgeRoundData(rounds);
 			const judgeUsage: JudgeUsage = {
 				inputTokens: 0,
@@ -206,9 +207,13 @@ export async function runScenario(
 					aggregate: judgeAggregate,
 					usage: judgeUsage,
 				},
+				error: mrError,
 			};
 		}
 
+		const mrRoundCount = rounds.length || 1;
+		const mrAvgAgents =
+			rounds.reduce((s, r) => s + r.respondingAgentCount, 0) / mrRoundCount;
 		return {
 			protocolId,
 			scenarioName: scenario.name,
@@ -218,21 +223,27 @@ export async function runScenario(
 				totalOutputTokens: mr.cumulative.totalOutputTokens,
 				totalCost: mr.cumulative.totalCost,
 				totalDurationMs: mr.cumulative.totalDurationMs,
-				averageAgentsPerRound:
-					rounds.reduce((s, r) => s + r.respondingAgentCount, 0) /
-					rounds.length,
+				averageAgentsPerRound: mrAvgAgents,
 				roundCount: mr.cumulative.roundCount,
 			},
+			error: mrError,
 		};
 	}
 
 	const rounds: RoundResult[] = [];
+	let roundError: string | undefined;
 
 	for (let i = 0; i < scenario.rounds.length; i++) {
 		const prompt = scenario.rounds[i].prompt;
 		const roundStart = performance.now();
 
-		const { results } = await protocol.sendRequest(userId, prompt, chainId);
+		let results: Awaited<ReturnType<typeof protocol.sendRequest>>["results"];
+		try {
+			({ results } = await protocol.sendRequest(userId, prompt, chainId));
+		} catch (err) {
+			roundError = `Round ${i + 1} failed: ${err instanceof Error ? err.message : String(err)}`;
+			break;
+		}
 
 		const roundDurationMs = performance.now() - roundStart;
 
@@ -268,18 +279,19 @@ export async function runScenario(
 		});
 	}
 
+	const roundCount = rounds.length || 1;
 	const aggregate = {
 		totalInputTokens: rounds.reduce((s, r) => s + r.totalInputTokens, 0),
 		totalOutputTokens: rounds.reduce((s, r) => s + r.totalOutputTokens, 0),
 		totalCost: rounds.reduce((s, r) => s + r.totalCost, 0),
 		totalDurationMs: rounds.reduce((s, r) => s + r.totalDurationMs, 0),
 		averageAgentsPerRound:
-			rounds.reduce((s, r) => s + r.respondingAgentCount, 0) / rounds.length,
+			rounds.reduce((s, r) => s + r.respondingAgentCount, 0) / roundCount,
 		roundCount: rounds.length,
 	};
 
-	// Single-round judge evaluation
-	if (judgeConfig?.enabled) {
+	// Single-round judge evaluation (skip if we errored before any rounds)
+	if (judgeConfig?.enabled && rounds.length > 0 && !roundError) {
 		const roundData = toJudgeRoundData(rounds);
 		const judgeResult = await evaluateScenario(roundData, judgeConfig);
 		if (rounds.length > 0) {
@@ -291,6 +303,7 @@ export async function runScenario(
 			rounds,
 			aggregate,
 			judge: judgeResult,
+			error: roundError,
 		};
 	}
 
@@ -299,5 +312,6 @@ export async function runScenario(
 		scenarioName: scenario.name,
 		rounds,
 		aggregate,
+		error: roundError,
 	};
 }

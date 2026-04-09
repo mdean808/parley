@@ -124,26 +124,47 @@ export async function runComparison(
 		for (const pid of protocolIds) {
 			progress(`[${si + 1}/${scenarios.length}] ${scenario.name} -- ${pid}...`);
 
-			const protocol = createProtocol(pid);
-			if (judgeConfig.enabled) {
-				progress(
-					`[${si + 1}/${scenarios.length}] ${scenario.name} -- ${pid} judging...`,
+			try {
+				const protocol = createProtocol(pid);
+				if (judgeConfig.enabled) {
+					progress(
+						`[${si + 1}/${scenarios.length}] ${scenario.name} -- ${pid} judging...`,
+					);
+				}
+				const result = await runScenario(
+					protocol,
+					pid,
+					scenarioConfig,
+					judgeConfig,
 				);
-			}
-			const result = await runScenario(
-				protocol,
-				pid,
-				scenarioConfig,
-				judgeConfig,
-			);
 
-			results[pid] = result;
+				results[pid] = result;
+			} catch (err) {
+				const msg = err instanceof Error ? err.message : String(err);
+				progress(
+					`[${si + 1}/${scenarios.length}] ${scenario.name} -- ${pid} ERROR: ${msg}`,
+				);
+				results[pid] = {
+					protocolId: pid,
+					scenarioName: scenarioConfig.name,
+					rounds: [],
+					aggregate: {
+						totalInputTokens: 0,
+						totalOutputTokens: 0,
+						totalCost: 0,
+						totalDurationMs: 0,
+						averageAgentsPerRound: 0,
+						roundCount: 0,
+					},
+					error: msg,
+				};
+			}
 		}
 
-		// Compute overhead for each non-baseline protocol
+		// Compute overhead for each non-baseline protocol (skip if either errored)
 		const protocolOverhead: ProtocolOverhead = {};
 		for (const pid of protocolIds) {
-			if (pid !== baseline) {
+			if (pid !== baseline && !results[pid].error && !results[baseline].error) {
 				protocolOverhead[pid] = computeOverhead(
 					results[pid],
 					results[baseline],
@@ -195,9 +216,10 @@ export async function runComparison(
 	const avgOverhead: ProtocolOverhead = {};
 	for (const pid of protocolIds) {
 		if (pid !== baseline) {
-			avgOverhead[pid] = averageOverhead(
-				scenarioComparisons.map((sc) => sc.protocolOverhead[pid]),
-			);
+			const overheads = scenarioComparisons
+				.map((sc) => sc.protocolOverhead[pid])
+				.filter((o): o is OverheadMetrics => o != null);
+			avgOverhead[pid] = averageOverhead(overheads);
 		}
 	}
 
