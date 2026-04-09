@@ -47,7 +47,10 @@ export async function runMultiRound(
 			0,
 		);
 		const model = results[0]?.model ?? "";
-		const cost = computeCost(totalInputTokens, totalOutputTokens, model);
+		const costFromResults = results.reduce((s, r) => s + (r.cost ?? 0), 0);
+		const cost =
+			costFromResults ||
+			computeCost(totalInputTokens, totalOutputTokens, model);
 
 		rounds.push({
 			roundIndex: i,

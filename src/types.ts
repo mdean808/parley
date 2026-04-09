@@ -70,6 +70,7 @@ export interface AgentResult {
 	usage?: { inputTokens: number; outputTokens: number };
 	model?: string;
 	durationMs?: number;
+	cost?: number;
 }
 
 /** Summary info about an agent exposed to the chat application layer. */

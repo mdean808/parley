@@ -139,7 +139,7 @@ export async function runScenario(
 					responseText: r.response.payload,
 					inputTokens,
 					outputTokens,
-					cost: computeCost(inputTokens, outputTokens, model),
+					cost: r.cost ?? computeCost(inputTokens, outputTokens, model),
 					durationMs: r.durationMs ?? 0,
 					model,
 				};
@@ -246,7 +246,7 @@ export async function runScenario(
 				responseText: r.response.payload,
 				inputTokens,
 				outputTokens,
-				cost: computeCost(inputTokens, outputTokens, model),
+				cost: r.cost ?? computeCost(inputTokens, outputTokens, model),
 				durationMs: r.durationMs ?? 0,
 				model,
 			};
