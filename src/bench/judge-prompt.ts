@@ -70,3 +70,41 @@ export function buildJudgeUserPrompt(
 
 	return parts.join("\n");
 }
+
+export function buildJudgeRoundPrompt(
+	rounds: { userMessage: string; results: AgentResult[] }[],
+	targetRoundIndex: number,
+): string {
+	const parts: string[] = ["## Scenario\n"];
+
+	for (let i = 0; i <= targetRoundIndex; i++) {
+		const round = rounds[i];
+		parts.push(`### Round ${i + 1}`);
+		parts.push(`**User:** ${round.userMessage}\n`);
+
+		for (const result of round.results) {
+			parts.push(
+				`**Agent: ${result.agentName}** (skills: ${result.skills.join(", ")})`,
+			);
+			parts.push(result.response.payload);
+			parts.push("");
+		}
+	}
+
+	parts.push("## Instructions");
+
+	if (targetRoundIndex === 0) {
+		parts.push(
+			'Evaluate the agents\' collective performance for this round. Use the "evaluate" tool.',
+		);
+		parts.push(
+			"Note: This is the first round. Do NOT evaluate the coherence dimension.",
+		);
+	} else {
+		parts.push(
+			`Evaluate the agents' collective performance for Round ${targetRoundIndex + 1} ONLY. Prior rounds are provided as context to assess coherence and continuity. Use the "evaluate" tool.`,
+		);
+	}
+
+	return parts.join("\n");
+}

@@ -1,6 +1,6 @@
 import type { ProtocolId } from "../factory.ts";
 import type { AgentResult } from "../types.ts";
-import type { JudgeResult } from "./judge-types.ts";
+import type { JudgeEvaluation, JudgeResult } from "./judge-types.ts";
 
 export type { ProtocolId };
 
@@ -74,6 +74,7 @@ export interface RoundResult {
 	totalCost: number;
 	totalDurationMs: number;
 	respondingAgentCount: number;
+	judge?: JudgeEvaluation;
 }
 
 export interface ProtocolRunResult {

@@ -1,6 +1,10 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { AgentResult } from "../types.ts";
-import { buildJudgeUserPrompt, JUDGE_SYSTEM_PROMPT } from "./judge-prompt.ts";
+import {
+	buildJudgeRoundPrompt,
+	buildJudgeUserPrompt,
+	JUDGE_SYSTEM_PROMPT,
+} from "./judge-prompt.ts";
 import type {
 	DimensionScore,
 	JudgeConfig,
@@ -128,7 +132,20 @@ export async function evaluateScenario(
 	usage.callCount++;
 	usage.durationMs = performance.now() - start;
 
-	// Extract tool_use block
+	const evaluation = parseJudgeResponse(response, dimensions, isMultiRound);
+
+	return {
+		perRound: [evaluation],
+		aggregate: evaluation,
+		usage,
+	};
+}
+
+function parseJudgeResponse(
+	response: Anthropic.Messages.Message,
+	dimensions: string[],
+	isMultiRound: boolean,
+): JudgeEvaluation {
 	const toolUse = response.content.find(
 		(block): block is Anthropic.Messages.ToolUseBlock =>
 			block.type === "tool_use",
@@ -152,7 +169,6 @@ export async function evaluateScenario(
 		summary = input.summary ?? "";
 	}
 
-	// Fill in missing dimensions with default score of 3
 	for (const dim of dimensions) {
 		if (!parsedDimensions.find((d) => d.dimension === dim)) {
 			parsedDimensions.push({
@@ -165,15 +181,54 @@ export async function evaluateScenario(
 
 	const overall = computeWeightedOverall(parsedDimensions, isMultiRound);
 
-	const aggregate: JudgeEvaluation = {
+	return {
 		dimensions: parsedDimensions,
 		overall,
 		summary,
 	};
+}
 
-	return {
-		perRound: [aggregate],
-		aggregate,
-		usage,
+export async function evaluateRound(
+	conversationSoFar: { userMessage: string; results: AgentResult[] }[],
+	targetRoundIndex: number,
+	config: JudgeConfig,
+): Promise<{ evaluation: JudgeEvaluation; usage: JudgeUsage }> {
+	const model =
+		config.model ?? process.env.JUDGE_MODEL ?? "claude-sonnet-4-5-20250929";
+
+	const isMultiRound = targetRoundIndex > 0;
+	const dimensions = isMultiRound
+		? MULTI_ROUND_DIMENSIONS
+		: SINGLE_ROUND_DIMENSIONS;
+
+	const judgeClient = new Anthropic();
+	const userPrompt = buildJudgeRoundPrompt(conversationSoFar, targetRoundIndex);
+	const tool = buildEvaluateTool(dimensions);
+
+	const usage: JudgeUsage = {
+		inputTokens: 0,
+		outputTokens: 0,
+		model,
+		durationMs: 0,
+		callCount: 0,
 	};
+
+	const start = performance.now();
+	const response = await judgeClient.messages.create({
+		model,
+		max_tokens: 2048,
+		system: JUDGE_SYSTEM_PROMPT,
+		messages: [{ role: "user", content: userPrompt }],
+		tools: [tool],
+		tool_choice: { type: "tool", name: "evaluate" },
+	});
+
+	usage.inputTokens += response.usage.input_tokens;
+	usage.outputTokens += response.usage.output_tokens;
+	usage.callCount++;
+	usage.durationMs = performance.now() - start;
+
+	const evaluation = parseJudgeResponse(response, dimensions, isMultiRound);
+
+	return { evaluation, usage };
 }

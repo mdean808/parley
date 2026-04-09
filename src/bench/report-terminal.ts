@@ -155,5 +155,46 @@ export function printTerminalReport(report: ComparisonReport): void {
 		}
 	}
 
+	// Per-Round Judge Progression (multi-round scenarios only)
+	const hasPerRoundJudge = report.scenarios.some((sc) =>
+		Object.values(sc.results).some((r) =>
+			r.rounds.some((round) => round.judge),
+		),
+	);
+
+	if (hasPerRoundJudge) {
+		console.log(chalk.bold("Per-Round Judge Progression"));
+
+		for (const sc of report.scenarios) {
+			const anyPerRound = Object.values(sc.results).some((r) =>
+				r.rounds.some((round) => round.judge),
+			);
+			if (!anyPerRound) continue;
+
+			console.log(chalk.dim(`  ${sc.scenario.name}`));
+
+			// Find max rounds across protocols
+			const maxRounds = Math.max(
+				...protocolIds.map((pid) => sc.results[pid].rounds.length),
+			);
+
+			const rHdr = [
+				pad("Protocol", 12),
+				...Array.from({ length: maxRounds }, (_, i) => pad(`R${i + 1}`, 8)),
+			].join(" | ");
+			console.log(`  ${rHdr}`);
+			console.log(chalk.dim(`  ${"─".repeat(rHdr.length)}`));
+
+			for (const pid of protocolIds) {
+				const scores = sc.results[pid].rounds.map((r) =>
+					r.judge ? r.judge.overall.toFixed(1) : "—",
+				);
+				const row = [pad(pid, 12), ...scores.map((s) => pad(s, 8))].join(" | ");
+				console.log(`  ${row}`);
+			}
+			console.log("");
+		}
+	}
+
 	console.log("");
 }

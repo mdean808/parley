@@ -195,6 +195,48 @@ export function generateMarkdownReport(report: ComparisonReport): string {
 			lines.push("");
 		}
 
+		// Per-Round Judge Progression
+		const hasPerRoundJudge = Object.values(sc.results).some((r) =>
+			r.rounds.some((round) => round.judge),
+		);
+		if (hasPerRoundJudge) {
+			lines.push("#### Per-Round Judge Progression\n");
+
+			// Collect all dimensions across all rounds
+			const roundDims = new Set<string>();
+			for (const pid of protocolIds) {
+				for (const round of sc.results[pid].rounds) {
+					if (round.judge) {
+						for (const d of round.judge.dimensions) {
+							roundDims.add(d.dimension);
+						}
+					}
+				}
+			}
+			const dimList = [...roundDims];
+
+			lines.push(`| Protocol | Round | ${dimList.join(" | ")} | overall |`);
+			lines.push(
+				`|----------|-------|${dimList.map(() => "-------").join("|")}|---------|`,
+			);
+
+			for (const pid of protocolIds) {
+				for (const round of sc.results[pid].rounds) {
+					if (!round.judge) continue;
+					const scores = dimList.map((dim) => {
+						const d = round.judge?.dimensions.find(
+							(dd) => dd.dimension === dim,
+						);
+						return d ? String(d.score) : "—";
+					});
+					lines.push(
+						`| ${pid} | ${round.roundIndex + 1} | ${scores.join(" | ")} | ${round.judge.overall.toFixed(1)} |`,
+					);
+				}
+			}
+			lines.push("");
+		}
+
 		// Agent Participation
 		lines.push("#### Agent Participation\n");
 		lines.push(`| Agent | ${protocolIds.join(" | ")} |`);

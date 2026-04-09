@@ -1,6 +1,6 @@
+import * as readline from "node:readline";
 import Anthropic from "@anthropic-ai/sdk";
 import chalk from "chalk";
-import * as readline from "node:readline";
 
 const MODEL = process.env.MODEL || "claude-haiku-4-5-20251001";
 const client = new Anthropic();
@@ -31,7 +31,8 @@ function prompt(): void {
 		const completion = await client.messages.create({
 			model: MODEL,
 			max_tokens: 1024,
-			system: "You are Atlas, a research assistant. You provide accurate, well-sourced answers to factual questions. Be concise and informative.",
+			system:
+				"You are Atlas, a research assistant. You provide accurate, well-sourced answers to factual questions. Be concise and informative.",
 			messages,
 		});
 		const durationMs = performance.now() - start;

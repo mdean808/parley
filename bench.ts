@@ -1,5 +1,4 @@
 import chalk from "chalk";
-import { evaluateScenario } from "./src/bench/judge.ts";
 import type { JudgeConfig } from "./src/bench/judge-types.ts";
 import { runScenario } from "./src/bench/runner.ts";
 import {
@@ -59,33 +58,15 @@ for (const scenario of scenarios) {
 		process.stdout.write(chalk.dim(`  ${label}... `));
 
 		const protocol = createProtocol(protocolId);
-		const result = await runScenario(protocol, protocolId, scenario);
-
-		// Run judge evaluation
 		if (judgeConfig.enabled) {
 			process.stdout.write(chalk.dim("judging... "));
-			const roundData = result.rounds.map((r) => ({
-				userMessage: r.prompt,
-				results: r.agents.map((a) => ({
-					agentName: a.agentName,
-					skills: a.skills,
-					response: {
-						id: "",
-						chainId: "",
-						replyTo: undefined,
-						timestamp: "",
-						type: "RESPONSE" as const,
-						payload: a.responseText,
-						from: a.agentName.toLowerCase(),
-						to: [] as string[],
-					},
-					usage: { inputTokens: a.inputTokens, outputTokens: a.outputTokens },
-					model: a.model,
-					durationMs: a.durationMs,
-				})),
-			}));
-			result.judge = await evaluateScenario(roundData, judgeConfig);
 		}
+		const result = await runScenario(
+			protocol,
+			protocolId,
+			scenario,
+			judgeConfig,
+		);
 
 		allResults.push(result);
 

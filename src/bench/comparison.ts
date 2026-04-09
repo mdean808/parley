@@ -1,6 +1,5 @@
 import { MODEL } from "../config.ts";
 import { createProtocol, getProtocolIds } from "../factory.ts";
-import { evaluateScenario } from "./judge.ts";
 import type { JudgeConfig } from "./judge-types.ts";
 import { runScenario } from "./runner.ts";
 import {
@@ -114,38 +113,17 @@ export async function runComparison(
 			);
 
 			const protocol = createProtocol(pid);
-			const result = await runScenario(protocol, pid, scenarioConfig);
-
-			// Judge
 			if (judgeConfig.enabled) {
 				progress(
 					`[${si + 1}/${comparisonScenarios.length}] ${cs.name} -- ${pid} judging...`,
 				);
-				const roundData = result.rounds.map((r) => ({
-					userMessage: r.prompt,
-					results: r.agents.map((a) => ({
-						agentName: a.agentName,
-						skills: a.skills,
-						response: {
-							id: "",
-							chainId: "",
-							replyTo: undefined,
-							timestamp: "",
-							type: "RESPONSE" as const,
-							payload: a.responseText,
-							from: a.agentName.toLowerCase(),
-							to: [] as string[],
-						},
-						usage: {
-							inputTokens: a.inputTokens,
-							outputTokens: a.outputTokens,
-						},
-						model: a.model,
-						durationMs: a.durationMs,
-					})),
-				}));
-				result.judge = await evaluateScenario(roundData, judgeConfig);
 			}
+			const result = await runScenario(
+				protocol,
+				pid,
+				scenarioConfig,
+				judgeConfig,
+			);
 
 			results[pid] = result;
 		}
