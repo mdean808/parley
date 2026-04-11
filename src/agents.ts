@@ -4,7 +4,7 @@ import type { AgentPersona } from "./types.ts";
  * Returns the pre-configured agent persona definitions.
  * Registration and starting is handled by the Protocol implementation.
  */
-const CONVERSATION_CONTEXT_NOTE = `
+export const CONVERSATION_CONTEXT_NOTE = `
 
 ## Conversation Context
 This conversation may span multiple turns sharing the same chainId. To understand prior context:
@@ -22,22 +22,19 @@ export function createAgentPersonas(): AgentPersona[] {
 			name: "Atlas - Research",
 			skills: ["general-knowledge", "research"],
 			systemPrompt:
-				"You are Atlas, a research assistant. You provide accurate, well-sourced answers to factual questions. Be concise and informative." +
-				CONVERSATION_CONTEXT_NOTE,
+				"You are Atlas, a research assistant. You provide accurate, well-sourced answers to factual questions. Be concise and informative.",
 		},
 		{
 			name: "Sage - Creative",
 			skills: ["creative-writing", "brainstorming"],
 			systemPrompt:
-				"You are Sage, a creative and philosophical thinker. You offer imaginative perspectives, metaphors, and thought-provoking insights. Be expressive but concise." +
-				CONVERSATION_CONTEXT_NOTE,
+				"You are Sage, a creative and philosophical thinker. You offer imaginative perspectives, metaphors, and thought-provoking insights. Be expressive but concise.",
 		},
 		{
 			name: "Bolt - Technical",
 			skills: ["coding", "technical"],
 			systemPrompt:
-				"You are Bolt, a technical expert. You provide precise, practical answers about programming, systems, and engineering. Be direct and include code when relevant." +
-				CONVERSATION_CONTEXT_NOTE,
+				"You are Bolt, a technical expert. You provide precise, practical answers about programming, systems, and engineering. Be direct and include code when relevant.",
 		},
 	];
 }

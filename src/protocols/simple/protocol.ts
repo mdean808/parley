@@ -18,15 +18,12 @@ import type {
  */
 export class SimpleProtocol implements Protocol {
 	private readonly personas: AgentPersona[];
-	private readonly histories: Map<string, Anthropic.MessageParam[]> = new Map();
+	private readonly history: Anthropic.MessageParam[] = [];
 	private readonly onEvent?: ProtocolEventHandler;
 
 	constructor(personas: AgentPersona[], onEvent?: ProtocolEventHandler) {
 		this.personas = personas;
 		this.onEvent = onEvent;
-		for (const persona of personas) {
-			this.histories.set(persona.name, []);
-		}
 	}
 
 	initialize(userName: string): ProtocolInit {
@@ -45,6 +42,12 @@ export class SimpleProtocol implements Protocol {
 		message: string,
 		_chainId?: string,
 	): Promise<ProtocolResponse> {
+		// Build messages for this turn: shared history + current user message
+		const messages: Anthropic.MessageParam[] = [
+			...this.history,
+			{ role: "user", content: message },
+		];
+
 		const results = await Promise.all(
 			this.personas.map(async (persona): Promise<AgentResult> => {
 				log.info("simple", "agent_start", {
@@ -56,15 +59,13 @@ export class SimpleProtocol implements Protocol {
 					type: "state_change",
 					detail: `generating response using skills: [${persona.skills.join(", ")}]`,
 				});
-				const history = this.histories.get(persona.name) ?? [];
-				history.push({ role: "user", content: message });
 
 				const start: number = performance.now();
 				const completion = await client.messages.create({
 					model: MODEL,
 					max_tokens: 1024,
 					system: persona.systemPrompt,
-					messages: history,
+					messages,
 				});
 				const durationMs: number = performance.now() - start;
 
@@ -79,7 +80,6 @@ export class SimpleProtocol implements Protocol {
 					completion.content[0].type === "text"
 						? completion.content[0].text
 						: "";
-				history.push({ role: "assistant", content: text });
 
 				return {
 					agentName: persona.name,
@@ -103,6 +103,13 @@ export class SimpleProtocol implements Protocol {
 				};
 			}),
 		);
+
+		// Append user message and combined agent responses to shared history
+		this.history.push({ role: "user", content: message });
+		const combined = results
+			.map((r) => `[${r.agentName}]: ${r.response.payload}`)
+			.join("\n\n");
+		this.history.push({ role: "assistant", content: combined });
 
 		return { results };
 	}

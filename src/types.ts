@@ -86,9 +86,21 @@ export interface ProtocolInit {
 	agents: ProtocolAgentInfo[];
 }
 
+/** A single protocol message captured during request processing. */
+export interface TraceMessage {
+	agentName: string;
+	type: string;
+	messageId: string;
+	payload: string;
+	toon: string;
+	timestamp: string;
+}
+
 /** Returned by Protocol.sendRequest() with the collected agent results. */
 export interface ProtocolResponse {
 	results: AgentResult[];
+	trace?: TraceMessage[];
+	requestToon?: string;
 }
 
 /** Abstraction over the agent-to-agent protocol so the chat app can swap implementations. */

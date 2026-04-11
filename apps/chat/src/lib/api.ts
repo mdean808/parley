@@ -1,5 +1,4 @@
-import type { ProtocolInfo, AgentInfo } from "./types";
-import type { AgentResult } from "simple-implementation/types";
+import type { ProtocolInfo, AgentInfo, ChatStreamEvent } from "./types";
 
 export async function fetchProtocols(): Promise<ProtocolInfo[]> {
 	const res = await fetch("/api/chat/protocols");
@@ -24,15 +23,67 @@ export async function initSession(
 	return res.json();
 }
 
+/** Fire-and-forget: sends a message, does not wait for results. */
 export async function sendMessage(
 	sessionId: string,
 	message: string,
-): Promise<AgentResult[]> {
-	const res = await fetch("/api/chat/send", {
+): Promise<void> {
+	await fetch("/api/chat/send", {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify({ sessionId, message }),
 	});
-	const data = await res.json();
-	return data.results;
+}
+
+/** Opens a persistent SSE connection. Returns an AbortController to disconnect. */
+export function connectToEvents(
+	sessionId: string,
+	onEvent: (event: ChatStreamEvent) => void,
+): AbortController {
+	const controller = new AbortController();
+
+	(async () => {
+		try {
+			const res = await fetch(
+				`/api/chat/events?sessionId=${encodeURIComponent(sessionId)}`,
+				{ signal: controller.signal },
+			);
+			if (!res.ok || !res.body) return;
+
+			const reader = res.body.getReader();
+			const decoder = new TextDecoder();
+			let buffer = "";
+
+			while (true) {
+				const { done, value } = await reader.read();
+				if (done) break;
+
+				buffer += decoder.decode(value, { stream: true });
+
+				// Parse SSE frames
+				const parts = buffer.split("\n\n");
+				buffer = parts.pop()!;
+
+				for (const part of parts) {
+					for (const line of part.split("\n")) {
+						if (line.startsWith("data: ")) {
+							try {
+								const event = JSON.parse(line.slice(6)) as ChatStreamEvent;
+								onEvent(event);
+							} catch {
+								// malformed JSON, skip
+							}
+						}
+						// skip comments (lines starting with :) and other fields
+					}
+				}
+			}
+		} catch (err) {
+			if ((err as Error).name !== "AbortError") {
+				console.error("[chat] SSE connection error:", err);
+			}
+		}
+	})();
+
+	return controller;
 }

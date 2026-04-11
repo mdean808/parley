@@ -86,22 +86,12 @@ export class ProtocolAgentV2 {
 		// REQUEST: run the agentic loop
 		this.store.updateAgentStatus(this.agent.id, "working");
 
-		// Send immediate programmatic ACK so the collector knows we're evaluating
-		this.safeStoreMessage(component, {
-			chainId: message.chainId,
-			replyTo: message.id,
-			type: "ACK",
-			payload: `${this.agent.name} evaluating`,
-			from: this.agent.id,
-			to: [message.from],
-		});
-
 		const history = this.chainHistory.get(message.chainId) ?? [];
 
 		// Present the incoming request to the LLM
 		history.push({
 			role: "user",
-			content: `You received a new REQUEST message:\n\nid: ${message.id}\nversion: ${message.version}\nchainId: ${message.chainId}\nsequence: ${message.sequence}\nreplyTo: ${message.replyTo ?? "undefined"}\ntimestamp: ${message.timestamp}\ntype: ${message.type}\npayload: ${message.payload}\nheaders: ${JSON.stringify(message.headers)}\nfrom: ${message.from}\nto: ${message.to.join(", ")}\n\nAn ACK has been sent automatically. If this request doesn't match your skills, respond with a single text message saying "SKIP". Otherwise, proceed directly with PROCESS then RESPONSE. Set replyTo to "${message.id}" on all messages you send.`,
+			content: `You received a new REQUEST message:\n\nid: ${message.id}\nversion: ${message.version}\nchainId: ${message.chainId}\nsequence: ${message.sequence}\nreplyTo: ${message.replyTo ?? "undefined"}\ntimestamp: ${message.timestamp}\ntype: ${message.type}\npayload: ${message.payload}\nheaders: ${JSON.stringify(message.headers)}\nfrom: ${message.from}\nto: ${message.to.join(", ")}\n\nEvaluate this request against your skills. If it matches, follow the message lifecycle: send ACK, then PROCESS, then RESPONSE. If it does not match your skills, stay silent — do not send any messages. Set replyTo to "${message.id}" on all messages you send.`,
 		});
 
 		let totalInputTokens = 0;
@@ -127,15 +117,14 @@ export class ProtocolAgentV2 {
 
 			history.push({ role: "assistant", content: assistantContent });
 
-			// Check for text-only response indicating SKIP
+			// Text-only response with no tool calls = agent is done
 			const textBlocks = assistantContent.filter((b) => b.type === "text");
 			if (
 				response.stop_reason === "end_turn" &&
-				textBlocks.length > 0 &&
 				assistantContent.every((b) => b.type === "text")
 			) {
-				const text = textBlocks.map((b) => b.text).join("");
-				if (text.trim().toUpperCase().includes("SKIP")) {
+				if (!sentResponse) {
+					const text = textBlocks.map((b) => b.text).join("");
 					log.info(component, "request_declined", {
 						chainId: message.chainId,
 						requestId: message.id,
@@ -143,10 +132,10 @@ export class ProtocolAgentV2 {
 					this.onEvent?.({
 						agentName: this.agent.name,
 						type: "decline",
-						detail: `SKIP — ${text.trim()}`,
+						detail: text.trim() || "silent decline",
 					});
-					break;
 				}
+				break;
 			}
 
 			// Process tool calls
@@ -226,15 +215,10 @@ export class ProtocolAgentV2 {
 			}
 		}
 
-		// Send DECLINED if agent didn't produce a RESPONSE (e.g., SKIP)
 		if (!sentResponse) {
-			this.safeStoreMessage(component, {
+			log.info(component, "request_not_handled", {
 				chainId: message.chainId,
-				replyTo: message.id,
-				type: "ERROR",
-				payload: "DECLINED",
-				from: this.agent.id,
-				to: [message.from],
+				requestId: message.id,
 			});
 		}
 

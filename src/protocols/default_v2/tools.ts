@@ -2,6 +2,8 @@ import type Anthropic from "@anthropic-ai/sdk";
 import type { StoreV2 } from "./store.ts";
 import type { ToolResult } from "./types.ts";
 
+const validationFailures: Map<string, number> = new Map();
+
 const PROTOCOL_TOOLS: Anthropic.Messages.Tool[] = [
 	{
 		name: "store_message",
@@ -139,16 +141,31 @@ export function executeToolCall(
 	name: string,
 	input: Record<string, unknown>,
 	store: StoreV2,
-	_agentId: string,
+	agentId: string,
 ): ToolResult {
 	try {
 		switch (name) {
 			case "store_message": {
-				const msg = store.storeMessage(input.message as string);
-				return {
-					success: true,
-					data: { id: msg.id, type: msg.type, chainId: msg.chainId },
-				};
+				const failCount = validationFailures.get(agentId) ?? 0;
+				if (failCount >= 3) {
+					return {
+						success: false,
+						error: "Agent failed to validate message after 3 attempts.",
+					};
+				}
+				try {
+					const msg = store.storeMessage(input.message as string);
+					validationFailures.delete(agentId);
+					return {
+						success: true,
+						data: { id: msg.id, type: msg.type, chainId: msg.chainId },
+					};
+				} catch (error: unknown) {
+					const errorMessage =
+						error instanceof Error ? error.message : String(error);
+					validationFailures.set(agentId, failCount + 1);
+					return { success: false, error: errorMessage };
+				}
 			}
 			case "get_agent": {
 				const agents = store.getAgent(input.ids as string[]);

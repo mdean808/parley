@@ -100,8 +100,14 @@ export class StoreV2 {
 		let chain = this.chains.get(message.chainId);
 
 		if (chain?.status === "cancelled") {
-			// Only allow ACK of CANCEL on cancelled chains
-			if (!(message.type === "ACK")) {
+			if (message.type === "ACK" && message.replyTo) {
+				const replyTarget = this.messages.find((m) => m.id === message.replyTo);
+				if (!replyTarget || replyTarget.type !== "CANCEL") {
+					throw new Error(
+						`Chain ${message.chainId} is cancelled. Only ACK of CANCEL allowed.`,
+					);
+				}
+			} else {
 				throw new Error(
 					`Chain ${message.chainId} is cancelled. Only ACK of CANCEL allowed.`,
 				);
@@ -128,22 +134,51 @@ export class StoreV2 {
 			chain.owner = message.from;
 		}
 
-		// CANCEL handling
+		// TTL enforcement — check if chain has expired
+		if (chain && message.type !== "REQUEST") {
+			const originRequest = this.messages.find(
+				(m) =>
+					m.chainId === message.chainId && m.type === "REQUEST" && !m.replyTo,
+			);
+			const ttl = originRequest?.headers?.ttl;
+			if (ttl && new Date() > new Date(ttl)) {
+				chain.status = "expired";
+				throw new Error(
+					`Chain ${message.chainId} expired: TTL ${ttl} exceeded`,
+				);
+			}
+		}
+
+		// CANCEL handling — only original requester or chain owner may cancel
 		if (message.type === "CANCEL") {
 			if (chain) {
+				const originRequest = this.messages.find(
+					(m) =>
+						m.chainId === message.chainId && m.type === "REQUEST" && !m.replyTo,
+				);
+				const isRequester = originRequest?.from === message.from;
+				const isOwner = chain.owner === message.from;
+				if (!isRequester && !isOwner) {
+					throw new Error(
+						`Only the original requester or chain owner may CANCEL chain ${message.chainId}`,
+					);
+				}
 				chain.status = "cancelled";
 			}
 		}
 
-		// Target resolution
+		// State transition validation
+		this.validateStateTransition(message, chain);
+
+		// Target resolution (spec order: ID -> channel -> broadcast)
 		const resolvedRecipients = new Set<string>();
 		for (const target of message.to) {
-			if (target === "*") {
-				// Broadcast to all agents and users
-				for (const agent of this.agents) resolvedRecipients.add(agent.id);
-				for (const user of this.users) resolvedRecipients.add(user.id);
+			if (
+				this.agents.some((a) => a.id === target) ||
+				this.users.some((u) => u.id === target)
+			) {
+				resolvedRecipients.add(target);
 			} else if (this.channels.has(target)) {
-				// Channel ID match
 				const ch = this.channels.get(target);
 				if (ch) {
 					for (const member of ch.members) resolvedRecipients.add(member);
@@ -153,12 +188,9 @@ export class StoreV2 {
 				if (ch) {
 					for (const member of ch.members) resolvedRecipients.add(member);
 				}
-			} else if (
-				this.agents.some((a) => a.id === target) ||
-				this.users.some((u) => u.id === target)
-			) {
-				// Direct ID match
-				resolvedRecipients.add(target);
+			} else if (target === "*") {
+				for (const agent of this.agents) resolvedRecipients.add(agent.id);
+				for (const user of this.users) resolvedRecipients.add(user.id);
 			} else {
 				throw new Error(
 					`Target resolution failed: "${target}" matches no agent, user, or channel`,
@@ -292,6 +324,132 @@ export class StoreV2 {
 	unsubscribe(entityId: string): void {
 		this.subscribers.delete(entityId);
 		log.debug("store_v2", "unsubscribed", { entityId });
+	}
+
+	private validateStateTransition(
+		message: MessageV2,
+		chain: Chain | undefined,
+	): void {
+		// REQUEST and CANCEL are always valid at the store level
+		// (CANCEL authorization is checked separately above)
+		if (message.type === "REQUEST" || message.type === "CANCEL") return;
+
+		if (!chain) {
+			throw new Error(
+				`Cannot send ${message.type} on non-existent chain ${message.chainId}`,
+			);
+		}
+
+		// All non-REQUEST messages must have a replyTo
+		if (!message.replyTo) {
+			throw new Error(`${message.type} message must have a replyTo field`);
+		}
+
+		const replyTarget = this.messages.find((m) => m.id === message.replyTo);
+		if (!replyTarget) {
+			throw new Error(
+				`replyTo ${message.replyTo} references a non-existent message`,
+			);
+		}
+
+		// Find the REQUEST this lifecycle is responding to
+		const requestId =
+			replyTarget.type === "REQUEST" || replyTarget.type === "CANCEL"
+				? replyTarget.id
+				: replyTarget.replyTo;
+
+		switch (message.type) {
+			case "ACK": {
+				// ACK must reply to a REQUEST or CANCEL
+				if (replyTarget.type !== "REQUEST" && replyTarget.type !== "CANCEL") {
+					throw new Error("ACK must reply to a REQUEST or CANCEL message");
+				}
+				break;
+			}
+			case "PROCESS": {
+				// Sender must have ACK'd the same REQUEST
+				const hasAck = this.messages.some(
+					(m) =>
+						m.chainId === message.chainId &&
+						m.from === message.from &&
+						m.type === "ACK" &&
+						m.replyTo === requestId,
+				);
+				if (!hasAck) {
+					throw new Error(
+						"Cannot send PROCESS without a prior ACK for this REQUEST",
+					);
+				}
+				// Ownership check
+				if (chain.owner && chain.owner !== message.from) {
+					throw new Error(
+						`Agent ${message.from} does not own chain ${message.chainId}`,
+					);
+				}
+				break;
+			}
+			case "RESPONSE": {
+				// Sender must have sent PROCESS for the same REQUEST
+				const hasProcess = this.messages.some(
+					(m) =>
+						m.chainId === message.chainId &&
+						m.from === message.from &&
+						m.type === "PROCESS" &&
+						m.replyTo === requestId,
+				);
+				if (!hasProcess) {
+					throw new Error(
+						"Cannot send RESPONSE without a prior PROCESS for this REQUEST",
+					);
+				}
+				// Ownership check
+				if (chain.owner && chain.owner !== message.from) {
+					throw new Error(
+						`Agent ${message.from} does not own chain ${message.chainId}`,
+					);
+				}
+				break;
+			}
+			case "CLAIM": {
+				// Sender must have ACK'd the same REQUEST
+				const hasAck = this.messages.some(
+					(m) =>
+						m.chainId === message.chainId &&
+						m.from === message.from &&
+						m.type === "ACK" &&
+						m.replyTo === requestId,
+				);
+				if (!hasAck) {
+					throw new Error(
+						"Cannot send CLAIM without a prior ACK for this REQUEST",
+					);
+				}
+				// The REQUEST must have exclusivity: true
+				const originRequest = this.messages.find((m) => m.id === requestId);
+				if (originRequest?.headers?.exclusivity !== "true") {
+					throw new Error(
+						"Cannot send CLAIM on a REQUEST without exclusivity: true header",
+					);
+				}
+				break;
+			}
+			case "ERROR": {
+				// Sender must have ACK'd the same REQUEST
+				const hasAck = this.messages.some(
+					(m) =>
+						m.chainId === message.chainId &&
+						m.from === message.from &&
+						m.type === "ACK" &&
+						m.replyTo === requestId,
+				);
+				if (!hasAck) {
+					throw new Error(
+						"Cannot send ERROR without a prior ACK for this REQUEST",
+					);
+				}
+				break;
+			}
+		}
 	}
 
 	private findChannelByName(name: string): Channel | undefined {

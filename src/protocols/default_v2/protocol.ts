@@ -1,5 +1,6 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { log } from "../../logger.ts";
+import { CONVERSATION_CONTEXT_NOTE } from "../../agents.ts";
 import type {
 	AgentPersona,
 	AgentResult,
@@ -8,10 +9,11 @@ import type {
 	ProtocolEventHandler,
 	ProtocolInit,
 	ProtocolResponse,
+	TraceMessage,
 } from "../../types.ts";
 import { ProtocolAgentV2 } from "./agent.ts";
 import { StoreV2 } from "./store.ts";
-import { encodeOutboundV2 } from "./toon.ts";
+import { encodeMessageV2, encodeOutboundV2 } from "./toon.ts";
 import type { AgentMeta, MessageV2 } from "./types.ts";
 
 const ACK_WINDOW_MS = 5_000;
@@ -43,7 +45,7 @@ export class DefaultProtocolV2 implements Protocol {
 			const protocolAgent = new ProtocolAgentV2(this.store, {
 				agent,
 				systemPrompt: persona.systemPrompt,
-				customInstructions: persona.systemPrompt,
+				customInstructions: persona.systemPrompt + CONVERSATION_CONTEXT_NOTE,
 				customTools: this.config.customTools,
 				onEvent: this.config.onEvent,
 				onMeta: (chainId: string, meta: AgentMeta) => {
@@ -72,6 +74,7 @@ export class DefaultProtocolV2 implements Protocol {
 
 		const ackedAgentIds = new Set<string>();
 		const responses = new Map<string, MessageV2>();
+		let ackWindowClosed = false;
 
 		let resolveCollector: () => void;
 		const collectorDone = new Promise<void>((resolve) => {
@@ -79,7 +82,12 @@ export class DefaultProtocolV2 implements Protocol {
 		});
 
 		function checkComplete(): void {
-			if (ackedAgentIds.size > 0 && ackedAgentIds.size === responses.size) {
+			if (!ackWindowClosed) return;
+			if (ackedAgentIds.size === 0) {
+				resolveCollector();
+				return;
+			}
+			if (ackedAgentIds.size === responses.size) {
 				resolveCollector();
 			}
 		}
@@ -89,10 +97,11 @@ export class DefaultProtocolV2 implements Protocol {
 		this.store.subscribe(userId, (_toon: string, msg: MessageV2) => {
 			if (msg.chainId !== chainId) return;
 
-			// Only accept ACKs that reference THIS specific request
-			if (msg.type === "ACK" && msg.replyTo === requestId) {
+			// Phase A: collect ACKs during the ACK window
+			if (msg.type === "ACK" && msg.replyTo === requestId && !ackWindowClosed) {
 				ackedAgentIds.add(msg.from);
 			} else if (
+				// Phase B: collect responses from ACK'd agents
 				(msg.type === "RESPONSE" || msg.type === "ERROR") &&
 				ackedAgentIds.has(msg.from)
 			) {
@@ -122,10 +131,10 @@ export class DefaultProtocolV2 implements Protocol {
 
 		const broadcastStart = performance.now();
 
+		// Phase A: wait for ACKs, then freeze the expected agent set
 		const ackWindowTimeout = setTimeout(() => {
-			if (ackedAgentIds.size === 0) {
-				resolveCollector();
-			}
+			ackWindowClosed = true;
+			checkComplete();
 		}, ackWindowMs);
 
 		const hardTimeout = setTimeout(() => {
@@ -140,21 +149,34 @@ export class DefaultProtocolV2 implements Protocol {
 
 		const totalDurationMs = performance.now() - broadcastStart;
 
+		// Build trace from all chain messages
+		const allChainMessages = this.store.getMessage({ chainId });
+		const trace: TraceMessage[] = allChainMessages.map((msg) => {
+			const agents = this.store.getAgent([msg.from]);
+			const users = this.store.getUser([msg.from]);
+			const name = agents[0]?.name ?? users[0]?.name ?? msg.from;
+			return {
+				agentName: name,
+				type: msg.type,
+				messageId: msg.id,
+				payload: msg.payload,
+				toon: encodeMessageV2(msg),
+				timestamp: msg.timestamp,
+			};
+		});
+		const requestToon = encodeMessageV2(request);
+
 		if (responses.size === 0) {
 			log.warn("protocol_v2", "no_agents_matched", {
 				chainId,
 				payload: message,
 			});
-			return { results: [] };
+			return { results: [], trace, requestToon };
 		}
 
 		// Map MessageV2 → shared Message type for AgentResult compatibility
 		const results: AgentResult[] = [];
 		for (const [agentId, response] of responses) {
-			// Skip agents that declined (SKIP)
-			if (response.type === "ERROR" && response.payload === "DECLINED")
-				continue;
-
 			const [agent] = this.store.getAgent([agentId]);
 			if (!agent) continue;
 
@@ -186,6 +208,6 @@ export class DefaultProtocolV2 implements Protocol {
 			totalDurationMs,
 		});
 
-		return { results };
+		return { results, trace, requestToon };
 	}
 }

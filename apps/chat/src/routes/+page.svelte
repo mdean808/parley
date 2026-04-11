@@ -4,17 +4,19 @@
 	import ChatMessageBubble from '$lib/components/ChatMessage.svelte';
 	import ChatInput from '$lib/components/ChatInput.svelte';
 	import LoadingIndicator from '$lib/components/LoadingIndicator.svelte';
-	import { fetchProtocols, initSession, sendMessage } from '$lib/api';
-	import type { ChatMessage, AgentInfo, ProtocolInfo } from '$lib/types';
+	import { fetchProtocols, initSession, sendMessage, connectToEvents } from '$lib/api';
+	import type { ChatMessage, AgentInfo, ProtocolInfo, ChatStreamEvent } from '$lib/types';
 
 	let sessionId = $state<string | null>(null);
 	let agents = $state<AgentInfo[]>([]);
 	let messages = $state<ChatMessage[]>([]);
-	let isLoading = $state(false);
 	let protocols = $state<ProtocolInfo[]>([]);
 	let currentProtocol = $state('simple');
+	let pendingCount = $state(0);
 
 	let chatContainer: HTMLDivElement;
+	let sseController: AbortController | null = null;
+	const seenIds = new Set<string>();
 
 	async function scrollToBottom() {
 		await tick();
@@ -23,16 +25,109 @@
 		}
 	}
 
+	function handleStreamEvent(event: ChatStreamEvent) {
+		if (event.type === 'protocol_event') {
+			const { agentName, eventType, message, meta } = event;
+
+			if (eventType === 'state_change' && message) {
+				if (seenIds.has(message.id)) return;
+				seenIds.add(message.id);
+
+				if (message.type === 'RESPONSE') {
+					messages.push({
+						id: message.id,
+						role: 'agent',
+						messageType: 'RESPONSE',
+						content: message.payload,
+						agentName,
+						skills: meta?.skills,
+						usage: meta?.usage,
+						model: meta?.model,
+						durationMs: meta?.durationMs,
+						timestamp: message.timestamp,
+					});
+				} else if (message.type === 'ACK' || message.type === 'PROCESS') {
+					messages.push({
+						id: message.id,
+						role: 'trace',
+						messageType: message.type,
+						content: message.payload,
+						agentName,
+						timestamp: message.timestamp,
+					});
+				}
+
+				scrollToBottom();
+			} else if (eventType === 'decline') {
+				// Optionally show decline as trace
+			}
+		} else if (event.type === 'results') {
+			// Results from sendRequest — used by simple protocol (v2 may be empty)
+			const { results, requestToon } = event.data;
+
+			if (requestToon) {
+				// Update the most recent user message's toonMessage
+				for (let i = messages.length - 1; i >= 0; i--) {
+					if (messages[i].role === 'user') {
+						messages[i].toonMessage = requestToon;
+						break;
+					}
+				}
+			}
+
+			for (const result of results) {
+				const id = result.response.id || crypto.randomUUID();
+				if (seenIds.has(id)) continue;
+				seenIds.add(id);
+
+				messages.push({
+					id,
+					role: 'agent',
+					messageType: 'RESPONSE',
+					content: result.response.payload,
+					agentName: result.agentName,
+					skills: result.skills,
+					usage: result.usage,
+					model: result.model,
+					durationMs: result.durationMs,
+					cost: result.cost,
+					timestamp: result.response.timestamp,
+				});
+			}
+
+			pendingCount = Math.max(0, pendingCount - 1);
+			scrollToBottom();
+		} else if (event.type === 'error') {
+			messages.push({
+				id: crypto.randomUUID(),
+				role: 'agent',
+				content: `Error: ${event.message}`,
+				agentName: 'System',
+				timestamp: new Date().toISOString(),
+			});
+			pendingCount = Math.max(0, pendingCount - 1);
+			scrollToBottom();
+		}
+	}
+
 	async function initializeSession(protocolId: string) {
+		// Clean up previous SSE connection
+		sseController?.abort();
+		sseController = null;
+
 		sessionId = null;
 		agents = [];
 		messages = [];
-		isLoading = false;
+		pendingCount = 0;
+		seenIds.clear();
 		currentProtocol = protocolId;
 
 		const session = await initSession(protocolId, 'User');
 		sessionId = session.sessionId;
 		agents = session.agents;
+
+		// Open persistent SSE connection
+		sseController = connectToEvents(session.sessionId, handleStreamEvent);
 	}
 
 	async function handleSend(message: string) {
@@ -44,27 +139,11 @@
 			content: message,
 			timestamp: new Date().toISOString(),
 		});
-		isLoading = true;
+		pendingCount++;
 		await scrollToBottom();
 
-		try {
-			const results = await sendMessage(sessionId, message);
-			for (const result of results) {
-				messages.push({
-					id: crypto.randomUUID(),
-					role: 'agent',
-					content: result.response.payload,
-					rawPayload: result.response.payload,
-					agentName: result.agentName,
-					skills: result.skills,
-					usage: result.usage,
-					model: result.model,
-					durationMs: result.durationMs,
-					cost: result.cost,
-					timestamp: result.response.timestamp,
-				});
-			}
-		} catch (err) {
+		// Fire-and-forget — results arrive via SSE
+		sendMessage(sessionId, message).catch((err) => {
 			messages.push({
 				id: crypto.randomUUID(),
 				role: 'agent',
@@ -72,10 +151,8 @@
 				agentName: 'System',
 				timestamp: new Date().toISOString(),
 			});
-		} finally {
-			isLoading = false;
-			await scrollToBottom();
-		}
+			pendingCount = Math.max(0, pendingCount - 1);
+		});
 	}
 
 	async function handleProtocolChange(protocolId: string) {
@@ -88,6 +165,10 @@
 			const defaultId = protocols.find(p => p.id === 'simple')?.id ?? protocols[0].id;
 			await initializeSession(defaultId);
 		}
+
+		return () => {
+			sseController?.abort();
+		};
 	});
 </script>
 
@@ -103,7 +184,7 @@
 		class="flex-1 overflow-y-auto p-6"
 		bind:this={chatContainer}
 	>
-		{#if messages.length === 0 && !isLoading}
+		{#if messages.length === 0 && pendingCount === 0}
 			<div class="h-full flex items-center justify-center">
 				<p class="text-zinc-500 text-sm">Send a message to start chatting with the agents.</p>
 			</div>
@@ -113,13 +194,13 @@
 			<ChatMessageBubble {message} />
 		{/each}
 
-		{#if isLoading}
+		{#if pendingCount > 0}
 			<LoadingIndicator />
 		{/if}
 	</div>
 
 	<ChatInput
-		disabled={isLoading || !sessionId}
+		disabled={!sessionId}
 		onSend={handleSend}
 	/>
 </main>
