@@ -1,27 +1,27 @@
 <script lang="ts">
-	import type { ProtocolInfo, AgentInfo } from '$lib/types';
+import type { AgentInfo, ProtocolInfo } from "$lib/types";
 
-	interface Props {
-		protocols: ProtocolInfo[];
-		currentProtocol: string;
-		agents: AgentInfo[];
-		onProtocolChange: (protocolId: string) => void;
+interface Props {
+	protocols: ProtocolInfo[];
+	currentProtocol: string;
+	agents: AgentInfo[];
+	onProtocolChange: (protocolId: string) => void;
+}
+
+let { protocols, currentProtocol, agents, onProtocolChange }: Props = $props();
+
+const agentColors: Record<string, string> = {
+	Atlas: "bg-blue-400",
+	Sage: "bg-green-400",
+	Bolt: "bg-yellow-400",
+};
+
+function getAgentColor(name: string): string {
+	for (const [key, color] of Object.entries(agentColors)) {
+		if (name.startsWith(key)) return color;
 	}
-
-	let { protocols, currentProtocol, agents, onProtocolChange }: Props = $props();
-
-	const agentColors: Record<string, string> = {
-		'Atlas': 'bg-blue-400',
-		'Sage': 'bg-green-400',
-		'Bolt': 'bg-yellow-400',
-	};
-
-	function getAgentColor(name: string): string {
-		for (const [key, color] of Object.entries(agentColors)) {
-			if (name.startsWith(key)) return color;
-		}
-		return 'bg-zinc-400';
-	}
+	return "bg-zinc-400";
+}
 </script>
 
 <aside class="w-64 bg-zinc-800 border-r border-zinc-700 flex flex-col shrink-0">

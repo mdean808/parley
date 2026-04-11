@@ -1,5 +1,5 @@
-import type { ProtocolId } from "protocols/factory";
 import type { AgentResult } from "core/types";
+import type { ProtocolId } from "protocols/factory";
 import type { JudgeEvaluation, JudgeResult } from "./judge-types.ts";
 
 export type { ProtocolId };

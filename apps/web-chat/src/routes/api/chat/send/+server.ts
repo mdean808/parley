@@ -1,7 +1,7 @@
-import { json, error } from "@sveltejs/kit";
-import type { RequestHandler } from "./$types";
-import { getSession } from "$lib/server/sessions";
+import { error, json } from "@sveltejs/kit";
 import type { ChatStreamEvent } from "$lib/server/sessions";
+import { getSession } from "$lib/server/sessions";
+import type { RequestHandler } from "./$types";
 
 export const POST: RequestHandler = async ({ request }) => {
 	const { sessionId, message } = await request.json();

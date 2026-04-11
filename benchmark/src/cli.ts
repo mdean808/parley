@@ -1,9 +1,9 @@
 import chalk from "chalk";
+import { MODEL } from "core/config";
 import { runComparison } from "./comparison.ts";
 import type { JudgeConfig } from "./judge-types.ts";
 import { generateMarkdownReport } from "./report-markdown.ts";
 import { printTerminalReport } from "./report-terminal.ts";
-import { MODEL } from "core/config";
 
 if (!process.env.ANTHROPIC_API_KEY) {
 	console.error("Error: ANTHROPIC_API_KEY environment variable is required.");

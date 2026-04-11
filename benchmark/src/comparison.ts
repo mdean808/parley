@@ -107,9 +107,13 @@ export async function runComparison(
 	// Load scenarios
 	let scenarios: Scenario[];
 	if (options.scenarios) {
-		scenarios = await Promise.all(options.scenarios.map((id) => loadScenario(id)));
+		scenarios = await Promise.all(
+			options.scenarios.map((id) => loadScenario(id)),
+		);
 	} else if (options.categories) {
-		const results = await Promise.all(options.categories.map((c) => loadScenariosByCategory(c)));
+		const results = await Promise.all(
+			options.categories.map((c) => loadScenariosByCategory(c)),
+		);
 		scenarios = results.flat();
 	} else {
 		scenarios = await loadAllScenarios();

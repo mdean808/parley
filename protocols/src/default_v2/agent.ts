@@ -1,7 +1,12 @@
 import type Anthropic from "@anthropic-ai/sdk";
-import { client, MODEL, MAX_AGENT_ITERATIONS, MAX_VALIDATION_RETRIES } from "core/config";
-import { log } from "../logger.ts";
+import {
+	client,
+	MAX_AGENT_ITERATIONS,
+	MAX_VALIDATION_RETRIES,
+	MODEL,
+} from "core/config";
 import type { ProtocolEventHandler } from "core/types";
+import { log } from "../logger.ts";
 import { assembleSystemPrompt } from "./prompt.ts";
 import type { StoreV2 } from "./store.ts";
 import { createToolDefinitions } from "./tool-definitions.ts";

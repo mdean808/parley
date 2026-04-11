@@ -1,12 +1,12 @@
-export {
-	createProtocol,
-	registerProtocol,
-	getProtocolIds,
-	getProtocolRegistration,
-} from "./factory.ts";
+export { CONVERSATION_CONTEXT_NOTE, createAgentPersonas } from "./agents.ts";
 export type {
 	ProtocolId,
 	ProtocolOptions,
 	ProtocolRegistration,
 } from "./factory.ts";
-export { createAgentPersonas, CONVERSATION_CONTEXT_NOTE } from "./agents.ts";
+export {
+	createProtocol,
+	getProtocolIds,
+	getProtocolRegistration,
+	registerProtocol,
+} from "./factory.ts";

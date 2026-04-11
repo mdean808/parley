@@ -1,4 +1,10 @@
 import * as readline from "node:readline/promises";
+import type { ProtocolEvent } from "core/types";
+import {
+	createProtocol,
+	getProtocolIds,
+	getProtocolRegistration,
+} from "protocols/factory";
 import {
 	agentHeader,
 	agentStats,
@@ -6,12 +12,6 @@ import {
 	renderMarkdown,
 	summaryBlock,
 } from "./display.ts";
-import {
-	createProtocol,
-	getProtocolIds,
-	getProtocolRegistration,
-} from "protocols/factory";
-import type { ProtocolEvent } from "core/types";
 
 if (!process.env.ANTHROPIC_API_KEY) {
 	console.error("Error: ANTHROPIC_API_KEY environment variable is required.");

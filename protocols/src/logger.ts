@@ -10,8 +10,8 @@ const LEVELS: Record<LogLevel, number> = {
 	ERROR: 3,
 };
 
-const LOG_DIR: string = process.env.LOG_DIR ||
-	new URL("../../logs", import.meta.url).pathname;
+const LOG_DIR: string =
+	process.env.LOG_DIR || new URL("../../logs", import.meta.url).pathname;
 const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
 const LOG_FILE = `${LOG_DIR}/${timestamp}.json`;
 const LOG_LEVEL: LogLevel =

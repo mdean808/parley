@@ -55,7 +55,12 @@ export type ChatStreamEvent =
 				results: Array<{
 					agentName: string;
 					skills: string[];
-					response: { id: string; payload: string; timestamp: string; type: string };
+					response: {
+						id: string;
+						payload: string;
+						timestamp: string;
+						type: string;
+					};
 					usage?: { inputTokens: number; outputTokens: number };
 					model?: string;
 					durationMs?: number;

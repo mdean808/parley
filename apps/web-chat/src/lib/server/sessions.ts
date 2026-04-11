@@ -1,5 +1,5 @@
-import { createProtocol } from "protocols/factory";
 import type { Protocol, ProtocolAgentInfo, ProtocolEvent } from "core/types";
+import { createProtocol } from "protocols/factory";
 
 export interface ChatStreamMessage {
 	id: string;
@@ -99,7 +99,9 @@ function buildEnrichedEvent(
 				});
 				const msg = msgs[msgs.length - 1];
 				if (msg) {
-					(base as Extract<ChatStreamEvent, { type: "protocol_event" }>).message = {
+					(
+						base as Extract<ChatStreamEvent, { type: "protocol_event" }>
+					).message = {
 						id: msg.id,
 						type: msg.type,
 						payload: msg.payload,
@@ -110,11 +112,20 @@ function buildEnrichedEvent(
 					// For RESPONSE, attach usage/model/duration from agentMeta
 					if (msgType === "RESPONSE") {
 						const proto = session.protocol as unknown as {
-							agentMeta?: Map<string, { usage: { inputTokens: number; outputTokens: number }; model: string; durationMs: number }>;
+							agentMeta?: Map<
+								string,
+								{
+									usage: { inputTokens: number; outputTokens: number };
+									model: string;
+									durationMs: number;
+								}
+							>;
 						};
 						const meta = proto.agentMeta?.get(`${agentId}:${session.chainId}`);
 						const skills = session._agentIdToSkills.get(agentId);
-						(base as Extract<ChatStreamEvent, { type: "protocol_event" }>).meta = {
+						(
+							base as Extract<ChatStreamEvent, { type: "protocol_event" }>
+						).meta = {
 							skills,
 							usage: meta?.usage,
 							model: meta?.model,
@@ -148,11 +159,12 @@ export async function createSession(
 	const { userId, agents } = await protocol.initialize(userName);
 
 	// Extract v2 internals (store, agents) — no-op for other protocols
-	const _store = (protocol as Record<string, unknown>).store ?? null;
+	const _store = (protocol as unknown as Record<string, unknown>).store ?? null;
 	const _agentNameToId = new Map<string, string>();
 	const _agentIdToSkills = new Map<string, string[]>();
 
-	const protocolAgents = (protocol as Record<string, unknown>).protocolAgents as
+	const protocolAgents = (protocol as unknown as Record<string, unknown>)
+		.protocolAgents as
 		| Array<{ agent: { id: string; name: string; skills: string[] } }>
 		| undefined;
 	if (protocolAgents) {

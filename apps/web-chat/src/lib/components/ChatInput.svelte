@@ -1,25 +1,25 @@
 <script lang="ts">
-	interface Props {
-		disabled: boolean;
-		onSend: (message: string) => void;
-	}
+interface Props {
+	disabled: boolean;
+	onSend: (message: string) => void;
+}
 
-	let { disabled, onSend }: Props = $props();
-	let text = $state('');
+let { disabled, onSend }: Props = $props();
+let text = $state("");
 
-	function handleKeydown(e: KeyboardEvent) {
-		if (e.key === 'Enter' && !e.shiftKey) {
-			e.preventDefault();
-			submit();
-		}
+function handleKeydown(e: KeyboardEvent) {
+	if (e.key === "Enter" && !e.shiftKey) {
+		e.preventDefault();
+		submit();
 	}
+}
 
-	function submit() {
-		const trimmed = text.trim();
-		if (!trimmed || disabled) return;
-		text = '';
-		onSend(trimmed);
-	}
+function submit() {
+	const trimmed = text.trim();
+	if (!trimmed || disabled) return;
+	text = "";
+	onSend(trimmed);
+}
 </script>
 
 <div class="border-t border-zinc-700 bg-zinc-800 p-4">

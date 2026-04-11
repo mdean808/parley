@@ -1,10 +1,10 @@
-import type { RequestHandler } from "./$types";
+import type { ChatStreamListener } from "$lib/server/sessions";
 import {
-	getSession,
 	addSessionListener,
+	getSession,
 	removeSessionListener,
 } from "$lib/server/sessions";
-import type { ChatStreamListener } from "$lib/server/sessions";
+import type { RequestHandler } from "./$types";
 
 export const GET: RequestHandler = async ({ url }) => {
 	const sessionId = url.searchParams.get("sessionId");

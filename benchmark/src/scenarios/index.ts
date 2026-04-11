@@ -47,11 +47,17 @@ export async function loadScenario(id: string): Promise<Scenario> {
 }
 
 export async function loadAllScenarios(): Promise<Scenario[]> {
-	const files = (await readdir(SCENARIOS_DIR)).filter((f) => f.endsWith(".json"));
-	return Promise.all(files.map((f) => parseScenarioFile(join(SCENARIOS_DIR, f))));
+	const files = (await readdir(SCENARIOS_DIR)).filter((f) =>
+		f.endsWith(".json"),
+	);
+	return Promise.all(
+		files.map((f) => parseScenarioFile(join(SCENARIOS_DIR, f))),
+	);
 }
 
-export async function loadScenariosByCategory(category: string): Promise<Scenario[]> {
+export async function loadScenariosByCategory(
+	category: string,
+): Promise<Scenario[]> {
 	const all = await loadAllScenarios();
 	return all.filter((s) => s.category === category);
 }

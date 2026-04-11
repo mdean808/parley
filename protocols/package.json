@@ -8,8 +8,9 @@
 		"./agents": "./src/agents.ts"
 	},
 	"dependencies": {
-		"core": "workspace:*",
-		"@anthropic-ai/sdk": "^0.78.0",
-		"@toon-format/toon": "^2.1.0"
+		"@a2a-js/sdk": "^0.3.13",
+		"@anthropic-ai/sdk": "^0.88.0",
+		"@toon-format/toon": "^2.1.0",
+		"core": "workspace:*"
 	}
 }

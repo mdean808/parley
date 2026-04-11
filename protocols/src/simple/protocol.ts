@@ -1,6 +1,5 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { client, MODEL } from "core/config";
-import { log } from "../logger.ts";
 import type {
 	AgentPersona,
 	AgentResult,
@@ -9,6 +8,7 @@ import type {
 	ProtocolInit,
 	ProtocolResponse,
 } from "core/types";
+import { log } from "../logger.ts";
 
 /**
  * Bare-bones protocol that calls Claude directly with no state machine,

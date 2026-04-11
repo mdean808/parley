@@ -1,48 +1,48 @@
 <script lang="ts">
-	import type { ChatMessage } from '$lib/types';
-	import { marked } from 'marked';
+import { marked } from "marked";
+import type { ChatMessage } from "$lib/types";
 
-	interface Props {
-		message: ChatMessage;
+interface Props {
+	message: ChatMessage;
+}
+
+let { message }: Props = $props();
+
+let showPayload = $state(false);
+
+const agentBorderColors: Record<string, string> = {
+	Atlas: "border-blue-400",
+	Sage: "border-green-400",
+	Bolt: "border-yellow-400",
+};
+
+function getBorderColor(name?: string): string {
+	if (!name) return "border-zinc-600";
+	for (const [key, color] of Object.entries(agentBorderColors)) {
+		if (name.startsWith(key)) return color;
 	}
+	return "border-zinc-600";
+}
 
-	let { message }: Props = $props();
+function getNameColor(name?: string): string {
+	if (!name) return "text-zinc-300";
+	if (name.startsWith("Atlas")) return "text-blue-400";
+	if (name.startsWith("Sage")) return "text-green-400";
+	if (name.startsWith("Bolt")) return "text-yellow-400";
+	return "text-zinc-300";
+}
 
-	let showPayload = $state(false);
+function renderMarkdown(text: string): string {
+	return marked.parse(text, { async: false }) as string;
+}
 
-	const agentBorderColors: Record<string, string> = {
-		'Atlas': 'border-blue-400',
-		'Sage': 'border-green-400',
-		'Bolt': 'border-yellow-400',
-	};
+function formatCost(cost: number): string {
+	return cost < 0.01 ? `$${cost.toFixed(4)}` : `$${cost.toFixed(3)}`;
+}
 
-	function getBorderColor(name?: string): string {
-		if (!name) return 'border-zinc-600';
-		for (const [key, color] of Object.entries(agentBorderColors)) {
-			if (name.startsWith(key)) return color;
-		}
-		return 'border-zinc-600';
-	}
-
-	function getNameColor(name?: string): string {
-		if (!name) return 'text-zinc-300';
-		if (name.startsWith('Atlas')) return 'text-blue-400';
-		if (name.startsWith('Sage')) return 'text-green-400';
-		if (name.startsWith('Bolt')) return 'text-yellow-400';
-		return 'text-zinc-300';
-	}
-
-	function renderMarkdown(text: string): string {
-		return marked.parse(text, { async: false }) as string;
-	}
-
-	function formatCost(cost: number): string {
-		return cost < 0.01 ? `$${cost.toFixed(4)}` : `$${cost.toFixed(3)}`;
-	}
-
-	function shortId(id: string): string {
-		return id.slice(0, 8);
-	}
+function shortId(id: string): string {
+	return id.slice(0, 8);
+}
 </script>
 
 {#snippet infoButton()}

@@ -1,4 +1,4 @@
-import type { ProtocolInfo, AgentInfo, ChatStreamEvent } from "./types";
+import type { AgentInfo, ChatStreamEvent, ProtocolInfo } from "./types";
 
 export async function fetchProtocols(): Promise<ProtocolInfo[]> {
 	const res = await fetch("/api/chat/protocols");
@@ -62,7 +62,7 @@ export function connectToEvents(
 
 				// Parse SSE frames
 				const parts = buffer.split("\n\n");
-				buffer = parts.pop()!;
+				buffer = parts.pop() ?? "";
 
 				for (const part of parts) {
 					for (const line of part.split("\n")) {

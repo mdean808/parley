@@ -1,17 +1,18 @@
 import type Anthropic from "@anthropic-ai/sdk";
-import { log } from "../logger.ts";
 import { ACK_WINDOW_MS, HARD_TIMEOUT_MS } from "core/config";
-import { CONVERSATION_CONTEXT_NOTE } from "../agents.ts";
 import type {
 	AgentPersona,
 	AgentResult,
 	Message,
+	MessageType,
 	Protocol,
 	ProtocolEventHandler,
 	ProtocolInit,
 	ProtocolResponse,
 	TraceMessage,
 } from "core/types";
+import { CONVERSATION_CONTEXT_NOTE } from "../agents.ts";
+import { log } from "../logger.ts";
 import { ProtocolAgentV2 } from "./agent.ts";
 import { StoreV2 } from "./store.ts";
 import { encodeMessageV2, encodeOutboundV2 } from "./toon.ts";
@@ -184,7 +185,7 @@ export class DefaultProtocolV2 implements Protocol {
 				chainId: response.chainId,
 				replyTo: response.replyTo,
 				timestamp: response.timestamp,
-				type: response.type,
+				type: response.type as MessageType,
 				payload: response.payload,
 				from: response.from,
 				to: response.to,

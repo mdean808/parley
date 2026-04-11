@@ -2,7 +2,12 @@
 	"name": "simple-implementation",
 	"private": true,
 	"type": "module",
-	"workspaces": ["packages/*", "protocols", "benchmark", "apps/*"],
+	"workspaces": [
+		"packages/*",
+		"protocols",
+		"benchmark",
+		"apps/*"
+	],
 	"scripts": {
 		"chat": "bun run apps/cli-chat/src/index.ts",
 		"bench": "bun run benchmark/src/cli.ts",

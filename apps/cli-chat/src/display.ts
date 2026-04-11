@@ -1,8 +1,8 @@
 import chalk from "chalk";
-import { Marked, type MarkedExtension } from "marked";
-import { markedTerminal } from "marked-terminal";
 import { computeCost } from "core/cost";
 import type { AgentResult, ProtocolEvent } from "core/types";
+import { Marked, type MarkedExtension } from "marked";
+import { markedTerminal } from "marked-terminal";
 
 const marked = new Marked(markedTerminal() as unknown as MarkedExtension);
 

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Implementation of an agent-to-agent communication protocol with three protocol variants (v2 tool-use, simple direct, claude-code). The system runs multiple AI agents (powered by Claude) that receive user requests, evaluate relevance based on their skills, and respond. Includes a benchmarking system that compares protocol performance with LLM-as-judge evaluation.
+Implementation of an agent-to-agent communication protocol with five protocol variants (v2 tool-use, simple direct, claude-code, Google A2A, CrewAI). The system runs multiple AI agents (powered by Claude) that receive user requests, evaluate relevance based on their skills, and respond. Includes a benchmarking system that compares protocol performance with LLM-as-judge evaluation. External protocols (A2A, CrewAI) are bridged via HTTP — TypeScript adapters in `protocols/src/` call Python agent servers in `external/`.
 
 ## Commands
 
@@ -23,6 +23,11 @@ No test runner is configured yet.
 - `MODEL` — Claude model to use for agents (default: `claude-haiku-4-5-20251001`)
 - `JUDGE_MODEL` — Claude model for LLM judge (default: `claude-sonnet-4-5-20250929`)
 - `LOG_LEVEL` — logging verbosity: `DEBUG`, `INFO`, `WARN`, `ERROR` (default: `INFO`)
+- `A2A_ATLAS_URL` — A2A agent URL for Atlas (default: `http://localhost:8001`)
+- `A2A_SAGE_URL` — A2A agent URL for Sage (default: `http://localhost:8002`)
+- `A2A_BOLT_URL` — A2A agent URL for Bolt (default: `http://localhost:8003`)
+- `CREWAI_URL` — CrewAI FastAPI wrapper URL (default: `http://localhost:8000`)
+- `CREWAI_MODE` — `single` (3 separate crews) or `crew` (1 collaborative crew) (default: `single`)
 
 ## Tech Stack
 
@@ -52,6 +57,10 @@ protocols/                            — Workspace: protocol implementations
       protocol.ts
     claude-code/                      — Claude Code CLI wrapper
       protocol.ts
+    a2a/                              — Google A2A adapter (calls external A2A agents via HTTP)
+      protocol.ts, types.ts
+    crewai/                           — CrewAI adapter (calls FastAPI wrapper via HTTP)
+      protocol.ts, types.ts
 benchmark/                            — Workspace: benchmarking system
   src/
     cli.ts                            — Benchmark CLI entry point
@@ -69,6 +78,11 @@ apps/cli-chat/                        — Workspace: terminal chat REPL
     index.ts                          — Protocol selection + chat loop
     display.ts                        — Terminal UI: markdown rendering, stats
 apps/web-chat/                        — Workspace: SvelteKit web chat app
+external/                             — Python agent servers (not Bun workspaces)
+  a2a/                                — A2A agent server scaffold + instructions
+    agent_server/main.py
+  crewai/                             — CrewAI FastAPI wrapper scaffold + instructions
+    app/{main.py, models.py, crew.py}
 specs/                                — Protocol specification documents
 logs/                                 — Runtime JSON logs (gitignored)
 plans/                                — Implementation plan documents
@@ -89,11 +103,13 @@ apps/web-chat     ← depends on core + protocols
 
 ### Protocol Implementations
 
-Three protocols implement the `Protocol` interface (`initialize()` + `sendRequest()`):
+Five protocols implement the `Protocol` interface (`initialize()` + `sendRequest()`):
 
 - **v2 (DefaultProtocolV2)**: Agentic tool-use approach. Agents have tools (`send_message`, `get_message`, `evaluate_skills`). Per-chain LLM conversation history. Richer multi-round support.
 - **simple (SimpleProtocol)**: Direct Claude SDK calls, no protocol overhead. Per-agent conversation history. All agents always respond (no skill filtering). Baseline for comparison.
 - **claude-code (ClaudeCodeProtocol)**: Wraps the Claude Code CLI for single-agent agentic baseline.
+- **a2a (A2AProtocol)**: Bridges to external A2A-compliant agent servers via `@a2a-js/sdk`. Each persona maps to a separate A2A server. Requires running `external/a2a/` servers.
+- **crewai (CrewAIProtocol)**: Bridges to a CrewAI FastAPI wrapper via HTTP. Supports two modes: `single` (3 independent single-agent crews) and `crew` (1 collaborative crew). Requires running `external/crewai/` server.
 
 ### Benchmark System
 

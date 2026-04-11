@@ -1,8 +1,10 @@
+import type { Protocol, ProtocolEventHandler } from "core/types";
+import { A2AProtocol } from "./a2a/index.ts";
 import { createAgentPersonas } from "./agents.ts";
 import { ClaudeCodeProtocol } from "./claude-code/index.ts";
+import { CrewAIProtocol } from "./crewai/index.ts";
 import { DefaultProtocolV2 } from "./default_v2/index.ts";
 import { SimpleProtocol } from "./simple/index.ts";
-import type { Protocol, ProtocolEventHandler } from "core/types";
 
 export type ProtocolId = string;
 
@@ -74,4 +76,42 @@ registerProtocol("claude-code", {
 	label: "Claude Code",
 	description: "Claude Code CLI, single-agent agentic baseline",
 	create: (options) => new ClaudeCodeProtocol(options?.onEvent),
+});
+
+registerProtocol("a2a", {
+	label: "A2A Protocol",
+	description: "Google A2A, HTTP JSON-RPC, multi-agent",
+	create: (options) => {
+		const personas = createAgentPersonas();
+		return new A2AProtocol(
+			personas,
+			{
+				agentUrls: {
+					"Atlas - Research":
+						process.env.A2A_ATLAS_URL ?? "http://localhost:8001",
+					"Sage - Creative":
+						process.env.A2A_SAGE_URL ?? "http://localhost:8002",
+					"Bolt - Technical":
+						process.env.A2A_BOLT_URL ?? "http://localhost:8003",
+				},
+			},
+			options?.onEvent,
+		);
+	},
+});
+
+registerProtocol("crewai", {
+	label: "CrewAI",
+	description: "CrewAI via FastAPI wrapper, multi-agent",
+	create: (options) => {
+		const personas = createAgentPersonas();
+		return new CrewAIProtocol(
+			personas,
+			{
+				baseUrl: process.env.CREWAI_URL ?? "http://localhost:8000",
+				mode: (process.env.CREWAI_MODE as "single" | "crew") ?? "single",
+			},
+			options?.onEvent,
+		);
+	},
 });

@@ -179,3 +179,8 @@ benchmark/results/
 
 # SvelteKit
 .svelte-kit/
+
+# Python (external/)
+.venv/
+__pycache__/
+*.pyc
