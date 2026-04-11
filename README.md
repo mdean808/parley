@@ -51,8 +51,6 @@ Runs all protocols against all comparison scenarios, computes overhead metrics, 
 | **v2** (tool-use) | Agentic — agents use tools (`send_message`, `get_message`, `evaluate_skills`) | Tool-based skill evaluation | Per-chain LLM history + store queries |
 | **simple** (direct) | Direct Claude API calls, no protocol overhead | None — all agents always respond | Per-agent conversation history |
 
-> **Note:** A legacy v1 state-machine protocol exists in `src/protocols/default_v1/` for reference but is not active in the REPL or benchmarks.
-
 ## Agents
 
 | Name | Role | Skills |
@@ -120,5 +118,4 @@ bun run compare.ts --no-judge                                    # skip judge
 
 ## Protocol Specs
 
-- [`spec/PROTOCOL_SPEC_1.md`](./spec/PROTOCOL_SPEC_1.md) — v1 state machine protocol
 - [`spec/PROTOCOL_SPEC_2.md`](./spec/PROTOCOL_SPEC_2.md) — v2 tool-use protocol

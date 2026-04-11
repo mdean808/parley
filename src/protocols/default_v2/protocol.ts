@@ -1,5 +1,6 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { log } from "../../logger.ts";
+import { ACK_WINDOW_MS, HARD_TIMEOUT_MS } from "../../config.ts";
 import { CONVERSATION_CONTEXT_NOTE } from "../../agents.ts";
 import type {
 	AgentPersona,
@@ -15,9 +16,6 @@ import { ProtocolAgentV2 } from "./agent.ts";
 import { StoreV2 } from "./store.ts";
 import { encodeMessageV2, encodeOutboundV2 } from "./toon.ts";
 import type { AgentMeta, MessageV2 } from "./types.ts";
-
-const ACK_WINDOW_MS = 5_000;
-const HARD_TIMEOUT_MS = 30_000;
 
 export interface DefaultProtocolV2Config {
 	personas: AgentPersona[];

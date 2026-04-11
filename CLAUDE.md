@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Implementation of an agent-to-agent communication protocol with two active protocol variants (v2 tool-use, simple direct) and a legacy v1 state-machine implementation kept for posterity. The system runs multiple AI agents (powered by Claude) that receive user requests, evaluate relevance based on their skills, and respond. Includes a benchmarking system that compares protocol performance with LLM-as-judge evaluation.
+Implementation of an agent-to-agent communication protocol with two protocol variants (v2 tool-use, simple direct). The system runs multiple AI agents (powered by Claude) that receive user requests, evaluate relevance based on their skills, and respond. Includes a benchmarking system that compares protocol performance with LLM-as-judge evaluation.
 
 ## Commands
 
@@ -40,17 +40,14 @@ bench.ts                              — Benchmark CLI: runs scenarios across p
 src/
   types.ts                            — Shared types (User, Agent, Message, Protocol, etc.)
   agents.ts                           — Agent persona definitions (Atlas, Sage, Bolt)
-  brain.ts                            — ClaudeBrain: LLM logic (Anthropic SDK calls)
-  config.ts                           — Shared MODEL string + Anthropic SDK client singleton
+  config.ts                           — Shared MODEL string, Anthropic SDK client singleton, protocol constants
   cost.ts                             — Per-model token pricing + computeCost()
   factory.ts                          — createProtocol(id) factory, ProtocolId type
   chat/
     display.ts                        — Terminal UI: markdown rendering, stats, spinners
   protocols/
-    default_v1/                       — v1: legacy state machine + TOON (kept for posterity, not active)
-      protocol.ts, agent.ts, store.ts, toon.ts
     default_v2/                       — v2: agentic tool-use + chain history + TOON
-      protocol.ts, agent.ts, store.ts, toon.ts, tools.ts, prompt.ts
+      protocol.ts, agent.ts, store.ts, toon.ts, tool-definitions.ts, tool-executor.ts, prompt.ts
     simple/                           — Simple: direct Claude calls, no protocol overhead
       protocol.ts
   bench/
@@ -72,17 +69,14 @@ src/
 
 ### Protocol Implementations
 
-Two active protocols implement the `Protocol` interface (`initialize()` + `sendRequest()`):
+Two protocols implement the `Protocol` interface (`initialize()` + `sendRequest()`):
 
 - **v2 (DefaultProtocolV2)**: Agentic tool-use approach. Agents have tools (`send_message`, `get_message`, `evaluate_skills`). Per-chain LLM conversation history. Richer multi-round support.
 - **simple (SimpleProtocol)**: Direct Claude SDK calls, no protocol overhead. Per-agent conversation history. All agents always respond (no skill filtering). Baseline for comparison.
 
-Legacy (not wired into factory/benchmarks/REPL):
-- **v1 (DefaultProtocol)**: Programmatic state machine (ACK/PROCESS/RESPONSE), TOON wire format, injected `AgentBrain`, central store with pub/sub. Code kept for reference.
-
 ### Shared Utilities
 
-- **`src/config.ts`**: Shared `MODEL` string and Anthropic `client` singleton. Used by simple protocol and v2 agents.
+- **`src/config.ts`**: Shared `MODEL` string, Anthropic `client` singleton, and v2 protocol constants (`ACK_WINDOW_MS`, `HARD_TIMEOUT_MS`, `MAX_AGENT_ITERATIONS`, `MAX_VALIDATION_RETRIES`). Used by simple protocol and v2 agents.
 - **`src/cost.ts`**: `PRICING` map + `computeCost()`. Used by display, runner, and reports.
 - **`src/factory.ts`**: `createProtocol(id)` factory. Used by index.ts, bench.ts, and comparison engine.
 

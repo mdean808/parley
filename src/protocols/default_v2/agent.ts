@@ -1,15 +1,13 @@
 import type Anthropic from "@anthropic-ai/sdk";
-import { client, MODEL } from "../../config.ts";
+import { client, MODEL, MAX_AGENT_ITERATIONS, MAX_VALIDATION_RETRIES } from "../../config.ts";
 import { log } from "../../logger.ts";
 import type { ProtocolEventHandler } from "../../types.ts";
 import { assembleSystemPrompt } from "./prompt.ts";
 import type { StoreV2 } from "./store.ts";
-import { createToolDefinitions, executeToolCall } from "./tools.ts";
+import { createToolDefinitions } from "./tool-definitions.ts";
+import { executeToolCall } from "./tool-executor.ts";
 import { encodeOutboundV2 } from "./toon.ts";
 import type { AgentMeta, AgentV2, MessageV2 } from "./types.ts";
-
-const MAX_ITERATIONS = 15;
-const MAX_VALIDATION_RETRIES = 3;
 
 interface AgentConfig {
 	agent: AgentV2;
@@ -99,7 +97,7 @@ export class ProtocolAgentV2 {
 		let sentResponse = false;
 		const startTime = performance.now();
 
-		for (let iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
+		for (let iteration = 0; iteration < MAX_AGENT_ITERATIONS; iteration++) {
 			const response = await client.messages.create({
 				model: MODEL,
 				max_tokens: 2048,
