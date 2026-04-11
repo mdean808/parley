@@ -6,91 +6,105 @@ import {
 	JUDGE_SYSTEM_PROMPT,
 } from "./judge-prompt.ts";
 import type {
-	DimensionScore,
 	JudgeConfig,
 	JudgeEvaluation,
 	JudgeResult,
 	JudgeUsage,
 } from "./judge-types.ts";
 
-const SINGLE_ROUND_DIMENSIONS = [
-	"relevance",
-	"information_density",
-	"redundancy",
-	"summarization_quality",
-];
-
-const MULTI_ROUND_DIMENSIONS = [...SINGLE_ROUND_DIMENSIONS, "coherence"];
-
-const DIMENSION_WEIGHTS: Record<string, number> = {
-	relevance: 0.3,
-	information_density: 0.2,
-	redundancy: 0.2,
-	summarization_quality: 0.2,
-	coherence: 0.1,
-};
-
-const SINGLE_ROUND_WEIGHTS: Record<string, number> = {
-	relevance: 0.35,
-	information_density: 0.25,
-	redundancy: 0.2,
-	summarization_quality: 0.2,
-};
-
-function buildEvaluateTool(dimensions: string[]): Anthropic.Messages.Tool {
+function buildEvaluateTool(): Anthropic.Messages.Tool {
 	return {
 		name: "evaluate",
-		description: "Submit evaluation scores for agent responses.",
+		description: "Submit evaluation of agent responses.",
 		input_schema: {
 			type: "object" as const,
 			properties: {
-				dimensions: {
-					type: "array",
-					items: {
-						type: "object",
-						properties: {
-							dimension: {
-								type: "string",
-								enum: dimensions,
-							},
-							score: {
-								type: "integer",
-								minimum: 1,
-								maximum: 5,
-							},
-							reasoning: {
-								type: "string",
-								maxLength: 500,
-							},
-						},
-						required: ["dimension", "score", "reasoning"],
-					},
+				pass: {
+					type: "boolean",
+					description:
+						"Did the agents answer the question / complete the task?",
+				},
+				pass_reasoning: {
+					type: "string",
+					maxLength: 300,
+					description: "Why pass or fail",
+				},
+				quality_score: {
+					type: "integer",
+					minimum: 1,
+					maximum: 5,
+					description: "Overall quality 1-5",
+				},
+				quality_reasoning: {
+					type: "string",
+					maxLength: 300,
+				},
+				multi_agent_value: {
+					type: "integer",
+					minimum: 1,
+					maximum: 5,
+					description:
+						"Did multiple agents add distinct value? 1-5. Score 1 for single-agent protocols.",
+				},
+				multi_agent_reasoning: {
+					type: "string",
+					maxLength: 300,
 				},
 				summary: {
 					type: "string",
-					maxLength: 1000,
+					maxLength: 500,
 				},
 			},
-			required: ["dimensions", "summary"],
+			required: [
+				"pass",
+				"pass_reasoning",
+				"quality_score",
+				"quality_reasoning",
+				"multi_agent_value",
+				"multi_agent_reasoning",
+				"summary",
+			],
 		},
 	};
 }
 
-function computeWeightedOverall(
-	dimensions: DimensionScore[],
-	isMultiRound: boolean,
-): number {
-	const weights = isMultiRound ? DIMENSION_WEIGHTS : SINGLE_ROUND_WEIGHTS;
-	let totalWeight = 0;
-	let weightedSum = 0;
+function parseJudgeResponse(
+	response: Anthropic.Messages.Message,
+): JudgeEvaluation {
+	const toolUse = response.content.find(
+		(block): block is Anthropic.Messages.ToolUseBlock =>
+			block.type === "tool_use",
+	);
 
-	for (const d of dimensions) {
-		const w = weights[d.dimension] ?? 0;
-		weightedSum += d.score * w;
-		totalWeight += w;
+	if (!toolUse) {
+		return {
+			pass: false,
+			qualityScore: 1,
+			multiAgentValue: 1,
+			summary: "Judge failed to respond with tool use.",
+			passReasoning: "No tool response from judge.",
+			qualityReasoning: "",
+			multiAgentReasoning: "",
+		};
 	}
 
-	return totalWeight > 0 ? weightedSum / totalWeight : 3;
+	const input = toolUse.input as Record<string, unknown>;
+
+	return {
+		pass: Boolean(input.pass),
+		qualityScore: Math.min(
+			5,
+			Math.max(1, Math.round(Number(input.quality_score) || 3)),
+		),
+		multiAgentValue: Math.min(
+			5,
+			Math.max(1, Math.round(Number(input.multi_agent_value) || 1)),
+		),
+		summary: String(input.summary ?? ""),
+		passReasoning: String(input.pass_reasoning ?? ""),
+		qualityReasoning: String(input.quality_reasoning ?? ""),
+		multiAgentReasoning: String(input.multi_agent_reasoning ?? ""),
+	};
 }
 
 export async function evaluateScenario(
@@ -100,14 +114,9 @@ export async function evaluateScenario(
 	const model =
 		config.model ?? process.env.JUDGE_MODEL ?? "claude-sonnet-4-5-20250929";
 
-	const isMultiRound = rounds.length > 1;
-	const dimensions = isMultiRound
-		? MULTI_ROUND_DIMENSIONS
-		: SINGLE_ROUND_DIMENSIONS;
-
 	const judgeClient = new Anthropic();
-	const userPrompt = buildJudgeUserPrompt(rounds, isMultiRound);
-	const tool = buildEvaluateTool(dimensions);
+	const userPrompt = buildJudgeUserPrompt(rounds);
+	const tool = buildEvaluateTool();
 
 	const usage: JudgeUsage = {
 		inputTokens: 0,
@@ -132,69 +141,12 @@ export async function evaluateScenario(
 	usage.callCount++;
 	usage.durationMs = performance.now() - start;
 
-	const evaluation = parseJudgeResponse(response, dimensions, isMultiRound);
+	const evaluation = parseJudgeResponse(response);
 
 	return {
 		perRound: [evaluation],
 		aggregate: evaluation,
 		usage,
-	};
-}
-
-function parseJudgeResponse(
-	response: Anthropic.Messages.Message,
-	dimensions: string[],
-	isMultiRound: boolean,
-): JudgeEvaluation {
-	const toolUse = response.content.find(
-		(block): block is Anthropic.Messages.ToolUseBlock =>
-			block.type === "tool_use",
-	);
-
-	let parsedDimensions: DimensionScore[] = [];
-	let summary = "";
-
-	if (toolUse) {
-		const input = toolUse.input as {
-			dimensions?: unknown;
-			summary?: string;
-		};
-
-		let rawDims: { dimension: string; score: number; reasoning: string }[] = [];
-		if (Array.isArray(input.dimensions)) {
-			rawDims = input.dimensions;
-		} else if (typeof input.dimensions === "string") {
-			try {
-				const parsed = JSON.parse(input.dimensions);
-				if (Array.isArray(parsed)) rawDims = parsed;
-			} catch {}
-		}
-
-		parsedDimensions = rawDims.map((d) => ({
-			dimension: d.dimension,
-			score: Math.min(5, Math.max(1, Math.round(d.score))),
-			reasoning: d.reasoning ?? "",
-		}));
-
-		summary = input.summary ?? "";
-	}
-
-	for (const dim of dimensions) {
-		if (!parsedDimensions.find((d) => d.dimension === dim)) {
-			parsedDimensions.push({
-				dimension: dim,
-				score: 3,
-				reasoning: "Not evaluated by judge.",
-			});
-		}
-	}
-
-	const overall = computeWeightedOverall(parsedDimensions, isMultiRound);
-
-	return {
-		dimensions: parsedDimensions,
-		overall,
-		summary,
 	};
 }
 
@@ -206,14 +158,9 @@ export async function evaluateRound(
 	const model =
 		config.model ?? process.env.JUDGE_MODEL ?? "claude-sonnet-4-5-20250929";
 
-	const isMultiRound = targetRoundIndex > 0;
-	const dimensions = isMultiRound
-		? MULTI_ROUND_DIMENSIONS
-		: SINGLE_ROUND_DIMENSIONS;
-
 	const judgeClient = new Anthropic();
 	const userPrompt = buildJudgeRoundPrompt(conversationSoFar, targetRoundIndex);
-	const tool = buildEvaluateTool(dimensions);
+	const tool = buildEvaluateTool();
 
 	const usage: JudgeUsage = {
 		inputTokens: 0,
@@ -238,7 +185,7 @@ export async function evaluateRound(
 	usage.callCount++;
 	usage.durationMs = performance.now() - start;
 
-	const evaluation = parseJudgeResponse(response, dimensions, isMultiRound);
+	const evaluation = parseJudgeResponse(response);
 
 	return { evaluation, usage };
 }

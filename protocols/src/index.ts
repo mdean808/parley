@@ -1,4 +1,8 @@
-export { CONVERSATION_CONTEXT_NOTE, createAgentPersonas } from "./agents.ts";
+export {
+	CONVERSATION_CONTEXT_NOTE,
+	createAgentPersonas,
+	getA2AUrls,
+} from "./agents.ts";
 export type {
 	ProtocolId,
 	ProtocolOptions,

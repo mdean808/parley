@@ -1,6 +1,6 @@
 import type { Protocol, ProtocolEventHandler } from "core/types";
 import { A2AProtocol } from "./a2a/index.ts";
-import { createAgentPersonas } from "./agents.ts";
+import { createAgentPersonas, getA2AUrls } from "./agents.ts";
 import { ClaudeCodeProtocol } from "./claude-code/index.ts";
 import { CrewAIProtocol } from "./crewai/index.ts";
 import { DefaultProtocolV2 } from "./default_v2/index.ts";
@@ -85,16 +85,7 @@ registerProtocol("a2a", {
 		const personas = createAgentPersonas();
 		return new A2AProtocol(
 			personas,
-			{
-				agentUrls: {
-					"Atlas - Research":
-						process.env.A2A_ATLAS_URL ?? "http://localhost:8001",
-					"Sage - Creative":
-						process.env.A2A_SAGE_URL ?? "http://localhost:8002",
-					"Bolt - Technical":
-						process.env.A2A_BOLT_URL ?? "http://localhost:8003",
-				},
-			},
+			{ agentUrls: getA2AUrls() },
 			options?.onEvent,
 		);
 	},

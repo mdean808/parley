@@ -10,27 +10,25 @@ import {
 } from "./scenarios/index.ts";
 import type { ProtocolRunResult, ScenarioConfig } from "./types.ts";
 
-export interface OverheadMetrics {
-	extraInputTokens: number;
-	extraOutputTokens: number;
-	extraInputPercent: number;
-	extraOutputPercent: number;
-	extraDurationMs: number;
-	extraDurationPercent: number;
+export interface ProtocolAggregateMetrics {
+	successRate: number;
+	avgQuality: number;
+	avgTokensPerSuccess: number;
+	avgLatencyPerSuccess: number;
+	avgCostPerSuccess: number;
+	avgCoordinationEfficiency: number;
+	avgMultiAgentContribution: number;
+	passedCount: number;
+	totalCount: number;
 }
-
-/** Maps non-baseline protocol IDs to their overhead vs the baseline. */
-export type ProtocolOverhead = Record<string, OverheadMetrics>;
 
 export interface ScenarioComparison {
 	scenario: Scenario;
 	results: Record<string, ProtocolRunResult>;
-	protocolOverhead: ProtocolOverhead;
 }
 
 export interface AggregateComparison {
-	avgScores: Record<string, number>;
-	avgOverhead: ProtocolOverhead;
+	protocolMetrics: Record<string, ProtocolAggregateMetrics>;
 	agentParticipation: Record<string, Record<string, number>>;
 }
 
@@ -38,7 +36,7 @@ export interface ComparisonReport {
 	generatedAt: string;
 	model: string;
 	protocolIds: string[];
-	baseline: string;
+	baseline?: string;
 	scenarios: ScenarioComparison[];
 	aggregate: AggregateComparison;
 }
@@ -52,31 +50,6 @@ export interface ComparisonOptions {
 	outputDir?: string;
 	judgeConfig?: JudgeConfig;
 	onProgress?: (msg: string) => void;
-}
-
-function computeOverhead(
-	protocol: ProtocolRunResult,
-	baseline: ProtocolRunResult,
-): OverheadMetrics {
-	const extraInputTokens =
-		protocol.aggregate.totalInputTokens - baseline.aggregate.totalInputTokens;
-	const extraOutputTokens =
-		protocol.aggregate.totalOutputTokens - baseline.aggregate.totalOutputTokens;
-	const extraDurationMs =
-		protocol.aggregate.totalDurationMs - baseline.aggregate.totalDurationMs;
-
-	const baseIn = baseline.aggregate.totalInputTokens || 1;
-	const baseOut = baseline.aggregate.totalOutputTokens || 1;
-	const baseDur = baseline.aggregate.totalDurationMs || 1;
-
-	return {
-		extraInputTokens,
-		extraOutputTokens,
-		extraInputPercent: (extraInputTokens / baseIn) * 100,
-		extraOutputPercent: (extraOutputTokens / baseOut) * 100,
-		extraDurationMs,
-		extraDurationPercent: (extraDurationMs / baseDur) * 100,
-	};
 }
 
 function toScenarioConfig(s: Scenario): ScenarioConfig {
@@ -99,7 +72,6 @@ export async function runComparison(
 ): Promise<ComparisonReport> {
 	const progress = options.onProgress ?? (() => {});
 	const protocolIds = options.protocols ?? getProtocolIds();
-	const baseline = options.baseline ?? protocolIds[0];
 	const judgeConfig: JudgeConfig = options.judgeConfig ?? {
 		enabled: true,
 	};
@@ -161,44 +133,71 @@ export async function runComparison(
 						averageAgentsPerRound: 0,
 						roundCount: 0,
 					},
+					metrics: {
+						passed: false,
+						tokensPerSuccess: null,
+						latencyPerSuccess: null,
+						costPerSuccess: null,
+						coordinationEfficiency: 0,
+						multiAgentContribution: 0,
+						participationBalance: 0,
+					},
 					error: msg,
 				};
-			}
-		}
-
-		// Compute overhead for each non-baseline protocol (skip if either errored)
-		const protocolOverhead: ProtocolOverhead = {};
-		for (const pid of protocolIds) {
-			if (pid !== baseline && !results[pid].error && !results[baseline].error) {
-				protocolOverhead[pid] = computeOverhead(
-					results[pid],
-					results[baseline],
-				);
 			}
 		}
 
 		scenarioComparisons.push({
 			scenario,
 			results,
-			protocolOverhead,
 		});
 	}
 
-	// Compute aggregate
-	const avgScores: Record<string, number> = {};
-	for (const pid of protocolIds) avgScores[pid] = 0;
-
+	// Compute aggregate metrics per protocol
+	const protocolMetrics: Record<string, ProtocolAggregateMetrics> = {};
 	const agentParticipation: Record<string, Record<string, number>> = {};
 
 	for (const pid of protocolIds) {
-		let scoreSum = 0;
-		let scoreCount = 0;
+		let passedCount = 0;
+		let totalCount = 0;
+		let qualitySum = 0;
+		let qualityCount = 0;
+		let tokensSum = 0;
+		let latencySum = 0;
+		let costSum = 0;
+		let coordEffSum = 0;
+		let coordEffCount = 0;
+		let multiAgentSum = 0;
+		let multiAgentCount = 0;
 
 		for (const sc of scenarioComparisons) {
 			const result = sc.results[pid];
-			if (result.judge) {
-				scoreSum += result.judge.aggregate.overall;
-				scoreCount++;
+			if (!result) continue;
+
+			totalCount++;
+			const metrics = result.metrics;
+
+			if (metrics?.passed) {
+				passedCount++;
+				if (metrics.tokensPerSuccess != null)
+					tokensSum += metrics.tokensPerSuccess;
+				if (metrics.latencyPerSuccess != null)
+					latencySum += metrics.latencyPerSuccess;
+				if (metrics.costPerSuccess != null) costSum += metrics.costPerSuccess;
+			}
+
+			// Quality averaged over passed scenarios with judge data
+			if (metrics?.passed && result.judge) {
+				qualitySum += result.judge.aggregate.qualityScore;
+				qualityCount++;
+			}
+
+			// Coordination efficiency and multi-agent contribution averaged over all scenarios
+			if (metrics) {
+				coordEffSum += metrics.coordinationEfficiency;
+				coordEffCount++;
+				multiAgentSum += metrics.multiAgentContribution;
+				multiAgentCount++;
 			}
 
 			// Track agent participation
@@ -214,46 +213,30 @@ export async function runComparison(
 			}
 		}
 
-		avgScores[pid] = scoreCount > 0 ? scoreSum / scoreCount : 0;
-	}
-
-	// Average overhead across scenarios for each non-baseline protocol
-	const avgOverhead: ProtocolOverhead = {};
-	for (const pid of protocolIds) {
-		if (pid !== baseline) {
-			const overheads = scenarioComparisons
-				.map((sc) => sc.protocolOverhead[pid])
-				.filter((o): o is OverheadMetrics => o != null);
-			avgOverhead[pid] = averageOverhead(overheads);
-		}
+		protocolMetrics[pid] = {
+			successRate: totalCount > 0 ? (passedCount / totalCount) * 100 : 0,
+			avgQuality: qualityCount > 0 ? qualitySum / qualityCount : 0,
+			avgTokensPerSuccess: passedCount > 0 ? tokensSum / passedCount : 0,
+			avgLatencyPerSuccess: passedCount > 0 ? latencySum / passedCount : 0,
+			avgCostPerSuccess: passedCount > 0 ? costSum / passedCount : 0,
+			avgCoordinationEfficiency:
+				coordEffCount > 0 ? coordEffSum / coordEffCount : 0,
+			avgMultiAgentContribution:
+				multiAgentCount > 0 ? multiAgentSum / multiAgentCount : 0,
+			passedCount,
+			totalCount,
+		};
 	}
 
 	return {
 		generatedAt: new Date().toISOString(),
 		model: MODEL,
 		protocolIds,
-		baseline,
+		baseline: options.baseline,
 		scenarios: scenarioComparisons,
 		aggregate: {
-			avgScores,
-			avgOverhead,
+			protocolMetrics,
 			agentParticipation,
 		},
-	};
-}
-
-function averageOverhead(overheads: OverheadMetrics[]): OverheadMetrics {
-	const n = overheads.length || 1;
-	return {
-		extraInputTokens: overheads.reduce((s, o) => s + o.extraInputTokens, 0) / n,
-		extraOutputTokens:
-			overheads.reduce((s, o) => s + o.extraOutputTokens, 0) / n,
-		extraInputPercent:
-			overheads.reduce((s, o) => s + o.extraInputPercent, 0) / n,
-		extraOutputPercent:
-			overheads.reduce((s, o) => s + o.extraOutputPercent, 0) / n,
-		extraDurationMs: overheads.reduce((s, o) => s + o.extraDurationMs, 0) / n,
-		extraDurationPercent:
-			overheads.reduce((s, o) => s + o.extraDurationPercent, 0) / n,
 	};
 }

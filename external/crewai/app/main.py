@@ -11,7 +11,19 @@ from .models import (
     SingleRunResponse,
 )
 
-AGENTS = ["Atlas - Research", "Sage - Creative", "Bolt - Technical"]
+import json
+from pathlib import Path
+
+_CONFIG_PATH = Path(__file__).resolve().parent.parent.parent.parent / "agents.json"
+
+
+def _load_agent_names() -> list[str]:
+    with open(_CONFIG_PATH) as f:
+        config = json.load(f)
+    return [a["name"] for a in config["agents"]]
+
+
+AGENTS = _load_agent_names()
 
 app = FastAPI(title="CrewAI Benchmark Wrapper")
 

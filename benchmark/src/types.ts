@@ -72,6 +72,16 @@ export interface RoundResult {
 	judge?: JudgeEvaluation;
 }
 
+export interface ProtocolMetrics {
+	passed: boolean;
+	tokensPerSuccess: number | null;
+	latencyPerSuccess: number | null;
+	costPerSuccess: number | null;
+	coordinationEfficiency: number;
+	multiAgentContribution: number;
+	participationBalance: number;
+}
+
 export interface ProtocolRunResult {
 	protocolId: ProtocolId;
 	scenarioName: string;
@@ -85,6 +95,7 @@ export interface ProtocolRunResult {
 		roundCount: number;
 	};
 	judge?: JudgeResult;
+	metrics?: ProtocolMetrics;
 	error?: string;
 }
 

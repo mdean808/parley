@@ -1,58 +1,86 @@
-import type {
-	ComparisonReport,
-	OverheadMetrics,
-	ScenarioComparison,
-} from "./comparison.ts";
+import type { ComparisonReport, ScenarioComparison } from "./comparison.ts";
 
 function fmtNum(n: number): string {
 	return n.toLocaleString("en-US");
 }
 
 function fmtPct(n: number): string {
-	const sign = n >= 0 ? "+" : "";
-	return `${sign}${n.toFixed(1)}%`;
+	return `${n.toFixed(1)}%`;
+}
+
+function fmtScore(n: number): string {
+	return n.toFixed(1);
+}
+
+function fmtPassFail(result: {
+	metrics?: { passed: boolean };
+	judge?: { aggregate: { qualityScore: number } };
+	error?: string;
+}): string {
+	if (result.error) return "ERR";
+	if (!result.metrics) return "—";
+	if (result.metrics.passed) {
+		const q = result.judge?.aggregate.qualityScore;
+		return q ? `PASS (${fmtScore(q)})` : "PASS";
+	}
+	return "FAIL";
 }
 
 function generateObservations(
 	sc: ScenarioComparison,
 	protocolIds: string[],
-	baseline: string,
 ): string[] {
 	const obs: string[] = [];
 
-	// Check overhead for each non-baseline protocol
-	for (const pid of protocolIds) {
-		if (pid === baseline) continue;
-		const overhead = sc.protocolOverhead[pid];
-		if (overhead && overhead.extraInputPercent > 50) {
+	// Find highest-scoring protocol (by quality)
+	const scores: [string, number][] = protocolIds
+		.filter((pid) => sc.results[pid]?.metrics?.passed)
+		.map((pid) => [pid, sc.results[pid]?.judge?.aggregate.qualityScore ?? 0]);
+	if (scores.length > 0) {
+		const best = scores.reduce((a, b) => (b[1] > a[1] ? b : a));
+		if (best[1] > 0) {
 			obs.push(
-				`${pid} has significant protocol overhead: ${fmtPct(overhead.extraInputPercent)} more input tokens than ${baseline}`,
+				`${best[0]} achieved the highest quality score (${fmtScore(best[1])})`,
 			);
 		}
 	}
 
-	// Find highest-scoring protocol
-	const scores: [string, number][] = protocolIds.map((pid) => [
-		pid,
-		sc.results[pid]?.judge?.aggregate.overall ?? 0,
-	]);
-	const best = scores.reduce((a, b) => (b[1] > a[1] ? b : a));
-	if (best[1] > 0) {
-		obs.push(`${best[0]} achieved the highest judge scores for this scenario`);
+	// Coordination efficiency comparison
+	const efficiencies: [string, number][] = protocolIds
+		.filter((pid) => sc.results[pid]?.metrics)
+		.map((pid) => [pid, sc.results[pid].metrics?.coordinationEfficiency ?? 0]);
+	if (efficiencies.length > 1) {
+		const best = efficiencies.reduce((a, b) => (b[1] > a[1] ? b : a));
+		const worst = efficiencies.reduce((a, b) => (b[1] < a[1] ? b : a));
+		if (best[1] > worst[1] * 2 && worst[1] > 0) {
+			obs.push(
+				`${best[0]} has ${(best[1] / worst[1]).toFixed(1)}x better coordination efficiency than ${worst[0]}`,
+			);
+		}
 	}
 
-	// Check agent participation differences
+	// Multi-agent contribution
+	const contributions: [string, number][] = protocolIds
+		.filter((pid) => sc.results[pid]?.metrics)
+		.map((pid) => [pid, sc.results[pid].metrics?.multiAgentContribution ?? 0]);
+	if (contributions.length > 1) {
+		const best = contributions.reduce((a, b) => (b[1] > a[1] ? b : a));
+		if (best[1] > 0.6) {
+			obs.push(
+				`${best[0]} shows strong multi-agent contribution (${best[1].toFixed(2)})`,
+			);
+		}
+	}
+
+	// Agent participation differences
 	for (const pid of protocolIds) {
-		if (pid === baseline) continue;
 		const result = sc.results[pid];
 		if (!result || result.error) continue;
 		const agentCount = new Set(
 			result.rounds.flatMap((r) => r.agents.map((a) => a.agentName)),
 		).size;
-		if (agentCount < 3) {
-			obs.push(
-				`${pid} protocol routing filtered to ${agentCount} agent(s), showing skill-based selection`,
-			);
+		if (agentCount === 1 && result.rounds.length > 0) {
+			obs.push(`${pid} used a single agent`);
 		}
 	}
 
@@ -61,22 +89,22 @@ function generateObservations(
 
 export function generateMarkdownReport(report: ComparisonReport): string {
 	const lines: string[] = [];
-	const { protocolIds, baseline } = report;
-	const nonBaseline = protocolIds.filter((p) => p !== baseline);
+	const { protocolIds } = report;
 
 	lines.push("# Protocol Comparison Report\n");
 
 	// Executive Summary
 	lines.push("## Executive Summary\n");
-	const best = Object.entries(report.aggregate.avgScores).reduce((a, b) =>
-		b[1] > a[1] ? b : a,
+	const metrics = report.aggregate.protocolMetrics;
+	const bestSuccess = Object.entries(metrics).reduce((a, b) =>
+		b[1].successRate > a[1].successRate ? b : a,
 	);
 	lines.push(
-		`This report compares ${protocolIds.length} protocol implementation(s) (${protocolIds.join(", ")}) across ${report.scenarios.length} scenarios using model \`${report.model}\`. Baseline: **${baseline}**.`,
+		`This report compares ${protocolIds.length} protocol implementation(s) (${protocolIds.join(", ")}) across ${report.scenarios.length} scenarios using model \`${report.model}\`.`,
 	);
-	if (best[1] > 0) {
+	if (bestSuccess[1].successRate > 0) {
 		lines.push(
-			`**${best[0]}** achieved the highest average judge score of **${best[1].toFixed(1)}/5.0**.\n`,
+			`**${bestSuccess[0]}** achieved the highest success rate of **${fmtPct(bestSuccess[1].successRate)}**.\n`,
 		);
 	}
 
@@ -85,65 +113,38 @@ export function generateMarkdownReport(report: ComparisonReport): string {
 	lines.push(
 		`Each scenario was run sequentially through all ${protocolIds.length} protocol implementation(s). ` +
 			"Protocols were freshly instantiated per scenario to prevent context leakage. " +
-			"An LLM judge (separate from the agents) evaluated response quality on 1-5 scales across " +
-			"relevance, information density, redundancy, summarization quality, and coherence (multi-round only).\n",
+			"An LLM judge evaluated each response on pass/fail task success, quality (1-5), and multi-agent value (1-5).\n",
 	);
 
-	// Overall Comparison
-	lines.push("## Overall Comparison\n");
+	// Protocol Comparison (main summary table)
+	lines.push("## Protocol Comparison\n");
 	lines.push(
-		`| Protocol | Input Tok | Output Tok | Cost | Duration | Judge Avg |`,
+		"| Protocol | Success Rate | Avg Quality | Tokens/Success | Latency/Success | Cost/Success | Coord. Efficiency | Multi-Agent |",
 	);
 	lines.push(
-		"|----------|-----------|------------|------|----------|-----------|",
+		"|----------|-------------|-------------|----------------|-----------------|--------------|-------------------|-------------|",
 	);
 
 	for (const pid of protocolIds) {
-		let totalIn = 0;
-		let totalOut = 0;
-		let totalCost = 0;
-		let totalDur = 0;
-		let judgeSum = 0;
-		let judgeCount = 0;
+		const m = metrics[pid];
+		const successLabel = `${m.passedCount}/${m.totalCount} (${fmtPct(m.successRate)})`;
+		const quality = m.avgQuality > 0 ? fmtScore(m.avgQuality) : "—";
+		const tokPerSuccess =
+			m.passedCount > 0 ? fmtNum(Math.round(m.avgTokensPerSuccess)) : "—";
+		const latPerSuccess =
+			m.passedCount > 0
+				? `${(m.avgLatencyPerSuccess / 1000).toFixed(1)}s`
+				: "—";
+		const costPerSuccess =
+			m.passedCount > 0 ? `$${m.avgCostPerSuccess.toFixed(4)}` : "—";
+		const coordEff = m.avgCoordinationEfficiency.toFixed(3);
+		const multiAgent = m.avgMultiAgentContribution.toFixed(2);
 
-		for (const sc of report.scenarios) {
-			const r = sc.results[pid];
-			if (!r) continue;
-			totalIn += r.aggregate.totalInputTokens;
-			totalOut += r.aggregate.totalOutputTokens;
-			totalCost += r.aggregate.totalCost;
-			totalDur += r.aggregate.totalDurationMs;
-			if (r.judge) {
-				judgeSum += r.judge.aggregate.overall;
-				judgeCount++;
-			}
-		}
-
-		const judgeAvg = judgeCount > 0 ? (judgeSum / judgeCount).toFixed(1) : "—";
 		lines.push(
-			`| ${pid} | ${fmtNum(totalIn)} | ${fmtNum(totalOut)} | $${totalCost.toFixed(4)} | ${(totalDur / 1000).toFixed(1)}s | ${judgeAvg} |`,
+			`| ${pid} | ${successLabel} | ${quality} | ${tokPerSuccess} | ${latPerSuccess} | ${costPerSuccess} | ${coordEff} | ${multiAgent} |`,
 		);
 	}
 	lines.push("");
-
-	// Protocol Overhead
-	if (nonBaseline.length > 0) {
-		lines.push("## Protocol Overhead\n");
-		lines.push(`| vs ${baseline} | +Input Tok | +Output Tok | +Duration |`);
-		lines.push("|-----------|-----------|-------------|-----------|");
-
-		function overheadRow(label: string, o: OverheadMetrics): string {
-			return `| ${label} | ${fmtNum(Math.round(o.extraInputTokens))} (${fmtPct(o.extraInputPercent)}) | ${fmtNum(Math.round(o.extraOutputTokens))} (${fmtPct(o.extraOutputPercent)}) | ${(o.extraDurationMs / 1000).toFixed(1)}s (${fmtPct(o.extraDurationPercent)}) |`;
-		}
-
-		for (const pid of nonBaseline) {
-			const overhead = report.aggregate.avgOverhead[pid];
-			if (overhead) {
-				lines.push(overheadRow(pid, overhead));
-			}
-		}
-		lines.push("");
-	}
 
 	// Scenario Results
 	lines.push("## Scenario Results\n");
@@ -163,6 +164,28 @@ export function generateMarkdownReport(report: ComparisonReport): string {
 			lines.push("");
 		}
 
+		// Pass/Fail + Quality table
+		const hasJudge = Object.values(sc.results).some((r) => r.judge);
+		if (hasJudge || scenarioErrors.length > 0) {
+			lines.push("#### Evaluation\n");
+			lines.push(`| Protocol | Result | Quality | Multi-Agent Value |`);
+			lines.push(`|----------|--------|---------|-------------------|`);
+
+			for (const pid of protocolIds) {
+				const r = sc.results[pid];
+				if (!r) continue;
+				const passFail = fmtPassFail(r);
+				const quality = r.judge
+					? fmtScore(r.judge.aggregate.qualityScore)
+					: "—";
+				const multiAgent = r.judge
+					? fmtScore(r.judge.aggregate.multiAgentValue)
+					: "—";
+				lines.push(`| ${pid} | ${passFail} | ${quality} | ${multiAgent} |`);
+			}
+			lines.push("");
+		}
+
 		// Token Usage by Round
 		lines.push("#### Token Usage\n");
 		lines.push("| Protocol | Round | Input | Output | Duration |");
@@ -178,80 +201,6 @@ export function generateMarkdownReport(report: ComparisonReport): string {
 			}
 		}
 		lines.push("");
-
-		// Judge Scores
-		const hasJudge = Object.values(sc.results).some((r) => r.judge);
-		if (hasJudge) {
-			lines.push("#### Judge Scores\n");
-			lines.push(`| Dimension | ${protocolIds.join(" | ")} |`);
-			lines.push(`|-----------|${protocolIds.map(() => "-------").join("|")}|`);
-
-			const allDims = new Set<string>();
-			for (const pid of protocolIds) {
-				const dims = sc.results[pid]?.judge?.aggregate.dimensions ?? [];
-				for (const d of dims) allDims.add(d.dimension);
-			}
-
-			for (const dim of allDims) {
-				const scores = protocolIds.map((pid) => {
-					const d = sc.results[pid]?.judge?.aggregate.dimensions.find(
-						(dd) => dd.dimension === dim,
-					);
-					return d ? String(d.score) : "—";
-				});
-				lines.push(`| ${dim} | ${scores.join(" | ")} |`);
-			}
-
-			// Overall
-			const overalls = protocolIds.map((pid) => {
-				const o = sc.results[pid]?.judge?.aggregate.overall;
-				return o ? o.toFixed(1) : "—";
-			});
-			lines.push(`| **overall** | ${overalls.join(" | ")} |`);
-			lines.push("");
-		}
-
-		// Per-Round Judge Progression
-		const hasPerRoundJudge = Object.values(sc.results).some((r) =>
-			r?.rounds.some((round) => round.judge),
-		);
-		if (hasPerRoundJudge) {
-			lines.push("#### Per-Round Judge Progression\n");
-
-			// Collect all dimensions across all rounds
-			const roundDims = new Set<string>();
-			for (const pid of protocolIds) {
-				for (const round of sc.results[pid]?.rounds ?? []) {
-					if (round.judge) {
-						for (const d of round.judge.dimensions) {
-							roundDims.add(d.dimension);
-						}
-					}
-				}
-			}
-			const dimList = [...roundDims];
-
-			lines.push(`| Protocol | Round | ${dimList.join(" | ")} | overall |`);
-			lines.push(
-				`|----------|-------|${dimList.map(() => "-------").join("|")}|---------|`,
-			);
-
-			for (const pid of protocolIds) {
-				for (const round of sc.results[pid]?.rounds ?? []) {
-					if (!round.judge) continue;
-					const scores = dimList.map((dim) => {
-						const d = round.judge?.dimensions.find(
-							(dd) => dd.dimension === dim,
-						);
-						return d ? String(d.score) : "—";
-					});
-					lines.push(
-						`| ${pid} | ${round.roundIndex + 1} | ${scores.join(" | ")} | ${round.judge.overall.toFixed(1)} |`,
-					);
-				}
-			}
-			lines.push("");
-		}
 
 		// Agent Participation
 		lines.push("#### Agent Participation\n");
@@ -281,7 +230,7 @@ export function generateMarkdownReport(report: ComparisonReport): string {
 		lines.push("");
 
 		// Observations
-		const observations = generateObservations(sc, protocolIds, baseline);
+		const observations = generateObservations(sc, protocolIds);
 		if (observations.length > 0) {
 			lines.push("#### Notable Observations\n");
 			for (const obs of observations) {
@@ -309,35 +258,89 @@ export function generateMarkdownReport(report: ComparisonReport): string {
 	lines.push("## Key Findings\n");
 
 	let findingNum = 1;
-	for (const pid of nonBaseline) {
-		const overhead = report.aggregate.avgOverhead[pid];
-		if (!overhead) continue;
+
+	// 1. Success rates
+	const sortedBySuccess = Object.entries(metrics).sort(
+		(a, b) => b[1].successRate - a[1].successRate,
+	);
+	if (sortedBySuccess.length > 0) {
+		const summaries = sortedBySuccess.map(
+			([pid, m]) => `${pid} ${fmtPct(m.successRate)}`,
+		);
+		lines.push(`${findingNum}. **Success rates:** ${summaries.join(", ")}.`);
+		findingNum++;
+	}
+
+	// 2. Cost efficiency
+	const withCost = Object.entries(metrics).filter(([, m]) => m.passedCount > 0);
+	if (withCost.length > 1) {
+		const sortedByCost = withCost.sort(
+			(a, b) => a[1].avgCostPerSuccess - b[1].avgCostPerSuccess,
+		);
 		lines.push(
-			`${findingNum}. **Protocol overhead (${pid}):** ~${fmtPct(overhead.extraInputPercent)} input tokens, ~${(overhead.extraDurationMs / 1000).toFixed(1)}s latency vs ${baseline}.`,
+			`${findingNum}. **Cost efficiency:** ${sortedByCost[0][0]} is cheapest at $${sortedByCost[0][1].avgCostPerSuccess.toFixed(4)}/success vs ${sortedByCost[sortedByCost.length - 1][0]} at $${sortedByCost[sortedByCost.length - 1][1].avgCostPerSuccess.toFixed(4)}/success.`,
 		);
 		findingNum++;
 	}
 
-	const sortedScores = Object.entries(report.aggregate.avgScores).sort(
-		(a, b) => b[1] - a[1],
+	// 3. Multi-agent contribution
+	const sortedByMultiAgent = Object.entries(metrics).sort(
+		(a, b) => b[1].avgMultiAgentContribution - a[1].avgMultiAgentContribution,
 	);
-	if (sortedScores.length > 1 && sortedScores[0][1] > 0) {
-		const [bestPid, bestScore] = sortedScores[0];
-		const [worstPid, worstScore] = sortedScores[sortedScores.length - 1];
-		if (bestScore > worstScore) {
-			lines.push(
-				`${findingNum}. **Quality:** ${bestPid} leads with ${bestScore.toFixed(1)} avg judge score vs ${worstPid} at ${worstScore.toFixed(1)}.`,
+	if (sortedByMultiAgent.length > 1) {
+		lines.push(
+			`${findingNum}. **Multi-agent value:** ${sortedByMultiAgent[0][0]} leads with ${sortedByMultiAgent[0][1].avgMultiAgentContribution.toFixed(2)} contribution score vs ${sortedByMultiAgent[sortedByMultiAgent.length - 1][0]} at ${sortedByMultiAgent[sortedByMultiAgent.length - 1][1].avgMultiAgentContribution.toFixed(2)}.`,
+		);
+		findingNum++;
+	}
+
+	// 4. Coordination efficiency
+	const sortedByCoord = Object.entries(metrics).sort(
+		(a, b) => b[1].avgCoordinationEfficiency - a[1].avgCoordinationEfficiency,
+	);
+	if (sortedByCoord.length > 1) {
+		lines.push(
+			`${findingNum}. **Coordination efficiency:** ${sortedByCoord[0][0]} produces the most output per input token (${sortedByCoord[0][1].avgCoordinationEfficiency.toFixed(3)}) vs ${sortedByCoord[sortedByCoord.length - 1][0]} (${sortedByCoord[sortedByCoord.length - 1][1].avgCoordinationEfficiency.toFixed(3)}).`,
+		);
+	}
+	lines.push("");
+
+	// Appendix: Per-Round Judge Progression
+	const hasPerRoundJudge = report.scenarios.some((sc) =>
+		Object.values(sc.results).some((r) =>
+			r?.rounds.some((round) => round.judge),
+		),
+	);
+
+	if (hasPerRoundJudge) {
+		lines.push("## Appendix: Per-Round Judge Progression\n");
+
+		for (const sc of report.scenarios) {
+			const anyPerRound = Object.values(sc.results).some((r) =>
+				r?.rounds.some((round) => round.judge),
 			);
-		} else {
-			lines.push(
-				`${findingNum}. **Quality:** All protocols scored similarly (${bestScore.toFixed(1)}).`,
-			);
+			if (!anyPerRound) continue;
+
+			lines.push(`### ${sc.scenario.name}\n`);
+			lines.push("| Protocol | Round | Pass | Quality | Multi-Agent Value |");
+			lines.push("|----------|-------|------|---------|-------------------|");
+
+			for (const pid of protocolIds) {
+				for (const round of sc.results[pid]?.rounds ?? []) {
+					if (!round.judge) continue;
+					const pass = round.judge.pass ? "PASS" : "FAIL";
+					const quality = fmtScore(round.judge.qualityScore);
+					const multiAgent = fmtScore(round.judge.multiAgentValue);
+					lines.push(
+						`| ${pid} | ${round.roundIndex + 1} | ${pass} | ${quality} | ${multiAgent} |`,
+					);
+				}
+			}
+			lines.push("");
 		}
 	}
 
-	lines.push(
-		"\n---\n*Generated by the protocol comparison benchmark system.*\n",
-	);
+	lines.push("---\n*Generated by the protocol comparison benchmark system.*\n");
 
 	return lines.join("\n");
 }

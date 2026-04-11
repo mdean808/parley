@@ -1,5 +1,5 @@
 """
-A2A-compliant agent server template.
+A2A-compliant agent server.
 
 Run 3 instances of this server, one per persona:
 
@@ -11,17 +11,43 @@ Configure the agent via environment variables:
     AGENT_NAME    - e.g. "Atlas - Research"
     AGENT_SKILLS  - comma-separated, e.g. "general-knowledge,research"
     AGENT_PORT    - port number (used in agent card URL)
+    MODEL         - Claude model (default: claude-haiku-4-5-20251001)
 """
 
+import json
 import os
+import time
 import uuid
+from pathlib import Path
 
+import anthropic
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 AGENT_NAME = os.environ.get("AGENT_NAME", "Atlas - Research")
 AGENT_SKILLS = os.environ.get("AGENT_SKILLS", "general-knowledge,research").split(",")
 AGENT_PORT = os.environ.get("AGENT_PORT", "8001")
+MODEL = os.environ.get("MODEL", "claude-haiku-4-5-20251001")
+
+# Load system prompt from shared config
+CONFIG_PATH = Path(__file__).resolve().parent.parent.parent.parent / "agents.json"
+
+
+def _load_system_prompt(agent_name: str) -> str:
+    try:
+        with open(CONFIG_PATH) as f:
+            config = json.load(f)
+        for agent in config["agents"]:
+            if agent["name"] == agent_name:
+                return agent["systemPrompt"]
+    except (FileNotFoundError, KeyError, json.JSONDecodeError):
+        pass
+    return f"You are {agent_name}. Respond helpfully."
+
+
+SYSTEM_PROMPT = _load_system_prompt(AGENT_NAME)
+
+llm_client = anthropic.AsyncAnthropic()
 
 app = FastAPI(title=f"A2A Agent: {AGENT_NAME}")
 
@@ -51,13 +77,7 @@ async def agent_card():
 
 @app.post("/")
 async def handle_jsonrpc(request: Request):
-    """Handle A2A JSON-RPC requests.
-
-    Supports:
-        - message/send: Process a user message and return a response
-
-    TODO: Implement actual agent logic. Currently returns a placeholder.
-    """
+    """Handle A2A JSON-RPC requests."""
     body = await request.json()
 
     method = body.get("method")
@@ -78,30 +98,35 @@ async def handle_jsonrpc(request: Request):
 
 
 async def handle_send_message(params: dict, request_id) -> JSONResponse:
-    """Handle message/send - the core A2A method.
-
-    TODO: Replace the placeholder with actual agent logic.
-    Use the A2A Python SDK, Google ADK, LangGraph, or direct Claude calls.
-
-    The benchmark adapter looks for token usage in task metadata:
-        metadata.usage = {"input_tokens": N, "output_tokens": N}
-        metadata.model = "model-name"
-        metadata.duration_ms = N
-
-    Include these for accurate benchmark metrics.
-    """
+    """Handle message/send — call Claude and return the response with token metadata."""
     message = params.get("message", {})
     parts = message.get("parts", [])
     user_text = " ".join(p.get("text", "") for p in parts if p.get("kind") == "text")
     context_id = message.get("contextId", str(uuid.uuid4()))
     task_id = message.get("taskId", str(uuid.uuid4()))
 
-    # --- PLACEHOLDER: Replace with actual agent logic ---
-    response_text = (
-        f"[{AGENT_NAME}] Received: {user_text[:100]}... "
-        "(placeholder - implement agent logic in handle_send_message)"
-    )
-    # --- END PLACEHOLDER ---
+    usage = None
+    start_time = time.perf_counter()
+
+    try:
+        completion = await llm_client.messages.create(
+            model=MODEL,
+            max_tokens=1024,
+            system=SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": user_text}],
+        )
+        duration_ms = (time.perf_counter() - start_time) * 1000
+
+        response_text = "".join(
+            block.text for block in completion.content if block.type == "text"
+        )
+        usage = {
+            "input_tokens": completion.usage.input_tokens,
+            "output_tokens": completion.usage.output_tokens,
+        }
+    except Exception as e:
+        duration_ms = (time.perf_counter() - start_time) * 1000
+        response_text = f"[{AGENT_NAME}] Error: {e}"
 
     return JSONResponse(
         content={
@@ -117,11 +142,10 @@ async def handle_send_message(params: dict, request_id) -> JSONResponse:
                         "parts": [{"kind": "text", "text": response_text}],
                     }
                 ],
-                # Custom metadata for benchmark token tracking
                 "metadata": {
-                    "usage": None,  # TODO: populate with actual token counts
-                    "model": None,  # TODO: populate with model name
-                    "duration_ms": None,  # TODO: populate with duration
+                    "usage": usage,
+                    "model": MODEL,
+                    "duration_ms": round(duration_ms, 1),
                 },
             },
             "id": request_id,

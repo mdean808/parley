@@ -1,13 +1,11 @@
-export interface DimensionScore {
-	dimension: string;
-	score: number;
-	reasoning: string;
-}
-
 export interface JudgeEvaluation {
-	dimensions: DimensionScore[];
-	overall: number;
+	pass: boolean;
+	qualityScore: number;
+	multiAgentValue: number;
 	summary: string;
+	passReasoning: string;
+	qualityReasoning: string;
+	multiAgentReasoning: string;
 }
 
 export interface JudgeUsage {

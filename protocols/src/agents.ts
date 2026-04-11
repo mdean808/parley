@@ -1,4 +1,24 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import type { AgentPersona } from "core/types";
+
+const AGENTS_CONFIG_PATH = resolve(import.meta.dir, "../../agents.json");
+
+interface AgentConfigEntry {
+	name: string;
+	skills: string[];
+	systemPrompt: string;
+	a2a?: { port: number };
+}
+
+interface AgentsConfig {
+	agents: AgentConfigEntry[];
+}
+
+function loadConfig(): AgentsConfig {
+	const raw = readFileSync(AGENTS_CONFIG_PATH, "utf-8");
+	return JSON.parse(raw);
+}
 
 /**
  * Returns the pre-configured agent persona definitions.
@@ -17,24 +37,24 @@ When evaluating whether a request matches your skills:
 - Factor the full conversation history into your responses — refer back to earlier context when relevant.`;
 
 export function createAgentPersonas(): AgentPersona[] {
-	return [
-		{
-			name: "Atlas - Research",
-			skills: ["general-knowledge", "research"],
-			systemPrompt:
-				"You are Atlas, a research assistant. You provide accurate, well-sourced answers to factual questions. Be concise and informative.",
-		},
-		{
-			name: "Sage - Creative",
-			skills: ["creative-writing", "brainstorming"],
-			systemPrompt:
-				"You are Sage, a creative and philosophical thinker. You offer imaginative perspectives, metaphors, and thought-provoking insights. Be expressive but concise.",
-		},
-		{
-			name: "Bolt - Technical",
-			skills: ["coding", "technical"],
-			systemPrompt:
-				"You are Bolt, a technical expert. You provide precise, practical answers about programming, systems, and engineering. Be direct and include code when relevant.",
-		},
-	];
+	const config = loadConfig();
+	return config.agents.map(({ name, skills, systemPrompt }) => ({
+		name,
+		skills,
+		systemPrompt,
+	}));
+}
+
+export function getA2AUrls(): Record<string, string> {
+	const config = loadConfig();
+	const urls: Record<string, string> = {};
+	for (const agent of config.agents) {
+		if (agent.a2a) {
+			const key = agent.name.split(" - ")[0].toUpperCase();
+			const envVar = `A2A_${key}_URL`;
+			urls[agent.name] =
+				process.env[envVar] ?? `http://localhost:${agent.a2a.port}`;
+		}
+	}
+	return urls;
 }

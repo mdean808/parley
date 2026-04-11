@@ -14,6 +14,7 @@ Implementation of an agent-to-agent communication protocol with five protocol va
 - **Benchmark**: `bun run bench [--protocols v2,simple] [--scenarios id1,id2] [--category general] [--baseline simple] [--output dir] [--no-judge] [--judge-model model] [--no-report]`
 - **Lint**: `bun run lint`
 - **Format**: `bun run format`
+- **Start external servers**: `./start-agents.sh` (requires `jq`; starts CrewAI + A2A servers from `agents.json`)
 
 No test runner is configured yet.
 
@@ -23,9 +24,7 @@ No test runner is configured yet.
 - `MODEL` — Claude model to use for agents (default: `claude-haiku-4-5-20251001`)
 - `JUDGE_MODEL` — Claude model for LLM judge (default: `claude-sonnet-4-5-20250929`)
 - `LOG_LEVEL` — logging verbosity: `DEBUG`, `INFO`, `WARN`, `ERROR` (default: `INFO`)
-- `A2A_ATLAS_URL` — A2A agent URL for Atlas (default: `http://localhost:8001`)
-- `A2A_SAGE_URL` — A2A agent URL for Sage (default: `http://localhost:8002`)
-- `A2A_BOLT_URL` — A2A agent URL for Bolt (default: `http://localhost:8003`)
+- `A2A_{KEY}_URL` — Override A2A agent URL per agent (key derived from agent name before ` - `, uppercased; e.g. `A2A_ATLAS_URL`). Defaults to `http://localhost:{port}` from `agents.json`.
 - `CREWAI_URL` — CrewAI FastAPI wrapper URL (default: `http://localhost:8000`)
 - `CREWAI_MODE` — `single` (3 separate crews) or `crew` (1 collaborative crew) (default: `single`)
 
@@ -40,6 +39,8 @@ No test runner is configured yet.
 ## Project Structure
 
 ```
+agents.json                           — Shared agent persona config (name, skills, systemPrompt, a2a port)
+start-agents.sh                       — Launches all external servers from agents.json
 packages/core/                        — Shared workspace: types, config, cost
   src/
     types.ts                          — Shared types (User, Agent, Message, Protocol, etc.)
@@ -48,7 +49,7 @@ packages/core/                        — Shared workspace: types, config, cost
 protocols/                            — Workspace: protocol implementations
   src/
     factory.ts                        — createProtocol(id) factory, registry
-    agents.ts                         — Agent persona definitions (Atlas, Sage, Bolt)
+    agents.ts                         — Reads personas from agents.json, exports getA2AUrls()
     logger.ts                         — Structured JSON file logger
     index.ts                          — Barrel re-export
     default_v2/                       — v2: agentic tool-use + chain history + TOON
@@ -79,9 +80,9 @@ apps/cli-chat/                        — Workspace: terminal chat REPL
     display.ts                        — Terminal UI: markdown rendering, stats
 apps/web-chat/                        — Workspace: SvelteKit web chat app
 external/                             — Python agent servers (not Bun workspaces)
-  a2a/                                — A2A agent server scaffold + instructions
+  a2a/                                — A2A agent servers (one per persona, Claude API)
     agent_server/main.py
-  crewai/                             — CrewAI FastAPI wrapper scaffold + instructions
+  crewai/                             — CrewAI FastAPI wrapper (single + crew modes)
     app/{main.py, models.py, crew.py}
 specs/                                — Protocol specification documents
 logs/                                 — Runtime JSON logs (gitignored)
@@ -99,6 +100,10 @@ apps/cli-chat     ← depends on core + protocols
 apps/web-chat     ← depends on core + protocols
 ```
 
+## Agent Configuration
+
+Agent personas are defined in `agents.json` at the project root — the single source of truth for all protocols and external services. To add a new agent, add an entry to the `agents` array with `name`, `skills`, `systemPrompt`, and `a2a.port`, then restart servers. The TypeScript code (`protocols/src/agents.ts`) and both Python services read from this file.
+
 ## Architecture
 
 ### Protocol Implementations
@@ -115,8 +120,8 @@ Five protocols implement the `Protocol` interface (`initialize()` + `sendRequest
 
 - **Runner** (`benchmark/src/runner.ts`): Executes `ScenarioConfig` against a protocol. Detects `multiRound` config and delegates to `runMultiRound()`.
 - **Multi-round** (`benchmark/src/multi-round.ts`): Runs N rounds where agent responses feed into a synthesizer to produce the next prompt.
-- **Judge** (`benchmark/src/judge.ts`): Independent LLM evaluation. Scores on relevance, information_density, redundancy, summarization_quality, and coherence (multi-round only).
-- **Comparison** (`benchmark/src/comparison.ts`): Runs protocols across all scenarios, computes overhead metrics vs baseline.
+- **Judge** (`benchmark/src/judge.ts`): Independent LLM evaluation. Binary pass/fail task success, quality score (1-5), and multi-agent value (1-5).
+- **Comparison** (`benchmark/src/comparison.ts`): Runs protocols across all scenarios, computes success rate, cost-per-success, coordination efficiency, and multi-agent contribution.
 
 ### TOON Format
 

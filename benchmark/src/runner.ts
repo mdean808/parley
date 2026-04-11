@@ -3,7 +3,6 @@ import { computeCost } from "core/cost";
 import type { AgentResult, Protocol } from "core/types";
 import { evaluateRound, evaluateScenario } from "./judge.ts";
 import type {
-	DimensionScore,
 	JudgeConfig,
 	JudgeEvaluation,
 	JudgeUsage,
@@ -12,6 +11,7 @@ import { runMultiRound } from "./multi-round.ts";
 import type {
 	AgentRoundResult,
 	ProtocolId,
+	ProtocolMetrics,
 	ProtocolRunResult,
 	RoundResult,
 	ScenarioConfig,
@@ -54,7 +54,15 @@ function aggregatePerRoundJudge(rounds: RoundResult[]): {
 
 	if (allEvals.length === 0) {
 		return {
-			aggregate: { dimensions: [], overall: 0, summary: "" },
+			aggregate: {
+				pass: false,
+				qualityScore: 0,
+				multiAgentValue: 0,
+				summary: "",
+				passReasoning: "",
+				qualityReasoning: "",
+				multiAgentReasoning: "",
+			},
 			usage: {
 				inputTokens: 0,
 				outputTokens: 0,
@@ -65,45 +73,21 @@ function aggregatePerRoundJudge(rounds: RoundResult[]): {
 		};
 	}
 
-	// Average dimension scores across rounds
-	const dimMap = new Map<
-		string,
-		{ total: number; count: number; reasonings: string[] }
-	>();
-	for (const evaluation of allEvals) {
-		for (const d of evaluation.dimensions) {
-			const existing = dimMap.get(d.dimension);
-			if (existing) {
-				existing.total += d.score;
-				existing.count++;
-				existing.reasonings.push(d.reasoning);
-			} else {
-				dimMap.set(d.dimension, {
-					total: d.score,
-					count: 1,
-					reasonings: [d.reasoning],
-				});
-			}
-		}
-	}
-
-	const avgDimensions: DimensionScore[] = [];
-	for (const [dimension, data] of dimMap) {
-		avgDimensions.push({
-			dimension,
-			score: Math.round((data.total / data.count) * 10) / 10,
-			reasoning: `Average across ${data.count} rounds`,
-		});
-	}
-
-	const avgOverall =
-		allEvals.reduce((s, e) => s + e.overall, 0) / allEvals.length;
+	const passCount = allEvals.filter((e) => e.pass).length;
+	const avgQuality =
+		allEvals.reduce((s, e) => s + e.qualityScore, 0) / allEvals.length;
+	const avgMultiAgent =
+		allEvals.reduce((s, e) => s + e.multiAgentValue, 0) / allEvals.length;
 
 	return {
 		aggregate: {
-			dimensions: avgDimensions,
-			overall: Math.round(avgOverall * 10) / 10,
+			pass: passCount > allEvals.length / 2,
+			qualityScore: Math.round(avgQuality * 10) / 10,
+			multiAgentValue: Math.round(avgMultiAgent * 10) / 10,
 			summary: `Aggregate of ${allEvals.length} per-round evaluations`,
+			passReasoning: `${passCount}/${allEvals.length} rounds passed`,
+			qualityReasoning: `Average quality across ${allEvals.length} rounds`,
+			multiAgentReasoning: `Average multi-agent value across ${allEvals.length} rounds`,
 		},
 		usage: {
 			inputTokens: 0,
@@ -112,6 +96,51 @@ function aggregatePerRoundJudge(rounds: RoundResult[]): {
 			durationMs: 0,
 			callCount: 0,
 		},
+	};
+}
+
+function computeNormalizedEntropy(values: number[]): number {
+	const total = values.reduce((s, v) => s + v, 0);
+	if (total === 0 || values.length <= 1) return 0;
+	const n = values.length;
+	let entropy = 0;
+	for (const v of values) {
+		if (v > 0) {
+			const p = v / total;
+			entropy -= p * Math.log2(p);
+		}
+	}
+	const maxEntropy = Math.log2(n);
+	return maxEntropy > 0 ? entropy / maxEntropy : 0;
+}
+
+function computeMetrics(result: ProtocolRunResult): ProtocolMetrics {
+	const passed = result.error ? false : (result.judge?.aggregate.pass ?? false);
+
+	const { totalInputTokens, totalOutputTokens, totalCost, totalDurationMs } =
+		result.aggregate;
+
+	const coordinationEfficiency =
+		totalInputTokens > 0 ? totalOutputTokens / totalInputTokens : 0;
+
+	// Participation balance: normalized entropy of output tokens across agents
+	const agentTokens = result.rounds.flatMap((r) =>
+		r.agents.map((a) => a.outputTokens),
+	);
+	const participationBalance = computeNormalizedEntropy(agentTokens);
+
+	const multiAgentJudgeValue = result.judge?.aggregate.multiAgentValue ?? 1;
+	const multiAgentContribution =
+		0.4 * participationBalance + 0.6 * (multiAgentJudgeValue / 5);
+
+	return {
+		passed,
+		tokensPerSuccess: passed ? totalInputTokens + totalOutputTokens : null,
+		latencyPerSuccess: passed ? totalDurationMs : null,
+		costPerSuccess: passed ? totalCost : null,
+		coordinationEfficiency,
+		multiAgentContribution,
+		participationBalance,
 	};
 }
 
@@ -186,7 +215,7 @@ export async function runScenario(
 
 			const { aggregate: judgeAggregate } = aggregatePerRoundJudge(rounds);
 
-			return {
+			const result: ProtocolRunResult = {
 				protocolId,
 				scenarioName: scenario.name,
 				rounds,
@@ -209,12 +238,14 @@ export async function runScenario(
 				},
 				error: mrError,
 			};
+			result.metrics = computeMetrics(result);
+			return result;
 		}
 
 		const mrRoundCount = rounds.length || 1;
 		const mrAvgAgents =
 			rounds.reduce((s, r) => s + r.respondingAgentCount, 0) / mrRoundCount;
-		return {
+		const result: ProtocolRunResult = {
 			protocolId,
 			scenarioName: scenario.name,
 			rounds,
@@ -228,6 +259,8 @@ export async function runScenario(
 			},
 			error: mrError,
 		};
+		result.metrics = computeMetrics(result);
+		return result;
 	}
 
 	const rounds: RoundResult[] = [];
@@ -297,7 +330,7 @@ export async function runScenario(
 		if (rounds.length > 0) {
 			rounds[0].judge = judgeResult.aggregate;
 		}
-		return {
+		const result: ProtocolRunResult = {
 			protocolId,
 			scenarioName: scenario.name,
 			rounds,
@@ -305,13 +338,17 @@ export async function runScenario(
 			judge: judgeResult,
 			error: roundError,
 		};
+		result.metrics = computeMetrics(result);
+		return result;
 	}
 
-	return {
+	const result: ProtocolRunResult = {
 		protocolId,
 		scenarioName: scenario.name,
 		rounds,
 		aggregate,
 		error: roundError,
 	};
+	result.metrics = computeMetrics(result);
+	return result;
 }

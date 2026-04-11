@@ -2,44 +2,36 @@ import type { AgentResult } from "core/types";
 
 export const JUDGE_SYSTEM_PROMPT = `You are an expert evaluator assessing AI agent responses in a multi-agent system.
 You will receive user requests and agent responses across one or more conversation rounds.
-You MUST evaluate using the "evaluate" tool. Score each dimension 1-5.
+You MUST evaluate using the "evaluate" tool.
 
-## Scoring Dimensions
+## Task Success (pass/fail)
+- PASS: The agents collectively produced a response that answers the user's question or completes the requested task.
+- FAIL: The response is off-topic, empty, incoherent, or does not address the request.
+- Be lenient on quality — a mediocre answer that addresses the question is still a PASS.
+- If no agents responded or all responses are empty, that is a FAIL.
 
-### relevance (1-5)
-- 1: Off-topic, does not address the request
-- 3: Addresses the request with some tangents
-- 5: Directly and fully addresses the request
+## Quality Score (1-5)
+- 1: Poor — barely addresses the request, major issues
+- 2: Below average — addresses the request but with significant gaps
+- 3: Acceptable — addresses the request adequately
+- 4: Good — thorough, well-structured response
+- 5: Excellent — comprehensive, insightful, well-organized
+- Be strict but fair. 3 means "acceptable." Reserve 5 for genuinely excellent responses.
 
-### information_density (1-5)
-- 1: Verbose, filler-heavy, low content/token ratio
-- 3: Reasonable content/token ratio
-- 5: Every sentence adds value, highly efficient
+## Multi-Agent Value (1-5)
+- 1: One agent did all meaningful work, or agents repeated each other entirely
+- 2: Minimal differentiation between agents
+- 3: Some complementary contributions, moderate overlap
+- 4: Clear division of expertise, each agent adds distinct value
+- 5: Excellent collaboration — agents cover different aspects with minimal redundancy
+- For single-agent protocols (only one agent responded): score 1. This is expected, not a penalty.
 
-### redundancy (1-5) — lower score = more redundancy (bad)
-- 1: Agents repeat each other entirely
-- 3: Some overlap, but each adds some value
-- 5: Each agent contributes distinct, complementary content
-
-### summarization_quality (1-5)
-- 1: Misses key points
-- 3: Captures main points but misses nuance
-- 5: Comprehensive, accurate, well-structured
-
-### coherence (1-5) — multi-round only
-- 1: Contradicts prior context
-- 3: Follows context but misses references
-- 5: Seamlessly builds on prior exchanges
-
-## Scoring Guidelines
-- Be strict but fair. 3 means "acceptable."
-- Reserve 5 for genuinely excellent responses.
+## Guidelines
 - Evaluate agents as a collective system, not individually.
-- For redundancy: lower means agents repeated each other more (bad). 5 means they complemented each other well.`;
+- For multi-round conversations, evaluate based on the cumulative conversation quality.`;
 
 export function buildJudgeUserPrompt(
 	rounds: { userMessage: string; results: AgentResult[] }[],
-	isMultiRound: boolean,
 ): string {
 	const parts: string[] = ["## Scenario\n"];
 
@@ -61,12 +53,6 @@ export function buildJudgeUserPrompt(
 	parts.push(
 		'Evaluate the agents\' collective performance across all rounds. Use the "evaluate" tool.',
 	);
-
-	if (!isMultiRound) {
-		parts.push(
-			"Note: This is a single-round scenario. Do NOT evaluate the coherence dimension.",
-		);
-	}
 
 	return parts.join("\n");
 }
@@ -97,12 +83,9 @@ export function buildJudgeRoundPrompt(
 		parts.push(
 			'Evaluate the agents\' collective performance for this round. Use the "evaluate" tool.',
 		);
-		parts.push(
-			"Note: This is the first round. Do NOT evaluate the coherence dimension.",
-		);
 	} else {
 		parts.push(
-			`Evaluate the agents' collective performance for Round ${targetRoundIndex + 1} ONLY. Prior rounds are provided as context to assess coherence and continuity. Use the "evaluate" tool.`,
+			`Evaluate the agents' collective performance for Round ${targetRoundIndex + 1} ONLY. Prior rounds are provided as context to assess continuity. Use the "evaluate" tool.`,
 		);
 	}
 
