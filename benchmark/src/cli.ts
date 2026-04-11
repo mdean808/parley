@@ -86,7 +86,7 @@ process.stdout.write("\r\x1b[K");
 printTerminalReport(report);
 
 // Write JSON + optionally Markdown
-const timestamp = new Date().toISOString().split("T")[0];
+const timestamp = new Date().toISOString().replace(/:/g, "-").replace(/\.\d+Z$/, "");
 const jsonPath = `${outputDir}/benchmark-${timestamp}.json`;
 await Bun.write(jsonPath, JSON.stringify(report, null, 2));
 console.log(chalk.dim(`Results written to: ${jsonPath}`));

@@ -92,6 +92,7 @@ export function generateMarkdownReport(report: ComparisonReport): string {
 	const { protocolIds } = report;
 
 	lines.push("# Protocol Comparison Report\n");
+	lines.push(`*Run: ${report.generatedAt}*\n`);
 
 	// Executive Summary
 	lines.push("## Executive Summary\n");
