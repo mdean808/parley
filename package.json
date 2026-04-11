@@ -1,28 +1,17 @@
 {
 	"name": "simple-implementation",
-	"module": "index.ts",
+	"private": true,
 	"type": "module",
-	"workspaces": ["apps/*"],
-	"exports": {
-		"./types": "./src/types.ts",
-		"./factory": "./src/factory.ts",
-		"./config": "./src/config.ts",
-		"./cost": "./src/cost.ts",
-		"./agents": "./src/agents.ts"
+	"workspaces": ["packages/*", "protocols", "benchmark", "apps/*"],
+	"scripts": {
+		"chat": "bun run apps/cli-chat/src/index.ts",
+		"bench": "bun run benchmark/src/cli.ts",
+		"web": "bun run --cwd apps/web-chat dev",
+		"lint": "bunx biome check .",
+		"format": "bunx biome format --write ."
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.4.4",
-		"@types/bun": "latest",
-		"@types/marked-terminal": "^6.1.1"
-	},
-	"peerDependencies": {
-		"typescript": "^5.0.0"
-	},
-	"dependencies": {
-		"@anthropic-ai/sdk": "^0.78.0",
-		"@toon-format/toon": "^2.1.0",
-		"chalk": "^5.6.2",
-		"marked": "^17.0.3",
-		"marked-terminal": "^7.3.0"
+		"@types/bun": "latest"
 	}
 }

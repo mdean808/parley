@@ -1,0 +1,15 @@
+{
+	"name": "protocols",
+	"private": true,
+	"type": "module",
+	"exports": {
+		".": "./src/index.ts",
+		"./factory": "./src/factory.ts",
+		"./agents": "./src/agents.ts"
+	},
+	"dependencies": {
+		"core": "workspace:*",
+		"@anthropic-ai/sdk": "^0.78.0",
+		"@toon-format/toon": "^2.1.0"
+	}
+}

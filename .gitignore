@@ -175,7 +175,7 @@ dist
 .DS_Store
 
 # Benchmark results
-results/
+benchmark/results/
 
 # SvelteKit
 .svelte-kit/

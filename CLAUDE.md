@@ -4,16 +4,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Implementation of an agent-to-agent communication protocol with two protocol variants (v2 tool-use, simple direct). The system runs multiple AI agents (powered by Claude) that receive user requests, evaluate relevance based on their skills, and respond. Includes a benchmarking system that compares protocol performance with LLM-as-judge evaluation.
+Implementation of an agent-to-agent communication protocol with three protocol variants (v2 tool-use, simple direct, claude-code). The system runs multiple AI agents (powered by Claude) that receive user requests, evaluate relevance based on their skills, and respond. Includes a benchmarking system that compares protocol performance with LLM-as-judge evaluation.
 
 ## Commands
 
 - **Install**: `bun install`
-- **Run (interactive REPL)**: `bun run index.ts`
-- **Benchmark**: `bun run bench.ts [--protocols v2,simple] [--scenarios id1,id2] [--category general] [--baseline simple] [--output dir] [--no-judge] [--judge-model model] [--no-report]`
-- **Lint**: `bunx biome lint ./src`
-- **Format**: `bunx biome format ./src`
-- **Check**: `bunx biome check ./src` (lint + format)
+- **CLI Chat**: `bun run chat`
+- **Web Chat**: `bun run web`
+- **Benchmark**: `bun run bench [--protocols v2,simple] [--scenarios id1,id2] [--category general] [--baseline simple] [--output dir] [--no-judge] [--judge-model model] [--no-report]`
+- **Lint**: `bun run lint`
+- **Format**: `bun run format`
 
 No test runner is configured yet.
 
@@ -26,7 +26,7 @@ No test runner is configured yet.
 
 ## Tech Stack
 
-- **Runtime**: Bun
+- **Runtime**: Bun (workspaces)
 - **Language**: TypeScript (strict mode, ESNext target, bundler module resolution)
 - **Module system**: ES modules (`"type": "module"`)
 - **LLM**: Anthropic Claude SDK (`@anthropic-ai/sdk`)
@@ -35,57 +35,72 @@ No test runner is configured yet.
 ## Project Structure
 
 ```
-index.ts                              — Interactive REPL: protocol selection + chat loop
-bench.ts                              — Benchmark CLI: runs scenarios across protocols, generates reports
-src/
-  types.ts                            — Shared types (User, Agent, Message, Protocol, etc.)
-  agents.ts                           — Agent persona definitions (Atlas, Sage, Bolt)
-  config.ts                           — Shared MODEL string, Anthropic SDK client singleton, protocol constants
-  cost.ts                             — Per-model token pricing + computeCost()
-  factory.ts                          — createProtocol(id) factory, ProtocolId type
-  chat/
-    display.ts                        — Terminal UI: markdown rendering, stats, spinners
-  protocols/
+packages/core/                        — Shared workspace: types, config, cost
+  src/
+    types.ts                          — Shared types (User, Agent, Message, Protocol, etc.)
+    config.ts                         — MODEL string, Anthropic client, protocol constants
+    cost.ts                           — Per-model token pricing + computeCost()
+protocols/                            — Workspace: protocol implementations
+  src/
+    factory.ts                        — createProtocol(id) factory, registry
+    agents.ts                         — Agent persona definitions (Atlas, Sage, Bolt)
+    logger.ts                         — Structured JSON file logger
+    index.ts                          — Barrel re-export
     default_v2/                       — v2: agentic tool-use + chain history + TOON
       protocol.ts, agent.ts, store.ts, toon.ts, tool-definitions.ts, tool-executor.ts, prompt.ts
     simple/                           — Simple: direct Claude calls, no protocol overhead
       protocol.ts
-  bench/
-    types.ts                          — Benchmark + multi-round + judge result types
-    runner.ts                         — Core runner: executes scenarios, delegates multi-round
-    multi-round.ts                    — Multi-round conversation loop
-    judge.ts                          — LLM-as-judge: forced tool-use evaluation
-    judge-types.ts                    — Judge type definitions
-    judge-prompt.ts                   — Judge system prompt, rubric, user prompt builder
+    claude-code/                      — Claude Code CLI wrapper
+      protocol.ts
+benchmark/                            — Workspace: benchmarking system
+  src/
+    cli.ts                            — Benchmark CLI entry point
     comparison.ts                     — Comparison engine: all protocols x all scenarios
-    report-terminal.ts                — Terminal report renderer (chalk tables)
+    runner.ts                         — Core runner: executes scenarios
+    multi-round.ts                    — Multi-round conversation loop
+    judge.ts                          — LLM-as-judge evaluation
+    judge-types.ts, judge-prompt.ts   — Judge types and prompts
+    report-terminal.ts                — Terminal report renderer
     report-markdown.ts                — Markdown report generator
-    scenarios/                        — JSON scenario definitions (single + multi-round)
-      index.ts                        — Scenario loader + validation + types
-      *.json                          — Individual scenario files (id, category, rounds, optional multiRound)
+    scenarios/                        — JSON scenario definitions
+  results/                            — Benchmark output (gitignored)
+apps/cli-chat/                        — Workspace: terminal chat REPL
+  src/
+    index.ts                          — Protocol selection + chat loop
+    display.ts                        — Terminal UI: markdown rendering, stats
+apps/web-chat/                        — Workspace: SvelteKit web chat app
+specs/                                — Protocol specification documents
+logs/                                 — Runtime JSON logs (gitignored)
+plans/                                — Implementation plan documents
+docs/                                 — Project documentation
+```
+
+## Workspace Dependency Graph
+
+```
+packages/core     ← no workspace deps
+protocols         ← depends on core
+benchmark         ← depends on core + protocols
+apps/cli-chat     ← depends on core + protocols
+apps/web-chat     ← depends on core + protocols
 ```
 
 ## Architecture
 
 ### Protocol Implementations
 
-Two protocols implement the `Protocol` interface (`initialize()` + `sendRequest()`):
+Three protocols implement the `Protocol` interface (`initialize()` + `sendRequest()`):
 
 - **v2 (DefaultProtocolV2)**: Agentic tool-use approach. Agents have tools (`send_message`, `get_message`, `evaluate_skills`). Per-chain LLM conversation history. Richer multi-round support.
 - **simple (SimpleProtocol)**: Direct Claude SDK calls, no protocol overhead. Per-agent conversation history. All agents always respond (no skill filtering). Baseline for comparison.
-
-### Shared Utilities
-
-- **`src/config.ts`**: Shared `MODEL` string, Anthropic `client` singleton, and v2 protocol constants (`ACK_WINDOW_MS`, `HARD_TIMEOUT_MS`, `MAX_AGENT_ITERATIONS`, `MAX_VALIDATION_RETRIES`). Used by simple protocol and v2 agents.
-- **`src/cost.ts`**: `PRICING` map + `computeCost()`. Used by display, runner, and reports.
-- **`src/factory.ts`**: `createProtocol(id)` factory. Used by index.ts, bench.ts, and comparison engine.
+- **claude-code (ClaudeCodeProtocol)**: Wraps the Claude Code CLI for single-agent agentic baseline.
 
 ### Benchmark System
 
-- **Runner** (`src/bench/runner.ts`): Executes `ScenarioConfig` against a protocol. Detects `multiRound` config and delegates to `runMultiRound()`.
-- **Multi-round** (`src/bench/multi-round.ts`): Runs N rounds where agent responses feed into a synthesizer to produce the next prompt. Same `chainId` across rounds for context continuity.
-- **Judge** (`src/bench/judge.ts`): Independent LLM evaluation. Scores on relevance, information_density, redundancy, summarization_quality, and coherence (multi-round only). Uses forced tool-use for structured output. Separate Anthropic client from agents.
-- **Comparison** (`src/bench/comparison.ts`): Runs v2 and simple protocols across all scenarios, computes overhead metrics (token/cost/latency deltas vs simple baseline), generates aggregate scores.
+- **Runner** (`benchmark/src/runner.ts`): Executes `ScenarioConfig` against a protocol. Detects `multiRound` config and delegates to `runMultiRound()`.
+- **Multi-round** (`benchmark/src/multi-round.ts`): Runs N rounds where agent responses feed into a synthesizer to produce the next prompt.
+- **Judge** (`benchmark/src/judge.ts`): Independent LLM evaluation. Scores on relevance, information_density, redundancy, summarization_quality, and coherence (multi-round only).
+- **Comparison** (`benchmark/src/comparison.ts`): Runs protocols across all scenarios, computes overhead metrics vs baseline.
 
 ### TOON Format
 

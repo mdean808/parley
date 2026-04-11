@@ -1,0 +1,13 @@
+{
+	"name": "core",
+	"private": true,
+	"type": "module",
+	"exports": {
+		"./types": "./src/types.ts",
+		"./config": "./src/config.ts",
+		"./cost": "./src/cost.ts"
+	},
+	"dependencies": {
+		"@anthropic-ai/sdk": "^0.78.0"
+	}
+}
