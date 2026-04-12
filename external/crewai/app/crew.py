@@ -15,6 +15,10 @@ from crewai import Agent, Crew, Process, Task
 CONFIG_PATH = Path(__file__).resolve().parent.parent.parent.parent / "agents.json"
 DEFAULT_MODEL = "claude-haiku-4-5-20251001"
 
+# Conversation history keyed by chain_id for multi-round support
+# Each entry maps chain_id -> list of {"role": "user"|"assistant", "content": str}
+_conversation_histories: dict[str, list[dict[str, str]]] = {}
+
 
 def _get_model() -> str:
     return os.environ.get("MODEL", DEFAULT_MODEL)
@@ -27,9 +31,25 @@ def _load_personas() -> list[dict]:
     return config["agents"]
 
 
-def run_single_agent(agent_name: str, system_prompt: str, message: str) -> dict:
+def run_single_agent(agent_name: str, system_prompt: str, message: str, chain_id: str | None = None) -> dict:
     """Run a single-agent CrewAI crew and return the result."""
     model = _get_model()
+
+    # Build task description with conversation history for multi-round support
+    history_key = f"{chain_id}:{agent_name}" if chain_id else None
+    history = _conversation_histories.get(history_key, []) if history_key else []
+
+    task_description = message
+    if history:
+        context_lines = []
+        for entry in history:
+            role = "User" if entry["role"] == "user" else agent_name
+            context_lines.append(f"[{role}]: {entry['content']}")
+        task_description = (
+            "Previous conversation:\n"
+            + "\n\n".join(context_lines)
+            + f"\n\nNew message:\n{message}"
+        )
 
     agent = Agent(
         role=agent_name,
@@ -39,7 +59,7 @@ def run_single_agent(agent_name: str, system_prompt: str, message: str) -> dict:
         verbose=False,
     )
     task = Task(
-        description=message,
+        description=task_description,
         expected_output="A helpful, relevant response",
         agent=agent,
     )
@@ -61,6 +81,12 @@ def run_single_agent(agent_name: str, system_prompt: str, message: str) -> dict:
             "output_tokens": result.token_usage.completion_tokens or 0,
         }
 
+    # Store conversation history for multi-round support
+    if history_key:
+        history.append({"role": "user", "content": message})
+        history.append({"role": "assistant", "content": result.raw})
+        _conversation_histories[history_key] = history
+
     return {
         "response_text": result.raw,
         "usage": usage,
@@ -69,10 +95,19 @@ def run_single_agent(agent_name: str, system_prompt: str, message: str) -> dict:
     }
 
 
-def run_full_crew(message: str) -> list[dict]:
+def run_full_crew(message: str, chain_id: str | None = None) -> list[dict]:
     """Run the full multi-agent crew and return per-agent results."""
     model = _get_model()
     personas = _load_personas()
+
+    # Build task descriptions with conversation history for multi-round support
+    history = _conversation_histories.get(chain_id, []) if chain_id else []
+    context_prefix = ""
+    if history:
+        context_lines = []
+        for entry in history:
+            context_lines.append(f"[{entry['role']}]: {entry['content']}")
+        context_prefix = "Previous conversation:\n" + "\n\n".join(context_lines) + "\n\nNew message:\n"
 
     agents = []
     tasks = []
@@ -88,7 +123,7 @@ def run_full_crew(message: str) -> list[dict]:
         agents.append(agent)
 
         task = Task(
-            description=message,
+            description=f"{context_prefix}{message}",
             expected_output=f"A response from {persona['name']} addressing the user's query",
             agent=agent,
         )
@@ -107,6 +142,7 @@ def run_full_crew(message: str) -> list[dict]:
 
     results = []
     n = len(personas)
+    all_responses = []
     for i, task_output in enumerate(result.tasks_output):
         per_task_usage = None
         if result.token_usage:
@@ -117,6 +153,7 @@ def run_full_crew(message: str) -> list[dict]:
                 "output_tokens": total_completion // n,
             }
 
+        all_responses.append(f"[{personas[i]['name']}]: {task_output.raw}")
         results.append({
             "agent_name": personas[i]["name"],
             "response_text": task_output.raw,
@@ -124,5 +161,11 @@ def run_full_crew(message: str) -> list[dict]:
             "model": model,
             "duration_ms": round(total_duration_ms / n, 1),
         })
+
+    # Store conversation history for multi-round support
+    if chain_id:
+        history.append({"role": "user", "content": message})
+        history.append({"role": "agents", "content": "\n\n".join(all_responses)})
+        _conversation_histories[chain_id] = history
 
     return results

@@ -21,6 +21,7 @@ interface AgentConfig {
 	customTools?: Anthropic.Messages.Tool[];
 	onMeta?: (chainId: string, meta: AgentMeta) => void;
 	onEvent?: ProtocolEventHandler;
+	onDecline?: (chainId: string) => void;
 }
 
 export class ProtocolAgentV2 {
@@ -30,10 +31,12 @@ export class ProtocolAgentV2 {
 	private readonly tools: Anthropic.Messages.Tool[];
 	private readonly onMeta?: (chainId: string, meta: AgentMeta) => void;
 	private readonly onEvent?: ProtocolEventHandler;
+	private readonly onDecline?: (chainId: string) => void;
 	private readonly chainHistory: Map<
 		string,
 		Anthropic.Messages.MessageParam[]
 	> = new Map();
+	private readonly chainResponded: Set<string> = new Set();
 
 	constructor(store: StoreV2, config: AgentConfig) {
 		this.agent = config.agent;
@@ -50,6 +53,7 @@ export class ProtocolAgentV2 {
 		});
 		this.tools = createToolDefinitions(config.customTools);
 		this.onMeta = config.onMeta;
+		this.onDecline = config.onDecline;
 	}
 
 	start(): void {
@@ -82,6 +86,7 @@ export class ProtocolAgentV2 {
 				to: message.to,
 			});
 			this.chainHistory.delete(message.chainId);
+			this.chainResponded.delete(message.chainId);
 			this.store.updateAgentStatus(this.agent.id, "idle");
 			return;
 		}
@@ -90,12 +95,38 @@ export class ProtocolAgentV2 {
 		this.store.updateAgentStatus(this.agent.id, "working");
 
 		const history = this.chainHistory.get(message.chainId) ?? [];
+		const hasRespondedOnChain = this.chainResponded.has(message.chainId);
 
-		// Present the incoming request to the LLM
-		history.push({
-			role: "user",
-			content: `You received a new REQUEST message:\n\nid: ${message.id}\nversion: ${message.version}\nchainId: ${message.chainId}\nsequence: ${message.sequence}\nreplyTo: ${message.replyTo ?? "undefined"}\ntimestamp: ${message.timestamp}\ntype: ${message.type}\npayload: ${message.payload}\nheaders: ${JSON.stringify(message.headers)}\nfrom: ${message.from}\nto: ${message.to.join(", ")}\n\nEvaluate this request against your skills. If it matches, follow the message lifecycle: send ACK, then PROCESS, then RESPONSE. If it does not match your skills, stay silent — do not send any messages. Set replyTo to "${message.id}" on all messages you send.`,
-		});
+		// For follow-up requests on chains we already responded to,
+		// send ACK immediately (bypass LLM) so it arrives within the ACK window
+		if (hasRespondedOnChain) {
+			this.safeStoreMessage(component, {
+				chainId: message.chainId,
+				replyTo: message.id,
+				type: "ACK",
+				payload: `${this.agent.name} continuing chain`,
+				from: this.agent.id,
+				to: message.to,
+			});
+			log.info(component, "auto_ack_followup", {
+				chainId: message.chainId,
+				requestId: message.id,
+			});
+		}
+
+		// Build the user message for the LLM
+		const messageFields = `id: ${message.id}\nversion: ${message.version}\nchainId: ${message.chainId}\nsequence: ${message.sequence}\nreplyTo: ${message.replyTo ?? "undefined"}\ntimestamp: ${message.timestamp}\ntype: ${message.type}\npayload: ${message.payload}\nheaders: ${JSON.stringify(message.headers)}\nfrom: ${message.from}\nto: ${message.to.join(", ")}`;
+
+		let userContent: string;
+		if (hasRespondedOnChain) {
+			// Already responded on this chain — skip skill evaluation and ACK (already sent)
+			userContent = `This is a FOLLOW-UP on a chain you already responded to. ACK has already been sent on your behalf.\n\nNew REQUEST:\n\n${messageFields}\n\nProceed directly: send PROCESS, then RESPONSE. Set replyTo to "${message.id}" on all messages you send.`;
+		} else {
+			// First request on this chain — evaluate skills
+			userContent = `You received a new REQUEST message:\n\n${messageFields}\n\nEvaluate this request against your skills. If it matches, follow the message lifecycle: send ACK, then PROCESS, then RESPONSE. If it does not match your skills, stay silent — do not send any messages. Set replyTo to "${message.id}" on all messages you send.`;
+		}
+
+		history.push({ role: "user", content: userContent });
 
 		let totalInputTokens = 0;
 		let totalOutputTokens = 0;
@@ -223,6 +254,7 @@ export class ProtocolAgentV2 {
 				chainId: message.chainId,
 				requestId: message.id,
 			});
+			this.onDecline?.(message.chainId);
 		}
 
 		const durationMs = performance.now() - startTime;
@@ -238,6 +270,9 @@ export class ProtocolAgentV2 {
 			});
 		}
 
+		if (sentResponse) {
+			this.chainResponded.add(message.chainId);
+		}
 		this.chainHistory.set(message.chainId, history);
 		this.store.updateAgentStatus(this.agent.id, "idle");
 

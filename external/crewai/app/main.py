@@ -37,7 +37,7 @@ async def health() -> HealthResponse:
 async def handle_run_single(req: SingleRunRequest) -> SingleRunResponse:
     start = time.perf_counter()
     try:
-        result = run_single_agent(req.agent_name, req.system_prompt, req.message)
+        result = run_single_agent(req.agent_name, req.system_prompt, req.message, req.chain_id)
     except NotImplementedError as e:
         return SingleRunResponse(
             agent_name=req.agent_name,
@@ -65,7 +65,7 @@ async def handle_run_single(req: SingleRunRequest) -> SingleRunResponse:
 async def handle_run_crew(req: CrewRunRequest) -> CrewRunResponse:
     start = time.perf_counter()
     try:
-        agent_results = run_full_crew(req.message)
+        agent_results = run_full_crew(req.message, req.chain_id)
     except NotImplementedError as e:
         return CrewRunResponse(
             results=[],

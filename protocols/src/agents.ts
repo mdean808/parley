@@ -1,8 +1,10 @@
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { AgentPersona } from "core/types";
 
-const AGENTS_CONFIG_PATH = resolve(import.meta.dir, "../../agents.json");
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const AGENTS_CONFIG_PATH = resolve(__dirname, "../../agents.json");
 
 interface AgentConfigEntry {
 	name: string;

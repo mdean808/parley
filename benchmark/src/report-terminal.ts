@@ -1,8 +1,14 @@
 import chalk from "chalk";
 import type { ComparisonReport } from "./comparison.ts";
 
+function stripAnsi(str: string): string {
+	return str.replace(/\x1b\[[0-9;]*m/g, "");
+}
+
 function pad(str: string, len: number): string {
-	return str.padEnd(len);
+	const visibleLen = stripAnsi(str).length;
+	const padding = Math.max(0, len - visibleLen);
+	return str + " ".repeat(padding);
 }
 
 function fmtNum(n: number): string {

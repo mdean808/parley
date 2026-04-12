@@ -12,6 +12,14 @@ fi
 command -v python3 >/dev/null 2>&1 || { echo "Error: python3 required"; exit 1; }
 command -v jq >/dev/null 2>&1 || { echo "Error: jq required (brew install jq)"; exit 1; }
 
+# Load .env so ANTHROPIC_API_KEY (and any other vars) reach the Python servers
+if [ -f "$SCRIPT_DIR/.env" ]; then
+    set -a
+    # shellcheck disable=SC1091
+    source "$SCRIPT_DIR/.env"
+    set +a
+fi
+
 PIDS=()
 cleanup() {
     echo ""

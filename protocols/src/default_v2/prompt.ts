@@ -28,6 +28,10 @@ When you receive a REQUEST, follow this sequence exactly:
 
 You MUST NOT skip steps. No PROCESS without ACK. No RESPONSE without PROCESS.
 
+### Chain Continuity
+
+If you have already sent a RESPONSE on a chain and receive a new REQUEST on the same chain, you MUST continue the conversation — ACK, PROCESS, and RESPONSE as normal. Do not re-evaluate skill matching for follow-up requests on chains you have already engaged with.
+
 ### CANCEL
 
 If you receive a CANCEL: stop work, ACK the CANCEL, and propagate CANCEL to any sub-chains you started. After CANCEL, send nothing else on the chain.
@@ -59,7 +63,9 @@ All your messages must include \`version: 2\`. If you receive a message with an 
 
 ## TOON Format
 
-Messages are encoded in TOON — a compact, token-efficient format. Example:
+Messages are encoded in TOON — a compact, token-efficient format.
+
+Simple payload (no special chars — unquoted):
 
 \`\`\`
 id: a1b2c3d4-e5f6-7890-abcd-ef1234567890
@@ -75,12 +81,29 @@ from: a1b2c3d4-user-0001
 to[1]: *
 \`\`\`
 
+Payload with code or special chars — MUST be quoted and escaped:
+
+\`\`\`
+id:
+version: 2
+chainId: f9e8d7c6-b5a4-3210-fedc-ba0987654321
+sequence: 3
+replyTo: a1b2c3d4-e5f6-7890-abcd-ef1234567890
+timestamp: 2025-03-19T10:00:05.000Z
+type: RESPONSE
+payload: "Here is the implementation:\\n\\nclass LRUCache {\\n  private cache = new Map<string, number>();\\n  constructor(private capacity: number) {}\\n  get(key: string): number {\\n    const val = this.cache.get(key);\\n    if (val === undefined) return -1;\\n    this.cache.delete(key);\\n    this.cache.set(key, val);\\n    return val;\\n  }\\n}"
+headers[0]:
+from: a1b2c3d4-agent-0001
+to[1]: *
+\`\`\`
+
 Rules:
 
 - Key-value pairs use \`key: value\` (YAML-like)
 - Arrays use \`key[N]: val1,val2\` for primitives or tabular \`key[N]{f1,f2}: \\n v1,v2\` for objects
-- Strings containing commas, colons, or special chars must be quoted
 - \`undefined\` for absent values, \`true\`/\`false\` for booleans
+- **Quoting**: wrap the value in double quotes (\`"\`) if it contains any of: colon, comma, quote, backslash, newline, tab, brackets, or leading/trailing spaces
+- **Escaping** (inside quoted strings only): \`\\\\\` → backslash, \`\\"\` → quote, \`\\n\` → newline, \`\\r\` → CR, \`\\t\` → tab. No other escapes exist.
 
 Every message you send MUST be valid TOON. If the store rejects your message, fix the format and retry.
 

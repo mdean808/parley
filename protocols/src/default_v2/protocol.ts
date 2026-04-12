@@ -31,6 +31,8 @@ export class DefaultProtocolV2 implements Protocol {
 	private readonly store: StoreV2 = new StoreV2();
 	private readonly agentMeta: Map<string, AgentMeta> = new Map();
 	private readonly protocolAgents: ProtocolAgentV2[] = [];
+	private readonly chainDeclineCallbacks: Map<string, (agentId: string) => void> =
+		new Map();
 
 	constructor(config: DefaultProtocolV2Config) {
 		this.config = config;
@@ -50,6 +52,10 @@ export class DefaultProtocolV2 implements Protocol {
 				onMeta: (chainId: string, meta: AgentMeta) => {
 					// Key by agentId:chainId for per-agent per-chain tracking
 					this.agentMeta.set(`${agent.id}:${chainId}`, meta);
+				},
+				onDecline: (chainId: string) => {
+					const callback = this.chainDeclineCallbacks.get(chainId);
+					callback?.(agent.id);
 				},
 			});
 			protocolAgent.start();
@@ -72,8 +78,10 @@ export class DefaultProtocolV2 implements Protocol {
 		const hardTimeoutMs = this.config.hardTimeoutMs ?? HARD_TIMEOUT_MS;
 
 		const ackedAgentIds = new Set<string>();
+		const declinedAgentIds = new Set<string>();
 		const responses = new Map<string, MessageV2>();
 		let ackWindowClosed = false;
+		const totalAgents = this.protocolAgents.length;
 
 		let resolveCollector: () => void;
 		const collectorDone = new Promise<void>((resolve) => {
@@ -91,6 +99,21 @@ export class DefaultProtocolV2 implements Protocol {
 			}
 		}
 
+		const closeAckWindowEarly = (): void => {
+			if (ackWindowClosed) return;
+			// Close when all agents have decided (ACK or decline)
+			if (ackedAgentIds.size + declinedAgentIds.size >= totalAgents) {
+				ackWindowClosed = true;
+				checkComplete();
+			}
+		};
+
+		// Track agent declines to close ACK window early
+		this.chainDeclineCallbacks.set(chainId, (agentId: string) => {
+			declinedAgentIds.add(agentId);
+			closeAckWindowEarly();
+		});
+
 		let requestId: string;
 
 		this.store.subscribe(userId, (_toon: string, msg: MessageV2) => {
@@ -99,6 +122,7 @@ export class DefaultProtocolV2 implements Protocol {
 			// Phase A: collect ACKs during the ACK window
 			if (msg.type === "ACK" && msg.replyTo === requestId && !ackWindowClosed) {
 				ackedAgentIds.add(msg.from);
+				closeAckWindowEarly();
 			} else if (
 				// Phase B: collect responses from ACK'd agents
 				(msg.type === "RESPONSE" || msg.type === "ERROR") &&
@@ -145,6 +169,7 @@ export class DefaultProtocolV2 implements Protocol {
 		clearTimeout(ackWindowTimeout);
 		clearTimeout(hardTimeout);
 		this.store.unsubscribe(userId);
+		this.chainDeclineCallbacks.delete(chainId);
 
 		const totalDurationMs = performance.now() - broadcastStart;
 

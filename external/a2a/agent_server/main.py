@@ -49,6 +49,9 @@ SYSTEM_PROMPT = _load_system_prompt(AGENT_NAME)
 
 llm_client = anthropic.AsyncAnthropic()
 
+# Conversation history keyed by contextId for multi-round support
+conversation_histories: dict[str, list[dict]] = {}
+
 app = FastAPI(title=f"A2A Agent: {AGENT_NAME}")
 
 
@@ -105,6 +108,10 @@ async def handle_send_message(params: dict, request_id) -> JSONResponse:
     context_id = message.get("contextId", str(uuid.uuid4()))
     task_id = message.get("taskId", str(uuid.uuid4()))
 
+    # Build conversation history for multi-round support
+    history = conversation_histories.get(context_id, [])
+    history.append({"role": "user", "content": user_text})
+
     usage = None
     start_time = time.perf_counter()
 
@@ -113,7 +120,7 @@ async def handle_send_message(params: dict, request_id) -> JSONResponse:
             model=MODEL,
             max_tokens=1024,
             system=SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": user_text}],
+            messages=history,
         )
         duration_ms = (time.perf_counter() - start_time) * 1000
 
@@ -124,6 +131,8 @@ async def handle_send_message(params: dict, request_id) -> JSONResponse:
             "input_tokens": completion.usage.input_tokens,
             "output_tokens": completion.usage.output_tokens,
         }
+        history.append({"role": "assistant", "content": response_text})
+        conversation_histories[context_id] = history
     except Exception as e:
         duration_ms = (time.perf_counter() - start_time) * 1000
         response_text = f"[{AGENT_NAME}] Error: {e}"
