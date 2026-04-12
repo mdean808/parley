@@ -1,0 +1,9 @@
+{
+	"id": "handoff-research-to-creative",
+	"prompt": "Give me the key facts about the Apollo 11 moon landing, then write a short fictional diary entry from Neil Armstrong's perspective.",
+	"pattern": "handoff",
+	"targetSkills": ["research", "creative-writing"],
+	"expect": {
+		"requiredSkills": ["research", "creative-writing"]
+	}
+}

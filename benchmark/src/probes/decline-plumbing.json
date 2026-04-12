@@ -1,0 +1,9 @@
+{
+	"id": "decline-plumbing",
+	"prompt": "My kitchen sink is leaking. Can you come fix it this afternoon?",
+	"pattern": "decline-all",
+	"targetSkills": [],
+	"expect": {
+		"agentCount": { "max": 0 }
+	}
+}

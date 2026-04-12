@@ -1,0 +1,11 @@
+{
+	"id": "route-creative-poem",
+	"prompt": "Write me a haiku about the ocean at sunset.",
+	"pattern": "single-route",
+	"targetSkills": ["creative-writing"],
+	"expect": {
+		"agentCount": { "max": 1 },
+		"requiredSkills": ["creative-writing"],
+		"excludedSkills": ["coding"]
+	}
+}

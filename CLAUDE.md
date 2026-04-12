@@ -11,7 +11,7 @@ Implementation of an agent-to-agent communication protocol with five protocol va
 - **Install**: `bun install`
 - **CLI Chat**: `bun run chat`
 - **Web Chat**: `bun run web`
-- **Benchmark**: `bun run bench [--protocols v2,simple] [--scenarios id1,id2] [--category general] [--baseline simple] [--output dir] [--no-judge] [--judge-model model] [--no-report] [--concurrency N]`
+- **Benchmark**: `bun run bench [--protocols v2,simple] [--probes id1,id2] [--pattern single-route,handoff] [--output dir] [--no-judge] [--judge-model model] [--no-report] [--concurrency N]`
 - **Lint**: `bun run lint`
 - **Format**: `bun run format`
 - **Start external servers**: `./start-agents.sh` (requires `jq`; starts CrewAI + A2A servers from `agents.json`)
@@ -65,14 +65,16 @@ protocols/                            — Workspace: protocol implementations
 benchmark/                            — Workspace: benchmarking system
   src/
     cli.ts                            — Benchmark CLI entry point
-    comparison.ts                     — Comparison engine: all protocols x all scenarios
-    runner.ts                         — Core runner: executes scenarios
-    multi-round.ts                    — Multi-round conversation loop
-    judge.ts                          — LLM-as-judge evaluation
-    judge-types.ts, judge-prompt.ts   — Judge types and prompts
+    comparison.ts                     — Comparison engine: all protocols x all probes
+    runner.ts                         — Core runner: single-shot probe execution
+    assertions.ts                     — Pure function assertion checker (no LLM)
+    judge.ts                          — Pattern-aware LLM-as-judge evaluation
+    judge-types.ts, judge-prompt.ts   — Judge types and pattern-specific prompts
+    collect.ts                        — ResultCollector for protocol callbacks
+    pool.ts                           — Concurrent task runner
     report-terminal.ts                — Terminal report renderer
     report-markdown.ts                — Markdown report generator
-    scenarios/                        — JSON scenario definitions
+    probes/                           — JSON probe definitions (by interaction pattern)
   results/                            — Benchmark output (gitignored)
 apps/cli-chat/                        — Workspace: terminal chat REPL
   src/
@@ -118,10 +120,13 @@ Five protocols implement the `Protocol` interface (`initialize()` + `sendRequest
 
 ### Benchmark System
 
-- **Runner** (`benchmark/src/runner.ts`): Executes `ScenarioConfig` against a protocol. Detects `multiRound` config and delegates to `runMultiRound()`.
-- **Multi-round** (`benchmark/src/multi-round.ts`): Runs N rounds where agent responses feed into a synthesizer to produce the next prompt.
-- **Judge** (`benchmark/src/judge.ts`): Independent LLM evaluation. Binary pass/fail task success, quality score (1-5), and multi-agent value (1-5).
-- **Comparison** (`benchmark/src/comparison.ts`): Runs protocols across all scenarios, computes success rate, cost-per-success, coordination efficiency, and multi-agent contribution.
+Probe-based system testing protocol interaction quality (routing, handoff, collaboration). Two-layer evaluation: structural assertions (no LLM) then pattern-aware LLM judge.
+
+- **Runner** (`benchmark/src/runner.ts`): Single-shot `runProbe()` — sends prompt, collects agent results, checks assertions, optionally judges.
+- **Assertions** (`benchmark/src/assertions.ts`): Pure function checker for agent count, required/excluded skills.
+- **Judge** (`benchmark/src/judge.ts`): Pattern-aware LLM evaluation with interaction-quality rubrics (0-3 score).
+- **Comparison** (`benchmark/src/comparison.ts`): Runs protocols across all probes, groups results by interaction pattern (single-route, selective-route, decline-all, handoff, collaborate).
+- **Probes** (`benchmark/src/probes/*.json`): Single-shot interaction test definitions with expected assertions.
 
 ### TOON Format
 

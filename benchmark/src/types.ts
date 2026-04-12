@@ -1,56 +1,50 @@
-import type { AgentResult } from "core/types";
 import type { ProtocolId } from "protocols/factory";
-import type { JudgeEvaluation, JudgeResult } from "./judge-types.ts";
+import type { JudgeEvaluation } from "./judge-types.ts";
 
 export type { ProtocolId };
 
-// --- Multi-round types (Plan 02) ---
+// --- Interaction patterns ---
 
-export interface MultiRoundConfig {
-	rounds: number;
-	followUpInstruction?: string;
-	crossAgentContext?: boolean;
+export type InteractionPattern =
+	| "single-route"
+	| "selective-route"
+	| "decline-all"
+	| "handoff"
+	| "collaborate";
+
+// --- Probe definition (loaded from JSON) ---
+
+export interface ProbeExpect {
+	agentCount?: { min?: number; max?: number };
+	requiredSkills?: string[];
+	excludedSkills?: string[];
 }
 
-export interface RoundMetrics {
-	roundIndex: number;
+export interface ProbeConfig {
+	id: string;
 	prompt: string;
-	results: AgentResult[];
-	totalInputTokens: number;
-	totalOutputTokens: number;
-	totalDurationMs: number;
-	cost: number;
+	pattern: InteractionPattern;
+	targetSkills: string[];
+	expect: ProbeExpect;
 }
 
-export interface MultiRoundResult {
-	scenarioName: string;
-	protocol: string;
-	rounds: RoundMetrics[];
-	cumulative: {
-		totalInputTokens: number;
-		totalOutputTokens: number;
-		totalDurationMs: number;
-		totalCost: number;
-		roundCount: number;
-		stoppedEarly: boolean;
-		error?: string;
-	};
-}
+// --- Assertion results ---
 
-export interface ScenarioRound {
-	prompt: string;
-	expectedResponse?: string;
-}
-
-export interface ScenarioConfig {
+export interface AssertionDetail {
 	name: string;
-	topic: string;
-	rounds: ScenarioRound[];
-	protocols?: ProtocolId[];
-	multiRound?: MultiRoundConfig;
+	passed: boolean;
+	expected: string;
+	actual: string;
 }
 
-export interface AgentRoundResult {
+export interface AssertionResult {
+	passed: boolean;
+	details: AssertionDetail[];
+}
+
+// --- Agent result for a probe ---
+
+export interface AgentProbeResult {
 	agentName: string;
 	skills: string[];
 	responseText: string;
@@ -61,54 +55,56 @@ export interface AgentRoundResult {
 	model: string;
 }
 
-export interface RoundResult {
-	roundIndex: number;
+// --- Single probe run result ---
+
+export interface ProbeResult {
+	probeId: string;
+	protocolId: ProtocolId;
+	pattern: InteractionPattern;
 	prompt: string;
-	expectedResponse?: string;
-	agents: AgentRoundResult[];
+	agents: AgentProbeResult[];
+	assertions: AssertionResult;
+	judge?: JudgeEvaluation;
 	totalInputTokens: number;
 	totalOutputTokens: number;
 	totalCost: number;
 	totalDurationMs: number;
-	respondingAgentCount: number;
-	judge?: JudgeEvaluation;
-}
-
-export interface ProtocolMetrics {
-	passed: boolean;
-	tokensPerSuccess: number | null;
-	latencyPerSuccess: number | null;
-	costPerSuccess: number | null;
-	coordinationEfficiency: number;
-	multiAgentContribution: number;
-	participationBalance: number;
-}
-
-export interface ProtocolRunResult {
-	protocolId: ProtocolId;
-	scenarioName: string;
-	rounds: RoundResult[];
-	aggregate: {
-		totalInputTokens: number;
-		totalOutputTokens: number;
-		totalCost: number;
-		totalDurationMs: number;
-		averageAgentsPerRound: number;
-		roundCount: number;
-	};
-	judge?: JudgeResult;
-	metrics?: ProtocolMetrics;
 	error?: string;
 }
 
-export interface BenchmarkOutput {
-	timestamp: string;
-	model: string;
-	scenarios: ProtocolRunResult[];
+// --- Aggregates ---
+
+export interface PatternMetrics {
+	pattern: InteractionPattern;
+	assertionPassRate: number;
+	judgePassRate: number;
+	overallPassRate: number;
+	avgInteractionScore: number;
+	avgCost: number;
+	probeCount: number;
+	passedCount: number;
 }
 
-export interface BenchOptions {
-	outputPath?: string;
-	protocols?: ProtocolId[];
-	scenarios?: ScenarioConfig[];
+export interface ProtocolAggregateMetrics {
+	overallPassRate: number;
+	avgInteractionScore: number;
+	avgCost: number;
+	passedCount: number;
+	totalCount: number;
+	byPattern: Record<string, PatternMetrics>;
+}
+
+export interface ProbeComparison {
+	probe: ProbeConfig;
+	results: Record<string, ProbeResult>;
+}
+
+export interface ComparisonReport {
+	generatedAt: string;
+	model: string;
+	protocolIds: string[];
+	probes: ProbeComparison[];
+	aggregate: {
+		protocolMetrics: Record<string, ProtocolAggregateMetrics>;
+	};
 }

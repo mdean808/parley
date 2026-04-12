@@ -1,0 +1,9 @@
+{
+	"id": "handoff-research-to-technical",
+	"prompt": "Explain the Dijkstra shortest-path algorithm conceptually, then write a working implementation in TypeScript.",
+	"pattern": "handoff",
+	"targetSkills": ["research", "coding"],
+	"expect": {
+		"requiredSkills": ["research", "coding"]
+	}
+}

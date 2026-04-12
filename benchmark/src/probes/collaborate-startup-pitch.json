@@ -1,0 +1,10 @@
+{
+	"id": "collaborate-startup-pitch",
+	"prompt": "Help me prepare a pitch for an AI-powered gardening app. I need market research, a catchy tagline, and a technical architecture overview.",
+	"pattern": "collaborate",
+	"targetSkills": ["research", "creative-writing", "technical"],
+	"expect": {
+		"agentCount": { "min": 2 },
+		"requiredSkills": ["research", "creative-writing"]
+	}
+}

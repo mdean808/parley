@@ -1,124 +1,83 @@
-import type { AgentResult } from "core/types";
+import type { InteractionPattern } from "./judge-types.ts";
+import type { AgentProbeResult } from "./types.ts";
 
-export const JUDGE_SYSTEM_PROMPT = `You are an expert evaluator assessing AI agent responses in a multi-agent system.
-You will receive user requests and agent responses across one or more conversation rounds.
-You MUST evaluate using the "evaluate" tool.
-
-## Task Success (pass/fail)
-- PASS: The agents collectively produced a response that answers the user's question or completes the requested task.
-- FAIL: The response is off-topic, empty, incoherent, or does not address the request.
-- Be lenient on quality — a mediocre answer that addresses the question is still a PASS.
-- If no agents responded or all responses are empty, that is a FAIL.
-
-## Quality Rubric
+const RUBRIC_DESCRIPTIONS: Record<InteractionPattern, string> = {
+	"single-route": `## Interaction Rubric (Routing)
 For each criterion, answer true or false:
-- **addresses_request**: The final output directly answers the question or completes the task.
-- **coherent_delivery**: The response is logically organized and easy to follow as a final product.
-- **sufficient_depth**: The response provides enough detail to be useful, not just surface-level.
-- **no_major_omissions**: Key aspects of the request are not ignored.
-- **efficient_resolution**: The task was completed without excessive back-and-forth, unnecessary messages, or protocol overhead that didn't contribute to the result.
+- **prompt_relevance**: The responding agent's reply directly addresses the user's request.
+- **skill_alignment**: The response reflects the agent's claimed skill domain (e.g., a coding agent gives a technical answer, not a creative one).
+- **clean_boundaries**: Non-responding agents stayed quiet rather than chiming in unnecessarily.`,
 
-## Multi-Agent Value Rubric
+	"selective-route": `## Interaction Rubric (Selective Routing)
 For each criterion, answer true or false:
-- **multiple_agents_contributed**: More than one agent provided a substantive response.
-- **distinct_roles**: Each responding agent addressed the task using different skills or perspectives.
-- **minimal_redundancy**: Agents did not substantially duplicate each other's work.
-- **complementary_coverage**: Agents addressed different aspects of the request, improving overall completeness.
-- **effective_coordination**: Agents built on or referenced each other's contributions without contradiction or wasted cycles.
+- **prompt_relevance**: The responding agent's reply directly addresses the user's request.
+- **skill_alignment**: The best-fit agent responded, not just any agent with tangential skills.
+- **clean_boundaries**: Other agents who could have responded deferred to the better-fit agent.`,
 
-For single-agent protocols (only one agent responded): all multi-agent criteria are false. This is expected, not a penalty.
+	"decline-all": `## Interaction Rubric (Decline)
+For each criterion, answer true or false:
+- **prompt_relevance**: If any agent responded, the response honestly communicates inability or redirects the user rather than fabricating an answer.
+- **skill_alignment**: No agent claimed expertise they don't have.
+- **clean_boundaries**: Agents did not overreach their skill domains.`,
 
-## Expected Response (when provided)
-When an "Expected Response" is provided for a round, use it as a reference for evaluating correctness and completeness.
-- The expected response describes the key elements, topics, or criteria that a good answer should address.
-- Agents do not need to match the expected response verbatim — evaluate whether they cover the substance.
-- Use the "expectation_alignment" field (1-5) in the evaluate tool to score how well agents addressed the expected response criteria.
-  - 1: Response misses nearly all expected elements
-  - 2: Response addresses some expected elements but has major gaps
-  - 3: Response addresses most expected elements adequately
-  - 4: Response covers expected elements well with good detail
-  - 5: Response fully addresses all expected elements with depth
-- If no expected response is provided, omit the "expectation_alignment" field.
+	handoff: `## Interaction Rubric (Handoff)
+For each criterion, answer true or false:
+- **handoff_clarity**: The first agent clearly signaled it was passing to another agent or the system routed the sub-tasks to appropriate agents.
+- **context_preserved**: The receiving agent picked up the task without requiring the user to repeat context.
+- **skill_alignment**: Each agent operated within their skill domain (e.g., the creative part was done by a creative agent, the coding part by a technical agent).`,
+
+	collaborate: `## Interaction Rubric (Collaboration)
+For each criterion, answer true or false:
+- **distinct_contributions**: The agents said meaningfully different things, not repeating each other's content.
+- **skill_alignment**: Each agent's contribution matches their skill domain.
+- **coherent_whole**: The combined responses form a useful, complementary answer to the user's request.`,
+};
+
+export function buildJudgeSystemPrompt(pattern: InteractionPattern): string {
+	return `You are an expert evaluator assessing AI agent interaction quality in a multi-agent system.
+You will receive a user prompt and agent responses. Your job is to evaluate HOW the agents interacted — routing, handoffs, and collaboration — not the factual correctness of their answers.
+
+${RUBRIC_DESCRIPTIONS[pattern]}
+
+## Content Check
+- **content_adequate**: As a minor secondary check, the collective response is not complete nonsense — it bears some reasonable relationship to the user's request. This is a very low bar.
+
+## Pass/Fail
+- PASS: All rubric criteria are true.
+- FAIL: Any rubric criterion is false.
 
 ## Guidelines
-- Evaluate agents as a collective system, not individually.
-- For multi-round conversations, evaluate based on the cumulative conversation quality.
-- Focus on protocol-level performance — how well the system coordinated to produce the result — not on the underlying LLM's knowledge or reasoning ability.`;
-
-export function buildJudgeUserPrompt(
-	rounds: {
-		userMessage: string;
-		expectedResponse?: string;
-		results: AgentResult[];
-	}[],
-): string {
-	const parts: string[] = ["## Scenario\n"];
-
-	for (let i = 0; i < rounds.length; i++) {
-		const round = rounds[i];
-		parts.push(`### Round ${i + 1}`);
-		parts.push(`**User:** ${round.userMessage}\n`);
-
-		if (round.expectedResponse) {
-			parts.push(`**Expected Response:** ${round.expectedResponse}\n`);
-		}
-
-		for (const result of round.results) {
-			parts.push(
-				`**Agent: ${result.agentName}** (skills: ${result.skills.join(", ")})`,
-			);
-			parts.push(result.response.payload);
-			parts.push("");
-		}
-	}
-
-	parts.push("## Instructions");
-	parts.push(
-		'Evaluate the agents\' collective performance across all rounds. Use the "evaluate" tool.',
-	);
-
-	return parts.join("\n");
+- Focus on the interaction pattern, not the underlying LLM's knowledge.
+- A factually imperfect answer that was correctly routed is better than a perfect answer from the wrong agent.
+- Evaluate the system's routing/coordination decisions, not individual agent quality.`;
 }
 
-export function buildJudgeRoundPrompt(
-	rounds: {
-		userMessage: string;
-		expectedResponse?: string;
-		results: AgentResult[];
-	}[],
-	targetRoundIndex: number,
+export function buildJudgeUserPrompt(
+	prompt: string,
+	targetSkills: string[],
+	agents: AgentProbeResult[],
 ): string {
-	const parts: string[] = ["## Scenario\n"];
+	const parts: string[] = [];
 
-	for (let i = 0; i <= targetRoundIndex; i++) {
-		const round = rounds[i];
-		parts.push(`### Round ${i + 1}`);
-		parts.push(`**User:** ${round.userMessage}\n`);
+	parts.push(`## Probe`);
+	parts.push(`**User prompt:** ${prompt}`);
+	parts.push(
+		`**Target skills:** ${targetSkills.join(", ") || "(none — all agents should decline)"}\n`,
+	);
 
-		if (round.expectedResponse) {
-			parts.push(`**Expected Response:** ${round.expectedResponse}\n`);
-		}
-
-		for (const result of round.results) {
-			parts.push(
-				`**Agent: ${result.agentName}** (skills: ${result.skills.join(", ")})`,
-			);
-			parts.push(result.response.payload);
+	if (agents.length === 0) {
+		parts.push("**No agents responded.**\n");
+	} else {
+		parts.push("## Agent Responses\n");
+		for (const agent of agents) {
+			parts.push(`**${agent.agentName}** (skills: ${agent.skills.join(", ")})`);
+			parts.push(agent.responseText);
 			parts.push("");
 		}
 	}
 
 	parts.push("## Instructions");
-
-	if (targetRoundIndex === 0) {
-		parts.push(
-			'Evaluate the agents\' collective performance for this round. Use the "evaluate" tool.',
-		);
-	} else {
-		parts.push(
-			`Evaluate the agents' collective performance for Round ${targetRoundIndex + 1} ONLY. Prior rounds are provided as context to assess continuity. Use the "evaluate" tool.`,
-		);
-	}
+	parts.push('Evaluate the interaction quality using the "evaluate" tool.');
 
 	return parts.join("\n");
 }

@@ -4,6 +4,7 @@ import { runComparison } from "./comparison.ts";
 import type { JudgeConfig } from "./judge-types.ts";
 import { generateMarkdownReport } from "./report-markdown.ts";
 import { printTerminalReport } from "./report-terminal.ts";
+import type { InteractionPattern } from "./types.ts";
 
 if (!process.env.ANTHROPIC_API_KEY) {
 	console.error("Error: ANTHROPIC_API_KEY environment variable is required.");
@@ -12,10 +13,9 @@ if (!process.env.ANTHROPIC_API_KEY) {
 
 // Parse CLI args
 const args = process.argv.slice(2);
-let scenarioIds: string[] | undefined;
-let categories: string[] | undefined;
+let probeIds: string[] | undefined;
+let patterns: InteractionPattern[] | undefined;
 let protocolIds: string[] | undefined;
-let baseline: string | undefined;
 let outputDir = new URL("../results", import.meta.url).pathname;
 let judgeEnabled = true;
 let judgeModel: string | undefined;
@@ -24,9 +24,8 @@ let concurrency = 3;
 
 const KNOWN_FLAGS = new Set([
 	"--protocols",
-	"--scenarios",
-	"--category",
-	"--baseline",
+	"--probes",
+	"--pattern",
 	"--output",
 	"--no-judge",
 	"--judge",
@@ -36,26 +35,39 @@ const KNOWN_FLAGS = new Set([
 ]);
 const VALUE_FLAGS = new Set([
 	"--protocols",
-	"--scenarios",
-	"--category",
-	"--baseline",
+	"--probes",
+	"--pattern",
 	"--output",
 	"--judge-model",
 	"--concurrency",
+]);
+
+const VALID_PATTERNS: Set<string> = new Set([
+	"single-route",
+	"selective-route",
+	"decline-all",
+	"handoff",
+	"collaborate",
 ]);
 
 for (let i = 0; i < args.length; i++) {
 	if (args[i] === "--protocols" && args[i + 1]) {
 		protocolIds = args[i + 1].split(",");
 		i++;
-	} else if (args[i] === "--scenarios" && args[i + 1]) {
-		scenarioIds = args[i + 1].split(",");
+	} else if (args[i] === "--probes" && args[i + 1]) {
+		probeIds = args[i + 1].split(",");
 		i++;
-	} else if (args[i] === "--category" && args[i + 1]) {
-		categories = args[i + 1].split(",");
-		i++;
-	} else if (args[i] === "--baseline" && args[i + 1]) {
-		baseline = args[i + 1];
+	} else if (args[i] === "--pattern" && args[i + 1]) {
+		const raw = args[i + 1].split(",");
+		for (const p of raw) {
+			if (!VALID_PATTERNS.has(p)) {
+				console.error(
+					`Error: Unknown pattern "${p}". Valid: ${[...VALID_PATTERNS].join(", ")}`,
+				);
+				process.exit(1);
+			}
+		}
+		patterns = raw as InteractionPattern[];
 		i++;
 	} else if (args[i] === "--output" && args[i + 1]) {
 		outputDir = args[i + 1];
@@ -95,12 +107,9 @@ console.log(`Model: ${chalk.cyan(MODEL)}`);
 console.log(
 	`Protocols: ${chalk.cyan(protocolIds ? protocolIds.join(", ") : "all registered")}`,
 );
-if (baseline) console.log(`Baseline: ${chalk.cyan(baseline)}`);
-if (scenarioIds)
-	console.log(`Scenarios: ${chalk.cyan(scenarioIds.join(", "))}`);
-else if (categories)
-	console.log(`Categories: ${chalk.cyan(categories.join(", "))}`);
-else console.log(`Scenarios: ${chalk.cyan("all")}`);
+if (probeIds) console.log(`Probes: ${chalk.cyan(probeIds.join(", "))}`);
+else if (patterns) console.log(`Patterns: ${chalk.cyan(patterns.join(", "))}`);
+else console.log(`Probes: ${chalk.cyan("all")}`);
 console.log(`Judge: ${chalk.cyan(judgeEnabled ? "enabled" : "disabled")}`);
 console.log(`Concurrency: ${chalk.cyan(String(concurrency))}\n`);
 
@@ -108,7 +117,7 @@ console.log(`Concurrency: ${chalk.cyan(String(concurrency))}\n`);
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
 interface TaskDisplay {
-	scenarioName: string;
+	probeId: string;
 	protocolId: string;
 	status: "running" | "judging" | "done" | "error";
 	durationMs?: number;
@@ -124,7 +133,7 @@ let completedTasks = 0;
 const effectiveJudgeModel = (
 	judgeModel ??
 	process.env.JUDGE_MODEL ??
-	"claude-sonnet-4-5-20250929"
+	"claude-sonnet-4-6"
 )
 	.replace("claude-", "")
 	.replace(/-\d{8}$/, "");
@@ -173,7 +182,7 @@ function renderProgress() {
 		}
 
 		process.stdout.write(
-			`\x1b[K  ${icon} ${task.scenarioName} ${chalk.dim("/")} ${task.protocolId} ${chalk.dim("—")} ${status}\n`,
+			`\x1b[K  ${icon} ${task.probeId} ${chalk.dim("/")} ${task.protocolId} ${chalk.dim("—")} ${status}\n`,
 		);
 		lines++;
 	}
@@ -192,20 +201,18 @@ function renderProgress() {
 const spinnerInterval = setInterval(renderProgress, 80);
 
 const report = await runComparison({
-	scenarios: scenarioIds,
-	categories,
+	probes: probeIds,
+	patterns,
 	protocols: protocolIds,
-	baseline,
-	outputDir,
 	judgeConfig,
 	concurrency,
 	onProgress: (event) => {
-		const key = `${event.scenarioName}::${event.protocolId}`;
+		const key = `${event.probeId}::${event.protocolId}`;
 		switch (event.type) {
 			case "start": {
 				totalTasks = event.totalTasks;
 				taskDisplays.push({
-					scenarioName: event.scenarioName,
+					probeId: event.probeId,
 					protocolId: event.protocolId,
 					status: "running",
 				});

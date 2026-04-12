@@ -1,135 +1,71 @@
 import Anthropic from "@anthropic-ai/sdk";
-import type { AgentResult } from "core/types";
 import {
-	buildJudgeRoundPrompt,
+	buildJudgeSystemPrompt,
 	buildJudgeUserPrompt,
-	JUDGE_SYSTEM_PROMPT,
 } from "./judge-prompt.ts";
 import type {
+	InteractionPattern,
 	JudgeConfig,
 	JudgeEvaluation,
-	JudgeResult,
 	JudgeUsage,
-	MultiAgentRubric,
-	QualityRubric,
 } from "./judge-types.ts";
+import type { AgentProbeResult } from "./types.ts";
 
-const EMPTY_QUALITY_RUBRIC: QualityRubric = {
-	addressesRequest: false,
-	coherentDelivery: false,
-	sufficientDepth: false,
-	noMajorOmissions: false,
-	efficientResolution: false,
+const RUBRIC_FIELDS: Record<InteractionPattern, string[]> = {
+	"single-route": ["prompt_relevance", "skill_alignment", "clean_boundaries"],
+	"selective-route": [
+		"prompt_relevance",
+		"skill_alignment",
+		"clean_boundaries",
+	],
+	"decline-all": ["prompt_relevance", "skill_alignment", "clean_boundaries"],
+	handoff: ["handoff_clarity", "context_preserved", "skill_alignment"],
+	collaborate: ["distinct_contributions", "skill_alignment", "coherent_whole"],
 };
 
-const EMPTY_MULTI_AGENT_RUBRIC: MultiAgentRubric = {
-	multipleAgentsContributed: false,
-	distinctRoles: false,
-	minimalRedundancy: false,
-	complementaryCoverage: false,
-	effectiveCoordination: false,
-};
+function buildEvaluateTool(
+	pattern: InteractionPattern,
+): Anthropic.Messages.Tool {
+	const fields = RUBRIC_FIELDS[pattern];
+	const properties: Record<string, object> = {};
 
-function countTrues(obj: QualityRubric | MultiAgentRubric): number {
-	return Object.values(obj).filter(Boolean).length;
-}
+	properties.pass = {
+		type: "boolean",
+		description: "Did the agents interact correctly for this pattern?",
+	};
+	properties.pass_reasoning = {
+		type: "string",
+		maxLength: 300,
+		description: "Why pass or fail — focus on interaction quality.",
+	};
 
-function buildEvaluateTool(): Anthropic.Messages.Tool {
+	for (const field of fields) {
+		properties[field] = {
+			type: "boolean",
+			description: `Rubric dimension: ${field.replace(/_/g, " ")}`,
+		};
+	}
+
+	properties.content_adequate = {
+		type: "boolean",
+		description: "Minor check: the response is not complete nonsense.",
+	};
+	properties.summary = {
+		type: "string",
+		maxLength: 300,
+	};
+
 	return {
 		name: "evaluate",
-		description: "Submit evaluation of agent responses.",
+		description: "Submit interaction quality evaluation.",
 		input_schema: {
 			type: "object" as const,
-			properties: {
-				pass: {
-					type: "boolean",
-					description:
-						"Did the agents answer the question / complete the task?",
-				},
-				pass_reasoning: {
-					type: "string",
-					maxLength: 300,
-					description: "Why pass or fail",
-				},
-				// Quality rubric booleans
-				addresses_request: {
-					type: "boolean",
-					description:
-						"The final output directly answers the question or completes the task.",
-				},
-				coherent_delivery: {
-					type: "boolean",
-					description:
-						"The response is logically organized and easy to follow as a final product.",
-				},
-				sufficient_depth: {
-					type: "boolean",
-					description:
-						"The response provides enough detail to be useful, not just surface-level.",
-				},
-				no_major_omissions: {
-					type: "boolean",
-					description: "Key aspects of the request are not ignored.",
-				},
-				efficient_resolution: {
-					type: "boolean",
-					description:
-						"The task was completed without excessive back-and-forth or protocol overhead.",
-				},
-				// Multi-agent rubric booleans
-				multiple_agents_contributed: {
-					type: "boolean",
-					description: "More than one agent provided a substantive response.",
-				},
-				distinct_roles: {
-					type: "boolean",
-					description:
-						"Each responding agent addressed the task using different skills or perspectives.",
-				},
-				minimal_redundancy: {
-					type: "boolean",
-					description:
-						"Agents did not substantially duplicate each other's work.",
-				},
-				complementary_coverage: {
-					type: "boolean",
-					description:
-						"Agents addressed different aspects of the request, improving overall completeness.",
-				},
-				effective_coordination: {
-					type: "boolean",
-					description:
-						"Agents built on or referenced each other's contributions without contradiction or wasted cycles.",
-				},
-				summary: {
-					type: "string",
-					maxLength: 500,
-				},
-				expectation_alignment: {
-					type: "integer",
-					minimum: 1,
-					maximum: 5,
-					description:
-						"How well agents addressed the expected response criteria (1-5). Only include when an expected response was provided.",
-				},
-				expectation_alignment_reasoning: {
-					type: "string",
-					maxLength: 300,
-				},
-			},
+			properties,
 			required: [
 				"pass",
 				"pass_reasoning",
-				"addresses_request",
-				"coherent_delivery",
-				"sufficient_depth",
-				"no_major_omissions",
-				"efficient_resolution",
-				"multiple_agents_contributed",
-				"distinct_roles",
-				"minimal_redundancy",
-				"complementary_coverage",
-				"effective_coordination",
+				...fields,
+				"content_adequate",
 				"summary",
 			],
 		},
@@ -138,6 +74,7 @@ function buildEvaluateTool(): Anthropic.Messages.Tool {
 
 function parseJudgeResponse(
 	response: Anthropic.Messages.Message,
+	pattern: InteractionPattern,
 ): JudgeEvaluation {
 	const toolUse = response.content.find(
 		(block): block is Anthropic.Messages.ToolUseBlock =>
@@ -147,138 +84,65 @@ function parseJudgeResponse(
 	if (!toolUse) {
 		return {
 			pass: false,
-			qualityScore: 0,
-			multiAgentValue: 0,
-			qualityRubric: { ...EMPTY_QUALITY_RUBRIC },
-			multiAgentRubric: { ...EMPTY_MULTI_AGENT_RUBRIC },
+			interactionScore: 0,
+			contentAdequate: false,
+			rubric: {},
 			summary: "Judge failed to respond with tool use.",
 			passReasoning: "No tool response from judge.",
 		};
 	}
 
 	const input = toolUse.input as Record<string, unknown>;
+	const fields = RUBRIC_FIELDS[pattern];
+	const rubric: Record<string, boolean> = {};
 
-	const qualityRubric: QualityRubric = {
-		addressesRequest: Boolean(input.addresses_request),
-		coherentDelivery: Boolean(input.coherent_delivery),
-		sufficientDepth: Boolean(input.sufficient_depth),
-		noMajorOmissions: Boolean(input.no_major_omissions),
-		efficientResolution: Boolean(input.efficient_resolution),
-	};
+	for (const field of fields) {
+		rubric[field] = Boolean(input[field]);
+	}
 
-	const multiAgentRubric: MultiAgentRubric = {
-		multipleAgentsContributed: Boolean(input.multiple_agents_contributed),
-		distinctRoles: Boolean(input.distinct_roles),
-		minimalRedundancy: Boolean(input.minimal_redundancy),
-		complementaryCoverage: Boolean(input.complementary_coverage),
-		effectiveCoordination: Boolean(input.effective_coordination),
-	};
+	const interactionScore = Object.values(rubric).filter(Boolean).length;
 
 	return {
 		pass: Boolean(input.pass),
-		qualityScore: countTrues(qualityRubric),
-		multiAgentValue: countTrues(multiAgentRubric),
-		qualityRubric,
-		multiAgentRubric,
+		interactionScore,
+		contentAdequate: Boolean(input.content_adequate),
+		rubric,
 		summary: String(input.summary ?? ""),
 		passReasoning: String(input.pass_reasoning ?? ""),
-		expectationAlignment: input.expectation_alignment
-			? Math.min(
-					5,
-					Math.max(1, Math.round(Number(input.expectation_alignment))),
-				)
-			: undefined,
-		expectationAlignmentReasoning: input.expectation_alignment_reasoning
-			? String(input.expectation_alignment_reasoning)
-			: undefined,
 	};
 }
 
-export async function evaluateScenario(
-	rounds: {
-		userMessage: string;
-		expectedResponse?: string;
-		results: AgentResult[];
-	}[],
-	config: JudgeConfig,
-): Promise<JudgeResult> {
-	const model = config.model ?? process.env.JUDGE_MODEL ?? "claude-sonnet-4-6";
-
-	const judgeClient = new Anthropic();
-	const userPrompt = buildJudgeUserPrompt(rounds);
-	const tool = buildEvaluateTool();
-
-	const usage: JudgeUsage = {
-		inputTokens: 0,
-		outputTokens: 0,
-		model,
-		durationMs: 0,
-		callCount: 0,
-	};
-
-	const start = performance.now();
-	const response = await judgeClient.messages.create({
-		model,
-		max_tokens: 2048,
-		system: JUDGE_SYSTEM_PROMPT,
-		messages: [{ role: "user", content: userPrompt }],
-		tools: [tool],
-		tool_choice: { type: "tool", name: "evaluate" },
-	});
-
-	usage.inputTokens += response.usage.input_tokens;
-	usage.outputTokens += response.usage.output_tokens;
-	usage.callCount++;
-	usage.durationMs = performance.now() - start;
-
-	const evaluation = parseJudgeResponse(response);
-
-	return {
-		perRound: [evaluation],
-		aggregate: evaluation,
-		usage,
-	};
-}
-
-export async function evaluateRound(
-	conversationSoFar: {
-		userMessage: string;
-		expectedResponse?: string;
-		results: AgentResult[];
-	}[],
-	targetRoundIndex: number,
+export async function evaluateProbe(
+	prompt: string,
+	targetSkills: string[],
+	agents: AgentProbeResult[],
+	pattern: InteractionPattern,
 	config: JudgeConfig,
 ): Promise<{ evaluation: JudgeEvaluation; usage: JudgeUsage }> {
 	const model = config.model ?? process.env.JUDGE_MODEL ?? "claude-sonnet-4-6";
+	const client = new Anthropic();
 
-	const judgeClient = new Anthropic();
-	const userPrompt = buildJudgeRoundPrompt(conversationSoFar, targetRoundIndex);
-	const tool = buildEvaluateTool();
-
-	const usage: JudgeUsage = {
-		inputTokens: 0,
-		outputTokens: 0,
-		model,
-		durationMs: 0,
-		callCount: 0,
-	};
+	const systemPrompt = buildJudgeSystemPrompt(pattern);
+	const userPrompt = buildJudgeUserPrompt(prompt, targetSkills, agents);
+	const tool = buildEvaluateTool(pattern);
 
 	const start = performance.now();
-	const response = await judgeClient.messages.create({
+	const response = await client.messages.create({
 		model,
-		max_tokens: 2048,
-		system: JUDGE_SYSTEM_PROMPT,
+		max_tokens: 1024,
+		system: systemPrompt,
 		messages: [{ role: "user", content: userPrompt }],
 		tools: [tool],
 		tool_choice: { type: "tool", name: "evaluate" },
 	});
 
-	usage.inputTokens += response.usage.input_tokens;
-	usage.outputTokens += response.usage.output_tokens;
-	usage.callCount++;
-	usage.durationMs = performance.now() - start;
+	const usage: JudgeUsage = {
+		inputTokens: response.usage.input_tokens,
+		outputTokens: response.usage.output_tokens,
+		model,
+		durationMs: performance.now() - start,
+	};
 
-	const evaluation = parseJudgeResponse(response);
-
+	const evaluation = parseJudgeResponse(response, pattern);
 	return { evaluation, usage };
 }

@@ -2,89 +2,88 @@ import { MODEL } from "core/config";
 import { createProtocol, getProtocolIds } from "protocols/factory";
 import type { JudgeConfig } from "./judge-types.ts";
 import { runPool } from "./pool.ts";
-import { ResultCollector, runScenario } from "./runner.ts";
 import {
-	loadAllScenarios,
-	loadScenario,
-	loadScenariosByCategory,
-	type Scenario,
-} from "./scenarios/index.ts";
-import type { ProtocolRunResult, ScenarioConfig } from "./types.ts";
-
-export interface ProtocolAggregateMetrics {
-	successRate: number;
-	avgQuality: number;
-	avgTokensPerSuccess: number;
-	avgLatencyPerSuccess: number;
-	avgCostPerSuccess: number;
-	avgCoordinationEfficiency: number;
-	avgMultiAgentContribution: number;
-	passedCount: number;
-	totalCount: number;
-}
-
-export interface ScenarioComparison {
-	scenario: Scenario;
-	results: Record<string, ProtocolRunResult>;
-}
-
-export interface AggregateComparison {
-	protocolMetrics: Record<string, ProtocolAggregateMetrics>;
-	agentParticipation: Record<string, Record<string, number>>;
-}
-
-export interface ComparisonReport {
-	generatedAt: string;
-	model: string;
-	protocolIds: string[];
-	baseline?: string;
-	scenarios: ScenarioComparison[];
-	aggregate: AggregateComparison;
-}
+	loadAllProbes,
+	loadProbe,
+	loadProbesByPattern,
+} from "./probes/index.ts";
+import { ResultCollector, runProbe } from "./runner.ts";
+import type {
+	ComparisonReport,
+	InteractionPattern,
+	PatternMetrics,
+	ProbeComparison,
+	ProbeConfig,
+	ProbeResult,
+	ProtocolAggregateMetrics,
+} from "./types.ts";
 
 export type ProgressEvent =
-	| {
-			type: "start";
-			scenarioName: string;
-			protocolId: string;
-			totalTasks: number;
-	  }
-	| { type: "phase"; scenarioName: string; protocolId: string; phase: string }
+	| { type: "start"; probeId: string; protocolId: string; totalTasks: number }
+	| { type: "phase"; probeId: string; protocolId: string; phase: string }
 	| {
 			type: "complete";
-			scenarioName: string;
+			probeId: string;
 			protocolId: string;
 			durationMs: number;
 			error?: string;
 	  };
 
 export interface ComparisonOptions {
-	scenarios?: string[];
-	categories?: string[];
+	probes?: string[];
+	patterns?: InteractionPattern[];
 	protocols?: string[];
-	baseline?: string;
-	model?: string;
-	outputDir?: string;
 	judgeConfig?: JudgeConfig;
 	concurrency?: number;
 	onProgress?: (event: ProgressEvent) => void;
 }
 
-function toScenarioConfig(s: Scenario): ScenarioConfig {
+function computePatternMetrics(
+	results: ProbeResult[],
+	pattern: InteractionPattern,
+): PatternMetrics {
+	const patternResults = results.filter((r) => r.pattern === pattern);
+	if (patternResults.length === 0) {
+		return {
+			pattern,
+			assertionPassRate: 0,
+			judgePassRate: 0,
+			overallPassRate: 0,
+			avgInteractionScore: 0,
+			avgCost: 0,
+			probeCount: 0,
+			passedCount: 0,
+		};
+	}
+
+	const assertionPassed = patternResults.filter((r) => r.assertions.passed);
+	const judged = assertionPassed.filter((r) => r.judge);
+	const judgePassed = judged.filter((r) => r.judge?.pass);
+	const overallPassed = patternResults.filter(
+		(r) => r.assertions.passed && (r.judge?.pass ?? r.assertions.passed),
+	);
+
+	const scoredResults = judged.filter((r) => r.judge);
+	const avgScore =
+		scoredResults.length > 0
+			? scoredResults.reduce(
+					(s, r) => s + (r.judge?.interactionScore ?? 0),
+					0,
+				) / scoredResults.length
+			: 0;
+
 	return {
-		name: s.name,
-		topic: s.topic,
-		rounds: s.rounds.map((r) => ({
-			prompt: r.prompt,
-			expectedResponse: r.expectedResponse,
-		})),
-		multiRound: s.multiRound
-			? {
-					rounds: s.multiRound.rounds,
-					followUpInstruction: s.multiRound.followUpInstruction,
-					crossAgentContext: s.multiRound.crossAgentContext,
-				}
-			: undefined,
+		pattern,
+		assertionPassRate: (assertionPassed.length / patternResults.length) * 100,
+		judgePassRate:
+			judged.length > 0 ? (judgePassed.length / judged.length) * 100 : 0,
+		overallPassRate: (overallPassed.length / patternResults.length) * 100,
+		avgInteractionScore: avgScore,
+		avgCost:
+			patternResults.reduce((s, r) => s + r.totalCost, 0) /
+			patternResults.length,
+		probeCount: patternResults.length,
+		passedCount: overallPassed.length,
 	};
 }
 
@@ -93,58 +92,51 @@ export async function runComparison(
 ): Promise<ComparisonReport> {
 	const progress = options.onProgress ?? (() => {});
 	const protocolIds = options.protocols ?? getProtocolIds();
-	const judgeConfig: JudgeConfig = options.judgeConfig ?? {
-		enabled: true,
-	};
+	const judgeConfig: JudgeConfig = options.judgeConfig ?? { enabled: true };
 
-	// Load scenarios
-	let scenarios: Scenario[];
-	if (options.scenarios) {
-		scenarios = await Promise.all(
-			options.scenarios.map((id) => loadScenario(id)),
-		);
-	} else if (options.categories) {
+	// Load probes
+	let probes: ProbeConfig[];
+	if (options.probes) {
+		probes = await Promise.all(options.probes.map((id) => loadProbe(id)));
+	} else if (options.patterns) {
 		const results = await Promise.all(
-			options.categories.map((c) => loadScenariosByCategory(c)),
+			options.patterns.map((p) => loadProbesByPattern(p)),
 		);
-		scenarios = results.flat();
+		probes = results.flat();
 	} else {
-		scenarios = await loadAllScenarios();
+		probes = await loadAllProbes();
 	}
 
 	const concurrency = options.concurrency ?? 3;
+	const totalTasks = probes.length * protocolIds.length;
 
 	interface TaskResult {
-		scenarioIndex: number;
+		probeIndex: number;
 		protocolId: string;
-		result: ProtocolRunResult;
+		result: ProbeResult;
 	}
 
-	const totalTasks = scenarios.length * protocolIds.length;
-	const tasks = scenarios.flatMap((scenario, si) =>
+	const tasks = probes.flatMap((probe, pi) =>
 		protocolIds.map((pid) => async (): Promise<TaskResult> => {
-			const scenarioConfig = toScenarioConfig(scenario);
 			progress({
 				type: "start",
-				scenarioName: scenario.name,
+				probeId: probe.id,
 				protocolId: pid,
 				totalTasks,
 			});
 			const taskStart = performance.now();
 			try {
 				const collector = new ResultCollector();
-				const protocol = createProtocol(pid, {
-					onMessage: collector.handler,
-				});
-				const result = await runScenario(
+				const protocol = createProtocol(pid, { onMessage: collector.handler });
+				const result = await runProbe(
 					protocol,
 					pid,
-					scenarioConfig,
+					probe,
 					judgeConfig,
 					(phase) =>
 						progress({
 							type: "phase",
-							scenarioName: scenario.name,
+							probeId: probe.id,
 							protocolId: pid,
 							phase,
 						}),
@@ -152,44 +144,44 @@ export async function runComparison(
 				);
 				progress({
 					type: "complete",
-					scenarioName: scenario.name,
+					probeId: probe.id,
 					protocolId: pid,
 					durationMs: performance.now() - taskStart,
 				});
-				return { scenarioIndex: si, protocolId: pid, result };
+				return { probeIndex: pi, protocolId: pid, result };
 			} catch (err) {
 				const msg = err instanceof Error ? err.message : String(err);
 				progress({
 					type: "complete",
-					scenarioName: scenario.name,
+					probeId: probe.id,
 					protocolId: pid,
 					durationMs: performance.now() - taskStart,
 					error: msg,
 				});
 				return {
-					scenarioIndex: si,
+					probeIndex: pi,
 					protocolId: pid,
 					result: {
+						probeId: probe.id,
 						protocolId: pid,
-						scenarioName: scenarioConfig.name,
-						rounds: [],
-						aggregate: {
-							totalInputTokens: 0,
-							totalOutputTokens: 0,
-							totalCost: 0,
-							totalDurationMs: 0,
-							averageAgentsPerRound: 0,
-							roundCount: 0,
-						},
-						metrics: {
+						pattern: probe.pattern,
+						prompt: probe.prompt,
+						agents: [],
+						assertions: {
 							passed: false,
-							tokensPerSuccess: null,
-							latencyPerSuccess: null,
-							costPerSuccess: null,
-							coordinationEfficiency: 0,
-							multiAgentContribution: 0,
-							participationBalance: 0,
+							details: [
+								{
+									name: "execution",
+									passed: false,
+									expected: "no error",
+									actual: msg,
+								},
+							],
 						},
+						totalInputTokens: 0,
+						totalOutputTokens: 0,
+						totalCost: 0,
+						totalDurationMs: 0,
 						error: msg,
 					},
 				};
@@ -199,90 +191,64 @@ export async function runComparison(
 
 	const taskResults = await runPool(tasks, concurrency);
 
-	const scenarioComparisons: ScenarioComparison[] = scenarios.map(
-		(scenario, si) => {
-			const results: Record<string, ProtocolRunResult> = {};
-			for (const tr of taskResults) {
-				if (tr.scenarioIndex === si) {
-					results[tr.protocolId] = tr.result;
-				}
-			}
-			return { scenario, results };
-		},
-	);
+	// Build probe comparisons
+	const probeComparisons: ProbeComparison[] = probes.map((probe, pi) => {
+		const results: Record<string, ProbeResult> = {};
+		for (const tr of taskResults) {
+			if (tr.probeIndex === pi) results[tr.protocolId] = tr.result;
+		}
+		return { probe, results };
+	});
 
-	// Compute aggregate metrics per protocol
+	// Aggregate metrics per protocol
 	const protocolMetrics: Record<string, ProtocolAggregateMetrics> = {};
-	const agentParticipation: Record<string, Record<string, number>> = {};
+	const allPatterns: InteractionPattern[] = [
+		"single-route",
+		"selective-route",
+		"decline-all",
+		"handoff",
+		"collaborate",
+	];
 
 	for (const pid of protocolIds) {
-		let passedCount = 0;
-		let totalCount = 0;
-		let qualitySum = 0;
-		let qualityCount = 0;
-		let tokensSum = 0;
-		let latencySum = 0;
-		let costSum = 0;
-		let coordEffSum = 0;
-		let coordEffCount = 0;
-		let multiAgentSum = 0;
-		let multiAgentCount = 0;
+		const allResults = probeComparisons
+			.map((pc) => pc.results[pid])
+			.filter((r): r is ProbeResult => r != null);
 
-		for (const sc of scenarioComparisons) {
-			const result = sc.results[pid];
-			if (!result) continue;
+		const overallPassed = allResults.filter(
+			(r) => r.assertions.passed && (r.judge?.pass ?? r.assertions.passed),
+		);
 
-			totalCount++;
-			const metrics = result.metrics;
+		const scoredResults = allResults.filter((r) => r.judge);
+		const avgScore =
+			scoredResults.length > 0
+				? scoredResults.reduce(
+						(s, r) => s + (r.judge?.interactionScore ?? 0),
+						0,
+					) / scoredResults.length
+				: 0;
 
-			if (metrics?.passed) {
-				passedCount++;
-				if (metrics.tokensPerSuccess != null)
-					tokensSum += metrics.tokensPerSuccess;
-				if (metrics.latencyPerSuccess != null)
-					latencySum += metrics.latencyPerSuccess;
-				if (metrics.costPerSuccess != null) costSum += metrics.costPerSuccess;
-			}
-
-			// Quality averaged over passed scenarios with judge data
-			if (metrics?.passed && result.judge) {
-				qualitySum += result.judge.aggregate.qualityScore;
-				qualityCount++;
-			}
-
-			// Coordination efficiency and multi-agent contribution averaged over all scenarios
-			if (metrics) {
-				coordEffSum += metrics.coordinationEfficiency;
-				coordEffCount++;
-				multiAgentSum += metrics.multiAgentContribution;
-				multiAgentCount++;
-			}
-
-			// Track agent participation
-			for (const round of result.rounds) {
-				for (const agent of round.agents) {
-					if (!agentParticipation[agent.agentName]) {
-						agentParticipation[agent.agentName] = {};
-						for (const p of protocolIds)
-							agentParticipation[agent.agentName][p] = 0;
-					}
-					agentParticipation[agent.agentName][pid]++;
-				}
+		const byPattern: Record<string, PatternMetrics> = {};
+		for (const pattern of allPatterns) {
+			const patternResults = allResults.filter((r) => r.pattern === pattern);
+			if (patternResults.length > 0) {
+				byPattern[pattern] = computePatternMetrics(allResults, pattern);
 			}
 		}
 
 		protocolMetrics[pid] = {
-			successRate: totalCount > 0 ? (passedCount / totalCount) * 100 : 0,
-			avgQuality: qualityCount > 0 ? qualitySum / qualityCount : 0,
-			avgTokensPerSuccess: passedCount > 0 ? tokensSum / passedCount : 0,
-			avgLatencyPerSuccess: passedCount > 0 ? latencySum / passedCount : 0,
-			avgCostPerSuccess: passedCount > 0 ? costSum / passedCount : 0,
-			avgCoordinationEfficiency:
-				coordEffCount > 0 ? coordEffSum / coordEffCount : 0,
-			avgMultiAgentContribution:
-				multiAgentCount > 0 ? multiAgentSum / multiAgentCount : 0,
-			passedCount,
-			totalCount,
+			overallPassRate:
+				allResults.length > 0
+					? (overallPassed.length / allResults.length) * 100
+					: 0,
+			avgInteractionScore: avgScore,
+			avgCost:
+				allResults.length > 0
+					? allResults.reduce((s, r) => s + r.totalCost, 0) / allResults.length
+					: 0,
+			passedCount: overallPassed.length,
+			totalCount: allResults.length,
+			byPattern,
 		};
 	}
 
@@ -290,11 +256,7 @@ export async function runComparison(
 		generatedAt: new Date().toISOString(),
 		model: MODEL,
 		protocolIds,
-		baseline: options.baseline,
-		scenarios: scenarioComparisons,
-		aggregate: {
-			protocolMetrics,
-			agentParticipation,
-		},
+		probes: probeComparisons,
+		aggregate: { protocolMetrics },
 	};
 }

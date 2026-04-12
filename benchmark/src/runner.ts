@@ -1,255 +1,44 @@
 import { MODEL } from "core/config";
 import { computeCost } from "core/cost";
-import type { AgentResult, Protocol } from "core/types";
+import type { Protocol } from "core/types";
+import { checkAssertions } from "./assertions.ts";
 import { collectSendRequest, type ResultCollector } from "./collect.ts";
-import { evaluateRound, evaluateScenario } from "./judge.ts";
+import { evaluateProbe } from "./judge.ts";
+import type { JudgeConfig } from "./judge-types.ts";
 import type {
-	JudgeConfig,
-	JudgeEvaluation,
-	JudgeUsage,
-	MultiAgentRubric,
-	QualityRubric,
-} from "./judge-types.ts";
-import { runMultiRound } from "./multi-round.ts";
-import type {
-	AgentRoundResult,
+	AgentProbeResult,
+	ProbeConfig,
+	ProbeResult,
 	ProtocolId,
-	ProtocolMetrics,
-	ProtocolRunResult,
-	RoundResult,
-	ScenarioConfig,
 } from "./types.ts";
 
-export { collectSendRequest, ResultCollector } from "./collect.ts";
-export { runMultiRound } from "./multi-round.ts";
+export { ResultCollector } from "./collect.ts";
 
-function toJudgeRoundData(rounds: RoundResult[]): {
-	userMessage: string;
-	expectedResponse?: string;
-	results: AgentResult[];
-}[] {
-	return rounds.map((r) => ({
-		userMessage: r.prompt,
-		expectedResponse: r.expectedResponse,
-		results: r.agents.map((a) => ({
-			agentName: a.agentName,
-			skills: a.skills,
-			response: {
-				id: "",
-				chainId: "",
-				replyTo: undefined,
-				timestamp: "",
-				type: "RESPONSE" as const,
-				payload: a.responseText,
-				from: a.agentName.toLowerCase(),
-				to: [] as string[],
-			},
-			usage: { inputTokens: a.inputTokens, outputTokens: a.outputTokens },
-			model: a.model,
-			durationMs: a.durationMs,
-		})),
-	}));
-}
-
-function majorityVote(values: boolean[]): boolean {
-	const trueCount = values.filter(Boolean).length;
-	return trueCount > values.length / 2;
-}
-
-function aggregateQualityRubric(evals: JudgeEvaluation[]): QualityRubric {
-	return {
-		addressesRequest: majorityVote(
-			evals.map((e) => e.qualityRubric.addressesRequest),
-		),
-		coherentDelivery: majorityVote(
-			evals.map((e) => e.qualityRubric.coherentDelivery),
-		),
-		sufficientDepth: majorityVote(
-			evals.map((e) => e.qualityRubric.sufficientDepth),
-		),
-		noMajorOmissions: majorityVote(
-			evals.map((e) => e.qualityRubric.noMajorOmissions),
-		),
-		efficientResolution: majorityVote(
-			evals.map((e) => e.qualityRubric.efficientResolution),
-		),
-	};
-}
-
-function aggregateMultiAgentRubric(evals: JudgeEvaluation[]): MultiAgentRubric {
-	return {
-		multipleAgentsContributed: majorityVote(
-			evals.map((e) => e.multiAgentRubric.multipleAgentsContributed),
-		),
-		distinctRoles: majorityVote(
-			evals.map((e) => e.multiAgentRubric.distinctRoles),
-		),
-		minimalRedundancy: majorityVote(
-			evals.map((e) => e.multiAgentRubric.minimalRedundancy),
-		),
-		complementaryCoverage: majorityVote(
-			evals.map((e) => e.multiAgentRubric.complementaryCoverage),
-		),
-		effectiveCoordination: majorityVote(
-			evals.map((e) => e.multiAgentRubric.effectiveCoordination),
-		),
-	};
-}
-
-function countTrues(obj: QualityRubric | MultiAgentRubric): number {
-	return Object.values(obj).filter(Boolean).length;
-}
-
-function aggregatePerRoundJudge(rounds: RoundResult[]): {
-	aggregate: JudgeEvaluation;
-	usage: JudgeUsage;
-} {
-	const allEvals = rounds
-		.map((r) => r.judge)
-		.filter((j): j is JudgeEvaluation => j != null);
-
-	const emptyQuality: QualityRubric = {
-		addressesRequest: false,
-		coherentDelivery: false,
-		sufficientDepth: false,
-		noMajorOmissions: false,
-		efficientResolution: false,
-	};
-	const emptyMultiAgent: MultiAgentRubric = {
-		multipleAgentsContributed: false,
-		distinctRoles: false,
-		minimalRedundancy: false,
-		complementaryCoverage: false,
-		effectiveCoordination: false,
-	};
-
-	if (allEvals.length === 0) {
-		return {
-			aggregate: {
-				pass: false,
-				qualityScore: 0,
-				multiAgentValue: 0,
-				qualityRubric: emptyQuality,
-				multiAgentRubric: emptyMultiAgent,
-				summary: "",
-				passReasoning: "",
-			},
-			usage: {
-				inputTokens: 0,
-				outputTokens: 0,
-				model: "",
-				durationMs: 0,
-				callCount: 0,
-			},
-		};
-	}
-
-	const passCount = allEvals.filter((e) => e.pass).length;
-	const qualityRubric = aggregateQualityRubric(allEvals);
-	const multiAgentRubric = aggregateMultiAgentRubric(allEvals);
-
-	const alignmentEvals = allEvals.filter((e) => e.expectationAlignment != null);
-	const avgAlignment =
-		alignmentEvals.length > 0
-			? alignmentEvals.reduce((s, e) => s + (e.expectationAlignment ?? 0), 0) /
-				alignmentEvals.length
-			: undefined;
-
-	return {
-		aggregate: {
-			pass: passCount > allEvals.length / 2,
-			qualityScore: countTrues(qualityRubric),
-			multiAgentValue: countTrues(multiAgentRubric),
-			qualityRubric,
-			multiAgentRubric,
-			summary: `Aggregate of ${allEvals.length} per-round evaluations`,
-			passReasoning: `${passCount}/${allEvals.length} rounds passed`,
-			expectationAlignment:
-				avgAlignment != null ? Math.round(avgAlignment * 10) / 10 : undefined,
-			expectationAlignmentReasoning:
-				avgAlignment != null
-					? `Average expectation alignment across ${alignmentEvals.length} rounds`
-					: undefined,
-		},
-		usage: {
-			inputTokens: 0,
-			outputTokens: 0,
-			model: "",
-			durationMs: 0,
-			callCount: 0,
-		},
-	};
-}
-
-function computeNormalizedEntropy(values: number[]): number {
-	const total = values.reduce((s, v) => s + v, 0);
-	if (total === 0 || values.length <= 1) return 0;
-	const n = values.length;
-	let entropy = 0;
-	for (const v of values) {
-		if (v > 0) {
-			const p = v / total;
-			entropy -= p * Math.log2(p);
-		}
-	}
-	const maxEntropy = Math.log2(n);
-	return maxEntropy > 0 ? entropy / maxEntropy : 0;
-}
-
-function computeMetrics(result: ProtocolRunResult): ProtocolMetrics {
-	const passed = result.error ? false : (result.judge?.aggregate.pass ?? false);
-
-	const { totalInputTokens, totalOutputTokens, totalCost, totalDurationMs } =
-		result.aggregate;
-
-	const coordinationEfficiency =
-		totalInputTokens > 0 ? totalOutputTokens / totalInputTokens : 0;
-
-	// Participation balance: normalized entropy of output tokens across agents
-	const agentTokens = result.rounds.flatMap((r) =>
-		r.agents.map((a) => a.outputTokens),
-	);
-	const participationBalance = computeNormalizedEntropy(agentTokens);
-
-	const multiAgentJudgeValue = result.judge?.aggregate.multiAgentValue ?? 0;
-	const multiAgentContribution =
-		0.4 * participationBalance + 0.6 * (multiAgentJudgeValue / 5);
-
-	return {
-		passed,
-		tokensPerSuccess: passed ? totalInputTokens + totalOutputTokens : null,
-		latencyPerSuccess: passed ? totalDurationMs : null,
-		costPerSuccess: passed ? totalCost : null,
-		coordinationEfficiency,
-		multiAgentContribution,
-		participationBalance,
-	};
-}
-
-export async function runScenario(
+export async function runProbe(
 	protocol: Protocol,
 	protocolId: ProtocolId,
-	scenario: ScenarioConfig,
+	probe: ProbeConfig,
 	judgeConfig?: JudgeConfig,
 	onPhase?: (phase: string) => void,
 	collector?: ResultCollector,
-): Promise<ProtocolRunResult> {
+): Promise<ProbeResult> {
 	const { userId } = await protocol.initialize("BenchUser");
 	const chainId = crypto.randomUUID();
 
-	// Delegate to multi-round runner if configured
-	if (scenario.multiRound && scenario.multiRound.rounds > 1) {
-		const mr = await runMultiRound(
-			scenario,
-			protocol,
-			userId,
-			chainId,
-			collector,
-		);
-		const mrError = mr.cumulative.error;
-		// Convert MultiRoundResult to ProtocolRunResult
-		const rounds: RoundResult[] = mr.rounds.map((rm) => {
-			const agents: AgentRoundResult[] = rm.results.map((r) => {
+	let agents: AgentProbeResult[] = [];
+	let error: string | undefined;
+
+	const start = performance.now();
+	try {
+		if (collector) {
+			const results = await collectSendRequest(
+				protocol,
+				collector,
+				userId,
+				probe.prompt,
+				chainId,
+			);
+			agents = results.map((r) => {
 				const inputTokens = r.usage?.inputTokens ?? 0;
 				const outputTokens = r.usage?.outputTokens ?? 0;
 				const model = r.model ?? MODEL;
@@ -264,195 +53,60 @@ export async function runScenario(
 					model,
 				};
 			});
-			return {
-				roundIndex: rm.roundIndex,
-				prompt: rm.prompt,
-				expectedResponse: scenario.rounds[rm.roundIndex]?.expectedResponse,
-				agents,
-				totalInputTokens: rm.totalInputTokens,
-				totalOutputTokens: rm.totalOutputTokens,
-				totalCost: rm.cost,
-				totalDurationMs: rm.totalDurationMs,
-				respondingAgentCount: agents.length,
-			};
-		});
-		// Per-round judge evaluation for multi-round scenarios
-		if (judgeConfig?.enabled && rounds.length > 0 && !mrError) {
-			onPhase?.("judge");
-			const roundData = toJudgeRoundData(rounds);
-			const judgeUsage: JudgeUsage = {
-				inputTokens: 0,
-				outputTokens: 0,
-				model:
-					judgeConfig.model ?? process.env.JUDGE_MODEL ?? "claude-sonnet-4-6",
-				durationMs: 0,
-				callCount: 0,
-			};
-
-			for (let i = 0; i < rounds.length; i++) {
-				const context = roundData.slice(0, i + 1);
-				const { evaluation, usage } = await evaluateRound(
-					context,
-					i,
-					judgeConfig,
-				);
-				rounds[i].judge = evaluation;
-				judgeUsage.inputTokens += usage.inputTokens;
-				judgeUsage.outputTokens += usage.outputTokens;
-				judgeUsage.durationMs += usage.durationMs;
-				judgeUsage.callCount += usage.callCount;
-			}
-
-			const { aggregate: judgeAggregate } = aggregatePerRoundJudge(rounds);
-
-			const result: ProtocolRunResult = {
-				protocolId,
-				scenarioName: scenario.name,
-				rounds,
-				aggregate: {
-					totalInputTokens: mr.cumulative.totalInputTokens,
-					totalOutputTokens: mr.cumulative.totalOutputTokens,
-					totalCost: mr.cumulative.totalCost,
-					totalDurationMs: mr.cumulative.totalDurationMs,
-					averageAgentsPerRound:
-						rounds.reduce((s, r) => s + r.respondingAgentCount, 0) /
-						rounds.length,
-					roundCount: mr.cumulative.roundCount,
-				},
-				judge: {
-					perRound: rounds
-						.map((r) => r.judge)
-						.filter((j): j is JudgeEvaluation => j != null),
-					aggregate: judgeAggregate,
-					usage: judgeUsage,
-				},
-				error: mrError,
-			};
-			result.metrics = computeMetrics(result);
-			return result;
+		} else {
+			await protocol.sendRequest(userId, probe.prompt, chainId);
 		}
-
-		const mrRoundCount = rounds.length || 1;
-		const mrAvgAgents =
-			rounds.reduce((s, r) => s + r.respondingAgentCount, 0) / mrRoundCount;
-		const result: ProtocolRunResult = {
-			protocolId,
-			scenarioName: scenario.name,
-			rounds,
-			aggregate: {
-				totalInputTokens: mr.cumulative.totalInputTokens,
-				totalOutputTokens: mr.cumulative.totalOutputTokens,
-				totalCost: mr.cumulative.totalCost,
-				totalDurationMs: mr.cumulative.totalDurationMs,
-				averageAgentsPerRound: mrAvgAgents,
-				roundCount: mr.cumulative.roundCount,
-			},
-			error: mrError,
-		};
-		result.metrics = computeMetrics(result);
-		return result;
+	} catch (err) {
+		error = err instanceof Error ? err.message : String(err);
 	}
+	const totalDurationMs = performance.now() - start;
 
-	const rounds: RoundResult[] = [];
-	let roundError: string | undefined;
-
-	for (let i = 0; i < scenario.rounds.length; i++) {
-		const prompt = scenario.rounds[i].prompt;
-		const roundStart = performance.now();
-
-		let results: AgentResult[];
-		try {
-			if (collector) {
-				results = await collectSendRequest(
-					protocol,
-					collector,
-					userId,
-					prompt,
-					chainId,
-				);
-			} else {
-				// Fallback: no collector, send and get empty results
-				await protocol.sendRequest(userId, prompt, chainId);
-				results = [];
+	// Layer 1: Assertions
+	const assertions = error
+		? {
+				passed: false,
+				details: [
+					{
+						name: "execution",
+						passed: false,
+						expected: "no error",
+						actual: error,
+					},
+				],
 			}
-		} catch (err) {
-			roundError = `Round ${i + 1} failed: ${err instanceof Error ? err.message : String(err)}`;
-			break;
-		}
+		: checkAssertions(probe.expect, agents);
 
-		const roundDurationMs = performance.now() - roundStart;
-
-		const agents: AgentRoundResult[] = results.map((r) => {
-			const inputTokens = r.usage?.inputTokens ?? 0;
-			const outputTokens = r.usage?.outputTokens ?? 0;
-			const model = r.model ?? MODEL;
-			return {
-				agentName: r.agentName,
-				skills: r.skills,
-				responseText: r.response.payload,
-				inputTokens,
-				outputTokens,
-				cost: r.cost ?? computeCost(inputTokens, outputTokens, model),
-				durationMs: r.durationMs ?? 0,
-				model,
-			};
-		});
-
-		const totalInputTokens = agents.reduce((s, a) => s + a.inputTokens, 0);
-		const totalOutputTokens = agents.reduce((s, a) => s + a.outputTokens, 0);
-		const totalCost = agents.reduce((s, a) => s + a.cost, 0);
-
-		rounds.push({
-			roundIndex: i,
-			prompt,
-			expectedResponse: scenario.rounds[i]?.expectedResponse,
-			agents,
-			totalInputTokens,
-			totalOutputTokens,
-			totalCost,
-			totalDurationMs: roundDurationMs,
-			respondingAgentCount: agents.length,
-		});
-	}
-
-	const roundCount = rounds.length || 1;
-	const aggregate = {
-		totalInputTokens: rounds.reduce((s, r) => s + r.totalInputTokens, 0),
-		totalOutputTokens: rounds.reduce((s, r) => s + r.totalOutputTokens, 0),
-		totalCost: rounds.reduce((s, r) => s + r.totalCost, 0),
-		totalDurationMs: rounds.reduce((s, r) => s + r.totalDurationMs, 0),
-		averageAgentsPerRound:
-			rounds.reduce((s, r) => s + r.respondingAgentCount, 0) / roundCount,
-		roundCount: rounds.length,
-	};
-
-	// Single-round judge evaluation (skip if we errored before any rounds)
-	if (judgeConfig?.enabled && rounds.length > 0 && !roundError) {
+	// Layer 2: Judge (only if assertions pass and judge enabled)
+	let judge: ProbeResult["judge"];
+	if (assertions.passed && judgeConfig?.enabled && !error) {
 		onPhase?.("judge");
-		const roundData = toJudgeRoundData(rounds);
-		const judgeResult = await evaluateScenario(roundData, judgeConfig);
-		if (rounds.length > 0) {
-			rounds[0].judge = judgeResult.aggregate;
+		try {
+			const { evaluation } = await evaluateProbe(
+				probe.prompt,
+				probe.targetSkills,
+				agents,
+				probe.pattern,
+				judgeConfig,
+			);
+			judge = evaluation;
+		} catch {
+			// Judge failure doesn't fail the probe — just no judge data
+			judge = undefined;
 		}
-		const result: ProtocolRunResult = {
-			protocolId,
-			scenarioName: scenario.name,
-			rounds,
-			aggregate,
-			judge: judgeResult,
-			error: roundError,
-		};
-		result.metrics = computeMetrics(result);
-		return result;
 	}
 
-	const result: ProtocolRunResult = {
+	return {
+		probeId: probe.id,
 		protocolId,
-		scenarioName: scenario.name,
-		rounds,
-		aggregate,
-		error: roundError,
+		pattern: probe.pattern,
+		prompt: probe.prompt,
+		agents,
+		assertions,
+		judge,
+		totalInputTokens: agents.reduce((s, a) => s + a.inputTokens, 0),
+		totalOutputTokens: agents.reduce((s, a) => s + a.outputTokens, 0),
+		totalCost: agents.reduce((s, a) => s + a.cost, 0),
+		totalDurationMs,
+		error,
 	};
-	result.metrics = computeMetrics(result);
-	return result;
 }

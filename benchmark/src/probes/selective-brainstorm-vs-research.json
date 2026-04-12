@@ -1,0 +1,11 @@
+{
+	"id": "selective-brainstorm-vs-research",
+	"prompt": "I need creative names for a new AI startup focused on climate tech.",
+	"pattern": "selective-route",
+	"targetSkills": ["brainstorming"],
+	"expect": {
+		"agentCount": { "max": 1 },
+		"requiredSkills": ["brainstorming"],
+		"excludedSkills": ["coding"]
+	}
+}

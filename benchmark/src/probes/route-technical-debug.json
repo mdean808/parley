@@ -1,0 +1,11 @@
+{
+	"id": "route-technical-debug",
+	"prompt": "Can you help me debug this Python function that's throwing a KeyError when accessing a nested dictionary?",
+	"pattern": "single-route",
+	"targetSkills": ["coding"],
+	"expect": {
+		"agentCount": { "max": 1 },
+		"requiredSkills": ["coding"],
+		"excludedSkills": ["creative-writing"]
+	}
+}

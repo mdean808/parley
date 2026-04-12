@@ -1,130 +1,117 @@
 import chalk from "chalk";
-import type { ComparisonReport } from "./comparison.ts";
+import type { ComparisonReport } from "./types.ts";
 
 function stripAnsi(str: string): string {
-	// biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI escape sequence stripping requires matching control characters
+	// biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI escape sequence stripping
 	return str.replace(/\x1b\[[0-9;]*m/g, "");
 }
 
 function pad(str: string, len: number): string {
 	const visibleLen = stripAnsi(str).length;
-	const padding = Math.max(0, len - visibleLen);
-	return str + " ".repeat(padding);
-}
-
-function fmtNum(n: number): string {
-	return n.toLocaleString("en-US");
+	return str + " ".repeat(Math.max(0, len - visibleLen));
 }
 
 export function printTerminalReport(report: ComparisonReport): void {
 	const { protocolIds } = report;
+	const metrics = report.aggregate.protocolMetrics;
 
-	console.log(chalk.bold("\n=== Protocol Comparison Report ===\n"));
+	console.log(chalk.bold("\n=== Protocol Interaction Benchmark ===\n"));
 	console.log(`Model: ${chalk.cyan(report.model)}`);
 	console.log(`Generated: ${chalk.dim(report.generatedAt)}`);
-	console.log(`Scenarios: ${chalk.cyan(String(report.scenarios.length))}`);
-	if (report.baseline) console.log(`Baseline: ${chalk.cyan(report.baseline)}`);
+	console.log(`Probes: ${chalk.cyan(String(report.probes.length))}`);
 	console.log("");
 
-	// Protocol Summary Table
+	// Summary table
 	console.log(chalk.bold("Protocol Summary"));
-	const cols = [12, 12, 10, 14, 12, 12, 12];
+	const cols = [12, 14, 10, 12];
 	const hdr = [
 		pad("Protocol", cols[0]),
-		pad("Success", cols[1]),
-		pad("Quality", cols[2]),
-		pad("Tok/Success", cols[3]),
-		pad("Cost/Success", cols[4]),
-		pad("Coord.Eff", cols[5]),
-		pad("Multi-Agent", cols[6]),
+		pad("Overall Pass", cols[1]),
+		pad("Avg Score", cols[2]),
+		pad("Avg Cost", cols[3]),
 	].join(" | ");
 	console.log(hdr);
-	console.log(chalk.dim("─".repeat(hdr.length)));
+	console.log(chalk.dim("-".repeat(stripAnsi(hdr).length)));
 
-	const metrics = report.aggregate.protocolMetrics;
 	for (const pid of protocolIds) {
 		const m = metrics[pid];
 		if (!m) continue;
-
-		const successLabel = `${m.passedCount}/${m.totalCount} (${m.successRate.toFixed(0)}%)`;
-		const quality = m.avgQuality > 0 ? m.avgQuality.toFixed(1) : "—";
-		const tokPerSuccess =
-			m.passedCount > 0 ? fmtNum(Math.round(m.avgTokensPerSuccess)) : "—";
-		const costPerSuccess =
-			m.passedCount > 0 ? `$${m.avgCostPerSuccess.toFixed(4)}` : "—";
-		const coordEff = m.avgCoordinationEfficiency.toFixed(3);
-		const multiAgent = m.avgMultiAgentContribution.toFixed(2);
-
 		const row = [
 			pad(pid, cols[0]),
-			pad(successLabel, cols[1]),
-			pad(quality, cols[2]),
-			pad(tokPerSuccess, cols[3]),
-			pad(costPerSuccess, cols[4]),
-			pad(coordEff, cols[5]),
-			pad(multiAgent, cols[6]),
+			pad(
+				`${m.passedCount}/${m.totalCount} (${m.overallPassRate.toFixed(0)}%)`,
+				cols[1],
+			),
+			pad(`${m.avgInteractionScore.toFixed(1)}/3`, cols[2]),
+			pad(`$${m.avgCost.toFixed(4)}`, cols[3]),
 		].join(" | ");
 		console.log(row);
 	}
 
-	// Per-Scenario Results
-	const hasJudge = report.scenarios.some((sc) =>
-		Object.values(sc.results).some((r) => r.judge),
-	);
+	// By-pattern breakdown
+	console.log(chalk.bold("\nBy Pattern"));
+	const patternCol = 16;
+	const protoCol = 14;
+	const pHdr = [
+		pad("Pattern", patternCol),
+		...protocolIds.map((pid) => pad(pid, protoCol)),
+	].join(" | ");
+	console.log(pHdr);
+	console.log(chalk.dim("-".repeat(stripAnsi(pHdr).length)));
 
-	if (hasJudge) {
-		console.log(chalk.bold("\nPer-Scenario Results"));
-		const colWidth = 14;
-		const sCols = [24, ...protocolIds.map(() => colWidth)];
-		const sHdr = [
-			pad("Scenario", sCols[0]),
-			...protocolIds.map((pid, i) => pad(pid, sCols[i + 1])),
-		].join(" | ");
-		console.log(sHdr);
-		console.log(chalk.dim("─".repeat(sHdr.length)));
-
-		for (const sc of report.scenarios) {
-			const vals = protocolIds.map((pid, i) => {
-				const r = sc.results[pid];
-				if (!r) return pad("—", sCols[i + 1]);
-				if (r.error) return pad(chalk.red("ERR"), sCols[i + 1]);
-				if (!r.metrics) return pad("—", sCols[i + 1]);
-				if (r.metrics.passed) {
-					const q = r.judge?.aggregate.qualityScore;
-					const ea = r.judge?.aggregate.expectationAlignment;
-					const parts = [
-						q ? q.toFixed(1) : null,
-						ea ? `E:${ea.toFixed(1)}` : null,
-					].filter(Boolean);
-					const label = parts.length > 0 ? `PASS (${parts.join(" ")})` : "PASS";
-					return pad(chalk.green(label), sCols[i + 1]);
-				}
-				return pad(chalk.red("FAIL"), sCols[i + 1]);
-			});
-
-			const row = [pad(sc.scenario.name, sCols[0]), ...vals].join(" | ");
-			console.log(row);
-		}
+	const patterns = [
+		"single-route",
+		"selective-route",
+		"decline-all",
+		"handoff",
+		"collaborate",
+	];
+	for (const pattern of patterns) {
+		const vals = protocolIds.map((pid) => {
+			const pm = metrics[pid]?.byPattern[pattern];
+			if (!pm || pm.probeCount === 0) return pad(chalk.dim("—"), protoCol);
+			const pct = pm.overallPassRate.toFixed(0);
+			const label = `${pct}% (${pm.passedCount}/${pm.probeCount})`;
+			const colored =
+				pm.overallPassRate >= 70
+					? chalk.green(label)
+					: pm.overallPassRate >= 40
+						? chalk.yellow(label)
+						: chalk.red(label);
+			return pad(colored, protoCol);
+		});
+		console.log([pad(pattern, patternCol), ...vals].join(" | "));
 	}
 
-	// Error Summary
-	const errors: { scenario: string; protocol: string; error: string }[] = [];
-	for (const sc of report.scenarios) {
+	// Failures
+	const failures: { probeId: string; protocolId: string; reason: string }[] =
+		[];
+	for (const pc of report.probes) {
 		for (const pid of protocolIds) {
-			const r = sc.results[pid];
-			if (r?.error) {
-				errors.push({
-					scenario: sc.scenario.name,
-					protocol: pid,
-					error: r.error,
+			const r = pc.results[pid];
+			if (!r) continue;
+			if (r.error) {
+				failures.push({ probeId: r.probeId, protocolId: pid, reason: r.error });
+			} else if (!r.assertions.passed) {
+				const failed = r.assertions.details.filter((d) => !d.passed);
+				const reason = failed
+					.map((d) => `${d.name}: expected ${d.expected}, got ${d.actual}`)
+					.join("; ");
+				failures.push({ probeId: r.probeId, protocolId: pid, reason });
+			} else if (r.judge && !r.judge.pass) {
+				failures.push({
+					probeId: r.probeId,
+					protocolId: pid,
+					reason: r.judge.passReasoning,
 				});
 			}
 		}
 	}
-	if (errors.length > 0) {
-		console.log(chalk.bold.red(`\nErrors (${errors.length})`));
-		for (const e of errors) {
-			console.log(chalk.red(`  ${e.scenario} / ${e.protocol}: ${e.error}`));
+
+	if (failures.length > 0) {
+		console.log(chalk.bold.red(`\nFailures (${failures.length})`));
+		for (const f of failures) {
+			console.log(chalk.red(`  x ${f.protocolId} x ${f.probeId}: ${f.reason}`));
 		}
 	}
 
