@@ -51,32 +51,26 @@ export type ChatStreamEvent =
 			meta?: ChatStreamMeta;
 	  }
 	| {
-			type: "results";
-			data: {
-				results: Array<{
-					agentName: string;
-					skills: string[];
-					response: {
-						id: string;
-						payload: string;
-						timestamp: string;
-						type: string;
-					};
-					usage?: { inputTokens: number; outputTokens: number };
-					model?: string;
-					durationMs?: number;
-					cost?: number;
-				}>;
-				trace?: Array<{
-					agentName: string;
-					type: string;
-					messageId: string;
+			type: "agent_result";
+			result: {
+				agentName: string;
+				skills: string[];
+				response: {
+					id: string;
 					payload: string;
-					toon: string;
 					timestamp: string;
-				}>;
-				requestToon?: string;
+					type: string;
+				};
+				usage?: { inputTokens: number; outputTokens: number };
+				model?: string;
+				durationMs?: number;
+				cost?: number;
 			};
+			chainId: string;
+	  }
+	| {
+			type: "request_toon";
+			requestToon: string;
 	  }
 	| {
 			type: "error";

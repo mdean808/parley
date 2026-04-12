@@ -73,42 +73,36 @@ function handleStreamEvent(event: ChatStreamEvent) {
 		} else if (eventType === "decline") {
 			// Optionally show decline as trace
 		}
-	} else if (event.type === "results") {
-		// Results from sendRequest — used by simple protocol (v2 may be empty)
-		const { results, requestToon } = event.data;
+	} else if (event.type === "agent_result") {
+		const { result } = event;
+		const id = result.response.id || crypto.randomUUID();
+		if (seenIds.has(id)) return;
+		seenIds.add(id);
 
-		if (requestToon) {
-			// Update the most recent user message's toonMessage
-			for (let i = messages.length - 1; i >= 0; i--) {
-				if (messages[i].role === "user") {
-					messages[i].toonMessage = requestToon;
-					break;
-				}
-			}
-		}
-
-		for (const result of results) {
-			const id = result.response.id || crypto.randomUUID();
-			if (seenIds.has(id)) continue;
-			seenIds.add(id);
-
-			messages.push({
-				id,
-				role: "agent",
-				messageType: "RESPONSE",
-				content: result.response.payload,
-				agentName: result.agentName,
-				skills: result.skills,
-				usage: result.usage,
-				model: result.model,
-				durationMs: result.durationMs,
-				cost: result.cost,
-				timestamp: result.response.timestamp,
-			});
-		}
+		messages.push({
+			id,
+			role: "agent",
+			messageType: "RESPONSE",
+			content: result.response.payload,
+			agentName: result.agentName,
+			skills: result.skills,
+			usage: result.usage,
+			model: result.model,
+			durationMs: result.durationMs,
+			cost: result.cost,
+			timestamp: result.response.timestamp,
+		});
 
 		pendingCount = Math.max(0, pendingCount - 1);
 		scrollToBottom();
+	} else if (event.type === "request_toon") {
+		// Update the most recent user message's toonMessage
+		for (let i = messages.length - 1; i >= 0; i--) {
+			if (messages[i].role === "user") {
+				messages[i].toonMessage = event.requestToon;
+				break;
+			}
+		}
 	} else if (event.type === "error") {
 		messages.push({
 			id: crypto.randomUUID(),

@@ -2,7 +2,7 @@ import { MODEL } from "core/config";
 import { createProtocol, getProtocolIds } from "protocols/factory";
 import type { JudgeConfig } from "./judge-types.ts";
 import { runPool } from "./pool.ts";
-import { runScenario } from "./runner.ts";
+import { ResultCollector, runScenario } from "./runner.ts";
 import {
 	loadAllScenarios,
 	loadScenario,
@@ -129,7 +129,10 @@ export async function runComparison(
 			});
 			const taskStart = performance.now();
 			try {
-				const protocol = createProtocol(pid);
+				const collector = new ResultCollector();
+				const protocol = createProtocol(pid, {
+					onMessage: collector.handler,
+				});
 				const result = await runScenario(
 					protocol,
 					pid,
@@ -142,6 +145,7 @@ export async function runComparison(
 							protocolId: pid,
 							phase,
 						}),
+					collector,
 				);
 				progress({
 					type: "complete",

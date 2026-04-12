@@ -6,7 +6,8 @@ import type {
 	Protocol,
 	ProtocolEventHandler,
 	ProtocolInit,
-	ProtocolResponse,
+	ProtocolMessageHandler,
+	SendResult,
 } from "core/types";
 import { log } from "../logger.ts";
 
@@ -20,10 +21,16 @@ export class SimpleProtocol implements Protocol {
 	private readonly personas: AgentPersona[];
 	private readonly history: Anthropic.MessageParam[] = [];
 	private readonly onEvent?: ProtocolEventHandler;
+	private readonly onMessage?: ProtocolMessageHandler;
 
-	constructor(personas: AgentPersona[], onEvent?: ProtocolEventHandler) {
+	constructor(
+		personas: AgentPersona[],
+		onEvent?: ProtocolEventHandler,
+		onMessage?: ProtocolMessageHandler,
+	) {
 		this.personas = personas;
 		this.onEvent = onEvent;
+		this.onMessage = onMessage;
 	}
 
 	initialize(userName: string): ProtocolInit {
@@ -41,7 +48,10 @@ export class SimpleProtocol implements Protocol {
 		_userId: string,
 		message: string,
 		_chainId?: string,
-	): Promise<ProtocolResponse> {
+	): Promise<SendResult> {
+		const chainId = _chainId ?? crypto.randomUUID();
+		const requestId = crypto.randomUUID();
+
 		// Build messages for this turn: shared history + current user message
 		const messages: Anthropic.MessageParam[] = [
 			...this.history,
@@ -86,7 +96,7 @@ export class SimpleProtocol implements Protocol {
 					skills: persona.skills,
 					response: {
 						id: crypto.randomUUID(),
-						chainId: crypto.randomUUID(),
+						chainId,
 						replyTo: undefined,
 						timestamp: new Date().toISOString(),
 						type: "RESPONSE",
@@ -104,6 +114,11 @@ export class SimpleProtocol implements Protocol {
 			}),
 		);
 
+		// Emit each result via onMessage callback
+		for (const result of results) {
+			this.onMessage?.(result, chainId);
+		}
+
 		// Append user message and combined agent responses to shared history
 		this.history.push({ role: "user", content: message });
 		const combined = results
@@ -111,6 +126,6 @@ export class SimpleProtocol implements Protocol {
 			.join("\n\n");
 		this.history.push({ role: "assistant", content: combined });
 
-		return { results };
+		return { chainId, requestId, settled: Promise.resolve() };
 	}
 }

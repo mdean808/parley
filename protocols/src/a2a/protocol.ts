@@ -10,7 +10,8 @@ import type {
 	Protocol,
 	ProtocolEventHandler,
 	ProtocolInit,
-	ProtocolResponse,
+	ProtocolMessageHandler,
+	SendResult,
 } from "core/types";
 import { log } from "../logger.ts";
 import type { A2AConfig } from "./types.ts";
@@ -21,6 +22,7 @@ export class A2AProtocol implements Protocol {
 	private readonly personas: AgentPersona[];
 	private readonly config: A2AConfig;
 	private readonly onEvent?: ProtocolEventHandler;
+	private readonly onMessage?: ProtocolMessageHandler;
 	private readonly clients = new Map<string, Client>();
 	private readonly contextIds = new Map<string, string>();
 	private healthChecked = false;
@@ -29,10 +31,12 @@ export class A2AProtocol implements Protocol {
 		personas: AgentPersona[],
 		config: A2AConfig,
 		onEvent?: ProtocolEventHandler,
+		onMessage?: ProtocolMessageHandler,
 	) {
 		this.personas = personas;
 		this.config = config;
 		this.onEvent = onEvent;
+		this.onMessage = onMessage;
 	}
 
 	initialize(userName: string): ProtocolInit {
@@ -50,10 +54,13 @@ export class A2AProtocol implements Protocol {
 		userId: string,
 		message: string,
 		chainId?: string,
-	): Promise<ProtocolResponse> {
+	): Promise<SendResult> {
 		await this.ensureHealthy();
 
-		const results = await Promise.all(
+		const resolvedChainId = chainId ?? crypto.randomUUID();
+		const requestId = crypto.randomUUID();
+
+		await Promise.all(
 			this.personas.map(async (persona): Promise<AgentResult> => {
 				log.info("a2a", "agent_start", {
 					agent: persona.name,
@@ -66,7 +73,7 @@ export class A2AProtocol implements Protocol {
 				});
 
 				const client = await this.getOrCreateClient(persona.name);
-				const contextId = chainId ?? this.contextIds.get(persona.name);
+				const contextId = resolvedChainId ?? this.contextIds.get(persona.name);
 
 				const start = performance.now();
 				let result: A2AResult;
@@ -92,7 +99,14 @@ export class A2AProtocol implements Protocol {
 						type: "error",
 						detail: errorMsg,
 					});
-					return this.errorResult(persona, userId, errorMsg, durationMs);
+					const errorResult = this.errorResult(
+						persona,
+						userId,
+						errorMsg,
+						durationMs,
+					);
+					this.onMessage?.(errorResult, resolvedChainId);
+					return errorResult;
 				}
 				const durationMs = performance.now() - start;
 
@@ -109,12 +123,12 @@ export class A2AProtocol implements Protocol {
 					durationMs: Math.round(durationMs),
 				});
 
-				return {
+				const agentResult: AgentResult = {
 					agentName: persona.name,
 					skills: persona.skills,
 					response: {
 						id: crypto.randomUUID(),
-						chainId: newContextId ?? chainId ?? crypto.randomUUID(),
+						chainId: newContextId ?? resolvedChainId,
 						replyTo: undefined,
 						timestamp: new Date().toISOString(),
 						type: "RESPONSE",
@@ -131,10 +145,13 @@ export class A2AProtocol implements Protocol {
 					model: metadata.model ?? undefined,
 					durationMs: metadata.duration_ms ?? durationMs,
 				};
+
+				this.onMessage?.(agentResult, resolvedChainId);
+				return agentResult;
 			}),
 		);
 
-		return { results };
+		return { chainId: resolvedChainId, requestId, settled: Promise.resolve() };
 	}
 
 	private async getOrCreateClient(personaName: string): Promise<Client> {

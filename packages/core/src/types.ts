@@ -68,6 +68,12 @@ export interface ProtocolEvent {
 
 export type ProtocolEventHandler = (event: ProtocolEvent) => void;
 
+/** Handler for individual agent results as they arrive via the event system. */
+export type ProtocolMessageHandler = (
+	result: AgentResult,
+	chainId: string,
+) => void;
+
 /** Collected result from an agent's response, used for display rendering. */
 export interface AgentResult {
 	agentName: string;
@@ -102,11 +108,17 @@ export interface TraceMessage {
 	timestamp: string;
 }
 
-/** Returned by Protocol.sendRequest() with the collected agent results. */
-export interface ProtocolResponse {
-	results: AgentResult[];
-	trace?: TraceMessage[];
+/** Returned by Protocol.sendRequest() — the request was sent/queued. */
+export interface SendResult {
+	chainId: string;
+	requestId: string;
 	requestToon?: string;
+	/**
+	 * Resolves when chain activity settles (no new messages for CHAIN_SETTLE_MS).
+	 * For synchronous protocols (simple, a2a, crewai, claude-code), resolves
+	 * immediately after all onMessage callbacks have fired.
+	 */
+	settled: Promise<void>;
 }
 
 /** Abstraction over the agent-to-agent protocol so the chat app can swap implementations. */
@@ -116,5 +128,5 @@ export interface Protocol {
 		userId: string,
 		message: string,
 		chainId?: string,
-	): Promise<ProtocolResponse>;
+	): Promise<SendResult>;
 }

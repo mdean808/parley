@@ -4,7 +4,8 @@ import type {
 	Protocol,
 	ProtocolEventHandler,
 	ProtocolInit,
-	ProtocolResponse,
+	ProtocolMessageHandler,
+	SendResult,
 } from "core/types";
 import { log } from "../logger.ts";
 import type {
@@ -20,16 +21,19 @@ export class CrewAIProtocol implements Protocol {
 	private readonly personas: AgentPersona[];
 	private readonly config: CrewAIConfig;
 	private readonly onEvent?: ProtocolEventHandler;
+	private readonly onMessage?: ProtocolMessageHandler;
 	private healthChecked = false;
 
 	constructor(
 		personas: AgentPersona[],
 		config: CrewAIConfig,
 		onEvent?: ProtocolEventHandler,
+		onMessage?: ProtocolMessageHandler,
 	) {
 		this.personas = personas;
 		this.config = config;
 		this.onEvent = onEvent;
+		this.onMessage = onMessage;
 	}
 
 	initialize(userName: string): ProtocolInit {
@@ -47,7 +51,7 @@ export class CrewAIProtocol implements Protocol {
 		userId: string,
 		message: string,
 		chainId?: string,
-	): Promise<ProtocolResponse> {
+	): Promise<SendResult> {
 		await this.ensureHealthy();
 
 		if (this.config.mode === "crew") {
@@ -60,7 +64,10 @@ export class CrewAIProtocol implements Protocol {
 		userId: string,
 		message: string,
 		chainId?: string,
-	): Promise<ProtocolResponse> {
+	): Promise<SendResult> {
+		const resolvedChainId = chainId ?? crypto.randomUUID();
+		const requestId = crypto.randomUUID();
+
 		const results = await Promise.all(
 			this.personas.map(async (persona): Promise<AgentResult> => {
 				log.info("crewai", "agent_start", {
@@ -77,7 +84,7 @@ export class CrewAIProtocol implements Protocol {
 					agent_name: persona.name,
 					message,
 					system_prompt: persona.systemPrompt,
-					chain_id: chainId,
+					chain_id: resolvedChainId,
 				};
 
 				const start = performance.now();
@@ -129,7 +136,7 @@ export class CrewAIProtocol implements Protocol {
 					skills: persona.skills,
 					response: {
 						id: crypto.randomUUID(),
-						chainId: chainId ?? crypto.randomUUID(),
+						chainId: resolvedChainId,
 						replyTo: undefined,
 						timestamp: new Date().toISOString(),
 						type: "RESPONSE",
@@ -149,14 +156,21 @@ export class CrewAIProtocol implements Protocol {
 			}),
 		);
 
-		return { results };
+		for (const result of results) {
+			this.onMessage?.(result, resolvedChainId);
+		}
+
+		return { chainId: resolvedChainId, requestId, settled: Promise.resolve() };
 	}
 
 	private async sendCrewRequest(
 		userId: string,
 		message: string,
 		chainId?: string,
-	): Promise<ProtocolResponse> {
+	): Promise<SendResult> {
+		const resolvedChainId = chainId ?? crypto.randomUUID();
+		const requestId = crypto.randomUUID();
+
 		log.info("crewai", "crew_start", { mode: "crew" });
 		this.onEvent?.({
 			agentName: "CrewAI",
@@ -164,7 +178,7 @@ export class CrewAIProtocol implements Protocol {
 			detail: "sending to CrewAI (crew mode)",
 		});
 
-		const body: CrewRunRequest = { message, chain_id: chainId };
+		const body: CrewRunRequest = { message, chain_id: resolvedChainId };
 		const start = performance.now();
 
 		let crewResp: CrewRunResponse;
@@ -184,10 +198,16 @@ export class CrewAIProtocol implements Protocol {
 			const durationMs = performance.now() - start;
 			const errorMsg = err instanceof Error ? err.message : String(err);
 			log.error("crewai", "crew_error", { error: errorMsg });
+			const errorResults = this.personas.map((p) =>
+				this.errorResult(p, userId, errorMsg, durationMs),
+			);
+			for (const result of errorResults) {
+				this.onMessage?.(result, resolvedChainId);
+			}
 			return {
-				results: this.personas.map((p) =>
-					this.errorResult(p, userId, errorMsg, durationMs),
-				),
+				chainId: resolvedChainId,
+				requestId,
+				settled: Promise.resolve(),
 			};
 		}
 
@@ -202,7 +222,7 @@ export class CrewAIProtocol implements Protocol {
 				skills: persona?.skills ?? [],
 				response: {
 					id: crypto.randomUUID(),
-					chainId: chainId ?? crypto.randomUUID(),
+					chainId: resolvedChainId,
 					replyTo: undefined,
 					timestamp: new Date().toISOString(),
 					type: "RESPONSE" as const,
@@ -226,7 +246,11 @@ export class CrewAIProtocol implements Protocol {
 			totalDurationMs: Math.round(crewResp.total_duration_ms),
 		});
 
-		return { results };
+		for (const result of results) {
+			this.onMessage?.(result, resolvedChainId);
+		}
+
+		return { chainId: resolvedChainId, requestId, settled: Promise.resolve() };
 	}
 
 	private errorResult(

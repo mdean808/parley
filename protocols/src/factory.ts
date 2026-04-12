@@ -1,4 +1,8 @@
-import type { Protocol, ProtocolEventHandler } from "core/types";
+import type {
+	Protocol,
+	ProtocolEventHandler,
+	ProtocolMessageHandler,
+} from "core/types";
 import { A2AProtocol } from "./a2a/index.ts";
 import { createAgentPersonas, getA2AUrls } from "./agents.ts";
 import { ClaudeCodeProtocol } from "./claude-code/index.ts";
@@ -10,6 +14,7 @@ export type ProtocolId = string;
 
 export interface ProtocolOptions {
 	onEvent?: ProtocolEventHandler;
+	onMessage?: ProtocolMessageHandler;
 }
 
 export interface ProtocolRegistration {
@@ -59,6 +64,7 @@ registerProtocol("v2", {
 		return new DefaultProtocolV2({
 			personas,
 			onEvent: options?.onEvent,
+			onMessage: options?.onMessage,
 		});
 	},
 });
@@ -68,14 +74,15 @@ registerProtocol("simple", {
 	description: "direct chat, multi-agent, no overhead",
 	create: (options) => {
 		const personas = createAgentPersonas();
-		return new SimpleProtocol(personas, options?.onEvent);
+		return new SimpleProtocol(personas, options?.onEvent, options?.onMessage);
 	},
 });
 
 registerProtocol("claude-code", {
 	label: "Claude Code",
 	description: "Claude Code CLI, single-agent agentic baseline",
-	create: (options) => new ClaudeCodeProtocol(options?.onEvent),
+	create: (options) =>
+		new ClaudeCodeProtocol(options?.onEvent, undefined, options?.onMessage),
 });
 
 registerProtocol("a2a", {
@@ -87,6 +94,7 @@ registerProtocol("a2a", {
 			personas,
 			{ agentUrls: getA2AUrls() },
 			options?.onEvent,
+			options?.onMessage,
 		);
 	},
 });
@@ -103,6 +111,7 @@ registerProtocol("crewai", {
 				mode: (process.env.CREWAI_MODE as "single" | "crew") ?? "single",
 			},
 			options?.onEvent,
+			options?.onMessage,
 		);
 	},
 });

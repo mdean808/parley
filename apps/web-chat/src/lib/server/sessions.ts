@@ -1,5 +1,10 @@
-import type { Protocol, ProtocolAgentInfo, ProtocolEvent } from "core/types";
 import { encode } from "@toon-format/toon";
+import type {
+	AgentResult,
+	Protocol,
+	ProtocolAgentInfo,
+	ProtocolEvent,
+} from "core/types";
 import { createProtocol } from "protocols/factory";
 
 export interface ChatStreamMessage {
@@ -28,8 +33,13 @@ export type ChatStreamEvent =
 			meta?: ChatStreamMeta;
 	  }
 	| {
-			type: "results";
-			data: unknown;
+			type: "agent_result";
+			result: AgentResult;
+			chainId: string;
+	  }
+	| {
+			type: "request_toon";
+			requestToon: string;
 	  }
 	| {
 			type: "error";
@@ -158,7 +168,16 @@ export async function createSession(
 		}
 	};
 
-	const protocol = createProtocol(protocolId, { onEvent });
+	const onMessage = (result: AgentResult, chainId: string) => {
+		console.log(
+			`[chat] [${result.agentName}] result on chain=${chainId.slice(0, 8)}`,
+		);
+		if (session) {
+			emitEvent(session, { type: "agent_result", result, chainId });
+		}
+	};
+
+	const protocol = createProtocol(protocolId, { onEvent, onMessage });
 	const { userId, agents } = await protocol.initialize(userName);
 
 	// Extract v2 internals (store, agents) — no-op for other protocols

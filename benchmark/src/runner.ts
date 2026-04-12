@@ -1,6 +1,7 @@
 import { MODEL } from "core/config";
 import { computeCost } from "core/cost";
 import type { AgentResult, Protocol } from "core/types";
+import { collectSendRequest, type ResultCollector } from "./collect.ts";
 import { evaluateRound, evaluateScenario } from "./judge.ts";
 import type {
 	JudgeConfig,
@@ -17,6 +18,7 @@ import type {
 	ScenarioConfig,
 } from "./types.ts";
 
+export { collectSendRequest, ResultCollector } from "./collect.ts";
 export { runMultiRound } from "./multi-round.ts";
 
 function toJudgeRoundData(
@@ -150,13 +152,20 @@ export async function runScenario(
 	scenario: ScenarioConfig,
 	judgeConfig?: JudgeConfig,
 	onPhase?: (phase: string) => void,
+	collector?: ResultCollector,
 ): Promise<ProtocolRunResult> {
 	const { userId } = await protocol.initialize("BenchUser");
 	const chainId = crypto.randomUUID();
 
 	// Delegate to multi-round runner if configured
 	if (scenario.multiRound && scenario.multiRound.rounds > 1) {
-		const mr = await runMultiRound(scenario, protocol, userId, chainId);
+		const mr = await runMultiRound(
+			scenario,
+			protocol,
+			userId,
+			chainId,
+			collector,
+		);
 		const mrError = mr.cumulative.error;
 		// Convert MultiRoundResult to ProtocolRunResult
 		const rounds: RoundResult[] = mr.rounds.map((rm) => {
@@ -270,9 +279,21 @@ export async function runScenario(
 		const prompt = scenario.rounds[i].prompt;
 		const roundStart = performance.now();
 
-		let results: Awaited<ReturnType<typeof protocol.sendRequest>>["results"];
+		let results: AgentResult[];
 		try {
-			({ results } = await protocol.sendRequest(userId, prompt, chainId));
+			if (collector) {
+				results = await collectSendRequest(
+					protocol,
+					collector,
+					userId,
+					prompt,
+					chainId,
+				);
+			} else {
+				// Fallback: no collector, send and get empty results
+				await protocol.sendRequest(userId, prompt, chainId);
+				results = [];
+			}
 		} catch (err) {
 			roundError = `Round ${i + 1} failed: ${err instanceof Error ? err.message : String(err)}`;
 			break;

@@ -5,7 +5,8 @@ import type {
 	Protocol,
 	ProtocolEventHandler,
 	ProtocolInit,
-	ProtocolResponse,
+	ProtocolMessageHandler,
+	SendResult,
 } from "core/types";
 
 interface ClaudeCodeOutput {
@@ -27,10 +28,16 @@ export class ClaudeCodeProtocol implements Protocol {
 	private readonly sessions = new Map<string, string>();
 	private readonly onEvent?: ProtocolEventHandler;
 	private readonly model: string;
+	private readonly onMessage?: ProtocolMessageHandler;
 
-	constructor(onEvent?: ProtocolEventHandler, model?: string) {
+	constructor(
+		onEvent?: ProtocolEventHandler,
+		model?: string,
+		onMessage?: ProtocolMessageHandler,
+	) {
 		this.onEvent = onEvent;
 		this.model = model ?? MODEL;
+		this.onMessage = onMessage;
 	}
 
 	initialize(userName: string): ProtocolInit {
@@ -45,7 +52,7 @@ export class ClaudeCodeProtocol implements Protocol {
 		_userId: string,
 		message: string,
 		chainId?: string,
-	): Promise<ProtocolResponse> {
+	): Promise<SendResult> {
 		this.onEvent?.({
 			agentName: "Claude Code",
 			type: "tool_use",
@@ -79,9 +86,11 @@ export class ClaudeCodeProtocol implements Protocol {
 		}
 
 		const output: ClaudeCodeOutput = JSON.parse(stdout);
+		const resolvedChainId = chainId ?? crypto.randomUUID();
+		const requestId = crypto.randomUUID();
 
-		if (chainId && output.session_id) {
-			this.sessions.set(chainId, output.session_id);
+		if (output.session_id) {
+			this.sessions.set(resolvedChainId, output.session_id);
 		}
 
 		if (output.is_error) {
@@ -98,7 +107,7 @@ export class ClaudeCodeProtocol implements Protocol {
 			skills: ["general"],
 			response: {
 				id: crypto.randomUUID(),
-				chainId: chainId ?? crypto.randomUUID(),
+				chainId: resolvedChainId,
 				replyTo: undefined,
 				timestamp: new Date().toISOString(),
 				type: "RESPONSE",
@@ -115,6 +124,8 @@ export class ClaudeCodeProtocol implements Protocol {
 			cost: output.total_cost_usd,
 		};
 
-		return { results: [result] };
+		this.onMessage?.(result, resolvedChainId);
+
+		return { chainId: resolvedChainId, requestId, settled: Promise.resolve() };
 	}
 }

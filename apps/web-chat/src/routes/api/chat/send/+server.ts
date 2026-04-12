@@ -13,21 +13,22 @@ export const POST: RequestHandler = async ({ request }) => {
 		return error(404, "Session not found");
 	}
 
-	// Fire-and-forget: emit results via session event bus when done
-	const start = performance.now();
+	// Fire-and-forget: results arrive via onMessage → SSE
 	session.protocol
 		.sendRequest(session.userId, message, session.chainId)
-		.then((response) => {
-			const durationMs = Math.round(performance.now() - start);
-			console.log(
-				`[chat] response complete: agents=[${response.results.map((r) => r.agentName).join(", ")}] duration=${durationMs}ms`,
-			);
-			const event: ChatStreamEvent = { type: "results", data: response };
-			for (const listener of session.listeners) {
-				try {
-					listener(event);
-				} catch {
-					// ignore
+		.then(({ requestToon }) => {
+			// Emit requestToon so the frontend can display it on the user message
+			if (requestToon) {
+				const event: ChatStreamEvent = {
+					type: "request_toon",
+					requestToon,
+				};
+				for (const listener of session.listeners) {
+					try {
+						listener(event);
+					} catch {
+						// ignore
+					}
 				}
 			}
 		})

@@ -1,5 +1,5 @@
 import * as readline from "node:readline/promises";
-import type { ProtocolEvent } from "core/types";
+import type { AgentResult, ProtocolEvent } from "core/types";
 import {
 	createProtocol,
 	getProtocolIds,
@@ -10,7 +10,6 @@ import {
 	agentStats,
 	agentThought,
 	renderMarkdown,
-	summaryBlock,
 } from "./display.ts";
 
 if (!process.env.ANTHROPIC_API_KEY) {
@@ -88,7 +87,13 @@ const choice = await selectProtocol(protocolOptions);
 
 const onEvent = (event: ProtocolEvent) => agentThought(event);
 
-const protocol = createProtocol(protocolIds[choice], { onEvent });
+const onMessage = (result: AgentResult, _chainId: string) => {
+	console.log(agentHeader(result.agentName, result.skills));
+	console.log(renderMarkdown(result.response.payload));
+	console.log(agentStats(result.usage, result.durationMs, result.model));
+};
+
+const protocol = createProtocol(protocolIds[choice], { onEvent, onMessage });
 
 console.log(`\nUsing: ${protocolOptions[choice].label}\n`);
 
@@ -118,22 +123,10 @@ while (true) {
 
 	if (!trimmed) continue;
 
-	const { results } = await protocol.sendRequest(
-		userId,
-		trimmed,
-		conversationChainId,
-	);
-
-	if (results.length === 0) {
-		console.log("\nNo agents had relevant skills for this request.\n");
-		continue;
-	}
-
-	for (const result of results) {
-		console.log(agentHeader(result.agentName, result.skills));
-		console.log(renderMarkdown(result.response.payload));
-		console.log(agentStats(result.usage, result.durationMs, result.model));
-	}
-
-	console.log(summaryBlock(results));
+	// Fire-and-forget — results print via onMessage as they arrive
+	protocol.sendRequest(userId, trimmed, conversationChainId).catch((err) => {
+		console.error(
+			`\nError: ${err instanceof Error ? err.message : String(err)}\n`,
+		);
+	});
 }

@@ -1,5 +1,6 @@
 import { computeCost } from "core/cost";
-import type { Protocol } from "core/types";
+import type { AgentResult, Protocol } from "core/types";
+import { collectSendRequest, type ResultCollector } from "./collect.ts";
 import type {
 	MultiRoundResult,
 	RoundMetrics,
@@ -11,6 +12,7 @@ export async function runMultiRound(
 	protocol: Protocol,
 	userId: string,
 	chainId: string,
+	collector?: ResultCollector,
 ): Promise<MultiRoundResult> {
 	const config = scenario.multiRound as NonNullable<typeof scenario.multiRound>;
 	const followUp =
@@ -36,9 +38,20 @@ export async function runMultiRound(
 		}
 
 		const roundStart = performance.now();
-		let results: Awaited<ReturnType<typeof protocol.sendRequest>>["results"];
+		let results: AgentResult[];
 		try {
-			({ results } = await protocol.sendRequest(userId, prompt, chainId));
+			if (collector) {
+				results = await collectSendRequest(
+					protocol,
+					collector,
+					userId,
+					prompt,
+					chainId,
+				);
+			} else {
+				await protocol.sendRequest(userId, prompt, chainId);
+				results = [];
+			}
 		} catch (err) {
 			roundError = `Round ${i + 1} failed: ${err instanceof Error ? err.message : String(err)}`;
 			break;
