@@ -54,6 +54,7 @@ function handleStreamEvent(event: ChatStreamEvent) {
 					usage: meta?.usage,
 					model: meta?.model,
 					durationMs: meta?.durationMs,
+					toonMessage: message.toon,
 					timestamp: message.timestamp,
 				});
 			} else if (message.type === "ACK" || message.type === "PROCESS") {
@@ -63,6 +64,7 @@ function handleStreamEvent(event: ChatStreamEvent) {
 					messageType: message.type,
 					content: message.payload,
 					agentName,
+					toonMessage: message.toon,
 					timestamp: message.timestamp,
 				});
 			}

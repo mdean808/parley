@@ -31,6 +31,7 @@ export interface ChatStreamMessage {
 	payload: string;
 	chainId: string;
 	timestamp: string;
+	toon?: string;
 }
 
 export interface ChatStreamMeta {

@@ -1,4 +1,5 @@
 import type { Protocol, ProtocolAgentInfo, ProtocolEvent } from "core/types";
+import { encode } from "@toon-format/toon";
 import { createProtocol } from "protocols/factory";
 
 export interface ChatStreamMessage {
@@ -7,6 +8,7 @@ export interface ChatStreamMessage {
 	payload: string;
 	chainId: string;
 	timestamp: string;
+	toon?: string;
 }
 
 export interface ChatStreamMeta {
@@ -107,6 +109,7 @@ function buildEnrichedEvent(
 						payload: msg.payload,
 						chainId: msg.chainId,
 						timestamp: msg.timestamp,
+						toon: encode({ ...msg, replyTo: msg.replyTo ?? null }),
 					};
 
 					// For RESPONSE, attach usage/model/duration from agentMeta

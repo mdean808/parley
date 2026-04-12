@@ -56,8 +56,8 @@ function shortId(id: string): string {
 				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
 			</svg>
 			{#if showPayload}
-				<div class="absolute left-6 top-0 z-50 w-[32rem] max-h-80 overflow-auto bg-zinc-800 border border-zinc-600 rounded-lg p-3 shadow-xl">
-					<pre class="text-xs text-zinc-300 whitespace-pre-wrap font-mono">{message.toonMessage}</pre>
+				<div class="absolute left-6 top-0 z-50 w-[32rem] max-h-80 overflow-auto bg-zinc-800 border border-zinc-600 rounded-lg p-3 shadow-xl text-left">
+					<pre class="text-xs text-zinc-300 whitespace-pre-wrap font-mono text-left">{message.toonMessage}</pre>
 				</div>
 			{/if}
 		</button>
