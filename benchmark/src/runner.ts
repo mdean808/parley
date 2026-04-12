@@ -149,6 +149,7 @@ export async function runScenario(
 	protocolId: ProtocolId,
 	scenario: ScenarioConfig,
 	judgeConfig?: JudgeConfig,
+	onPhase?: (phase: string) => void,
 ): Promise<ProtocolRunResult> {
 	const { userId } = await protocol.initialize("BenchUser");
 	const chainId = crypto.randomUUID();
@@ -187,14 +188,13 @@ export async function runScenario(
 		});
 		// Per-round judge evaluation for multi-round scenarios
 		if (judgeConfig?.enabled && rounds.length > 0 && !mrError) {
+			onPhase?.("judge");
 			const roundData = toJudgeRoundData(rounds);
 			const judgeUsage: JudgeUsage = {
 				inputTokens: 0,
 				outputTokens: 0,
 				model:
-					judgeConfig.model ??
-					process.env.JUDGE_MODEL ??
-					"claude-sonnet-4-5-20250929",
+					judgeConfig.model ?? process.env.JUDGE_MODEL ?? "claude-sonnet-4-6",
 				durationMs: 0,
 				callCount: 0,
 			};
@@ -325,6 +325,7 @@ export async function runScenario(
 
 	// Single-round judge evaluation (skip if we errored before any rounds)
 	if (judgeConfig?.enabled && rounds.length > 0 && !roundError) {
+		onPhase?.("judge");
 		const roundData = toJudgeRoundData(rounds);
 		const judgeResult = await evaluateScenario(roundData, judgeConfig);
 		if (rounds.length > 0) {

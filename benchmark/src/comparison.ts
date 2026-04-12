@@ -1,6 +1,7 @@
 import { MODEL } from "core/config";
 import { createProtocol, getProtocolIds } from "protocols/factory";
 import type { JudgeConfig } from "./judge-types.ts";
+import { runPool } from "./pool.ts";
 import { runScenario } from "./runner.ts";
 import {
 	loadAllScenarios,
@@ -41,6 +42,22 @@ export interface ComparisonReport {
 	aggregate: AggregateComparison;
 }
 
+export type ProgressEvent =
+	| {
+			type: "start";
+			scenarioName: string;
+			protocolId: string;
+			totalTasks: number;
+	  }
+	| { type: "phase"; scenarioName: string; protocolId: string; phase: string }
+	| {
+			type: "complete";
+			scenarioName: string;
+			protocolId: string;
+			durationMs: number;
+			error?: string;
+	  };
+
 export interface ComparisonOptions {
 	scenarios?: string[];
 	categories?: string[];
@@ -49,7 +66,8 @@ export interface ComparisonOptions {
 	model?: string;
 	outputDir?: string;
 	judgeConfig?: JudgeConfig;
-	onProgress?: (msg: string) => void;
+	concurrency?: number;
+	onProgress?: (event: ProgressEvent) => void;
 }
 
 function toScenarioConfig(s: Scenario): ScenarioConfig {
@@ -91,67 +109,100 @@ export async function runComparison(
 		scenarios = await loadAllScenarios();
 	}
 
-	const scenarioComparisons: ScenarioComparison[] = [];
+	const concurrency = options.concurrency ?? 3;
 
-	for (let si = 0; si < scenarios.length; si++) {
-		const scenario = scenarios[si];
-		const scenarioConfig = toScenarioConfig(scenario);
-		const results: Record<string, ProtocolRunResult> = {};
+	interface TaskResult {
+		scenarioIndex: number;
+		protocolId: string;
+		result: ProtocolRunResult;
+	}
 
-		for (const pid of protocolIds) {
-			progress(`[${si + 1}/${scenarios.length}] ${scenario.name} -- ${pid}...`);
-
+	const totalTasks = scenarios.length * protocolIds.length;
+	const tasks = scenarios.flatMap((scenario, si) =>
+		protocolIds.map((pid) => async (): Promise<TaskResult> => {
+			const scenarioConfig = toScenarioConfig(scenario);
+			progress({
+				type: "start",
+				scenarioName: scenario.name,
+				protocolId: pid,
+				totalTasks,
+			});
+			const taskStart = performance.now();
 			try {
 				const protocol = createProtocol(pid);
-				if (judgeConfig.enabled) {
-					progress(
-						`[${si + 1}/${scenarios.length}] ${scenario.name} -- ${pid} judging...`,
-					);
-				}
 				const result = await runScenario(
 					protocol,
 					pid,
 					scenarioConfig,
 					judgeConfig,
+					(phase) =>
+						progress({
+							type: "phase",
+							scenarioName: scenario.name,
+							protocolId: pid,
+							phase,
+						}),
 				);
-
-				results[pid] = result;
+				progress({
+					type: "complete",
+					scenarioName: scenario.name,
+					protocolId: pid,
+					durationMs: performance.now() - taskStart,
+				});
+				return { scenarioIndex: si, protocolId: pid, result };
 			} catch (err) {
 				const msg = err instanceof Error ? err.message : String(err);
-				progress(
-					`[${si + 1}/${scenarios.length}] ${scenario.name} -- ${pid} ERROR: ${msg}`,
-				);
-				results[pid] = {
+				progress({
+					type: "complete",
+					scenarioName: scenario.name,
 					protocolId: pid,
-					scenarioName: scenarioConfig.name,
-					rounds: [],
-					aggregate: {
-						totalInputTokens: 0,
-						totalOutputTokens: 0,
-						totalCost: 0,
-						totalDurationMs: 0,
-						averageAgentsPerRound: 0,
-						roundCount: 0,
-					},
-					metrics: {
-						passed: false,
-						tokensPerSuccess: null,
-						latencyPerSuccess: null,
-						costPerSuccess: null,
-						coordinationEfficiency: 0,
-						multiAgentContribution: 0,
-						participationBalance: 0,
-					},
+					durationMs: performance.now() - taskStart,
 					error: msg,
+				});
+				return {
+					scenarioIndex: si,
+					protocolId: pid,
+					result: {
+						protocolId: pid,
+						scenarioName: scenarioConfig.name,
+						rounds: [],
+						aggregate: {
+							totalInputTokens: 0,
+							totalOutputTokens: 0,
+							totalCost: 0,
+							totalDurationMs: 0,
+							averageAgentsPerRound: 0,
+							roundCount: 0,
+						},
+						metrics: {
+							passed: false,
+							tokensPerSuccess: null,
+							latencyPerSuccess: null,
+							costPerSuccess: null,
+							coordinationEfficiency: 0,
+							multiAgentContribution: 0,
+							participationBalance: 0,
+						},
+						error: msg,
+					},
 				};
 			}
-		}
+		}),
+	);
 
-		scenarioComparisons.push({
-			scenario,
-			results,
-		});
-	}
+	const taskResults = await runPool(tasks, concurrency);
+
+	const scenarioComparisons: ScenarioComparison[] = scenarios.map(
+		(scenario, si) => {
+			const results: Record<string, ProtocolRunResult> = {};
+			for (const tr of taskResults) {
+				if (tr.scenarioIndex === si) {
+					results[tr.protocolId] = tr.result;
+				}
+			}
+			return { scenario, results };
+		},
+	);
 
 	// Compute aggregate metrics per protocol
 	const protocolMetrics: Record<string, ProtocolAggregateMetrics> = {};

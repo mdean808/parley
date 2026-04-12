@@ -111,8 +111,7 @@ export async function evaluateScenario(
 	rounds: { userMessage: string; results: AgentResult[] }[],
 	config: JudgeConfig,
 ): Promise<JudgeResult> {
-	const model =
-		config.model ?? process.env.JUDGE_MODEL ?? "claude-sonnet-4-5-20250929";
+	const model = config.model ?? process.env.JUDGE_MODEL ?? "claude-sonnet-4-6";
 
 	const judgeClient = new Anthropic();
 	const userPrompt = buildJudgeUserPrompt(rounds);
@@ -155,8 +154,7 @@ export async function evaluateRound(
 	targetRoundIndex: number,
 	config: JudgeConfig,
 ): Promise<{ evaluation: JudgeEvaluation; usage: JudgeUsage }> {
-	const model =
-		config.model ?? process.env.JUDGE_MODEL ?? "claude-sonnet-4-5-20250929";
+	const model = config.model ?? process.env.JUDGE_MODEL ?? "claude-sonnet-4-6";
 
 	const judgeClient = new Anthropic();
 	const userPrompt = buildJudgeRoundPrompt(conversationSoFar, targetRoundIndex);

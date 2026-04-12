@@ -1,0 +1,17 @@
+{
+	"id": "emergent-coordination",
+	"name": "Emergent Coordination",
+	"category": "coordination",
+	"topic": "Tasks requiring agents to discover cross-domain dependencies mid-task",
+	"rounds": [
+		{
+			"prompt": "Write a Python simulation of predator-prey population dynamics using the Lotka-Volterra equations. The simulation should model a realistic ecosystem — use real-world parameter values for a specific predator-prey pair, explain why those values are ecologically valid, and present the results as a compelling narrative with visualizations described in prose."
+		},
+		{
+			"prompt": "A city is proposing a new zoning policy to increase urban density by 40%. Write a detailed technical impact analysis that includes: a Monte Carlo simulation in Python to model traffic flow changes, the actual demographic and infrastructure research for a mid-size US city to ground the parameters, and a persuasive executive summary that a non-technical city council member would find compelling."
+		},
+		{
+			"prompt": "Design a memorial for climate change displacement. The proposal needs three things that aren't obvious at first: the structural engineering constraints for an outdoor installation (materials, load bearing, weather resistance), historical research on specific displacement events and population figures to inscribe, and an artist's statement that connects the physical form to the human experience of loss."
+		}
+	]
+}

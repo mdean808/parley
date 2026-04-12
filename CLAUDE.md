@@ -11,7 +11,7 @@ Implementation of an agent-to-agent communication protocol with five protocol va
 - **Install**: `bun install`
 - **CLI Chat**: `bun run chat`
 - **Web Chat**: `bun run web`
-- **Benchmark**: `bun run bench [--protocols v2,simple] [--scenarios id1,id2] [--category general] [--baseline simple] [--output dir] [--no-judge] [--judge-model model] [--no-report]`
+- **Benchmark**: `bun run bench [--protocols v2,simple] [--scenarios id1,id2] [--category general] [--baseline simple] [--output dir] [--no-judge] [--judge-model model] [--no-report] [--concurrency N]`
 - **Lint**: `bun run lint`
 - **Format**: `bun run format`
 - **Start external servers**: `./start-agents.sh` (requires `jq`; starts CrewAI + A2A servers from `agents.json`)
@@ -22,7 +22,7 @@ No test runner is configured yet.
 
 - `ANTHROPIC_API_KEY` — required, set in `.env`
 - `MODEL` — Claude model to use for agents (default: `claude-haiku-4-5-20251001`)
-- `JUDGE_MODEL` — Claude model for LLM judge (default: `claude-sonnet-4-5-20250929`)
+- `JUDGE_MODEL` — Claude model for LLM judge (default: `claude-sonnet-4-6`)
 - `LOG_LEVEL` — logging verbosity: `DEBUG`, `INFO`, `WARN`, `ERROR` (default: `INFO`)
 - `A2A_{KEY}_URL` — Override A2A agent URL per agent (key derived from agent name before ` - `, uppercased; e.g. `A2A_ATLAS_URL`). Defaults to `http://localhost:{port}` from `agents.json`.
 - `CREWAI_URL` — CrewAI FastAPI wrapper URL (default: `http://localhost:8000`)

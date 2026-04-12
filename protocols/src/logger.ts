@@ -32,10 +32,25 @@ interface LogEntry {
 }
 
 const entries: LogEntry[] = [];
+let flushInProgress: Promise<void> | null = null;
+let flushQueued = false;
 
-/** Writes all accumulated log entries to the log file. */
+/** Writes all accumulated log entries to the log file, serializing concurrent calls. */
 async function flush(): Promise<void> {
-	await writeFile(LOG_FILE, `${JSON.stringify(entries, null, 2)}\n`);
+	if (flushInProgress) {
+		flushQueued = true;
+		return;
+	}
+	flushInProgress = writeFile(
+		LOG_FILE,
+		`${JSON.stringify(entries, null, 2)}\n`,
+	);
+	await flushInProgress;
+	flushInProgress = null;
+	if (flushQueued) {
+		flushQueued = false;
+		flush();
+	}
 }
 
 /**
