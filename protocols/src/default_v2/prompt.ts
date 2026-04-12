@@ -52,7 +52,6 @@ Check for these reserved headers on incoming REQUESTs:
 
 - \`ttl\` — Expiry timestamp. Do not begin work if expired. If TTL expires mid-PROCESS, stop and send ERROR.
 - \`exclusivity\` — If \`true\`, you must CLAIM before proceeding.
-- \`priority\` — Implementation-defined.
 
 ### Versioning
 
