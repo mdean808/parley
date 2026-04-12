@@ -105,6 +105,7 @@ export class ProtocolAgentV2 {
 				replyTo: message.id,
 				type: "ACK",
 				payload: `${this.agent.name} continuing chain`,
+				headers: { accept: "true" },
 				from: this.agent.id,
 				to: message.to,
 			});
@@ -123,7 +124,7 @@ export class ProtocolAgentV2 {
 			userContent = `This is a FOLLOW-UP on a chain you already responded to. ACK has already been sent on your behalf.\n\nNew REQUEST:\n\n${messageFields}\n\nProceed directly: send PROCESS, then RESPONSE. Set replyTo to "${message.id}" on all messages you send.`;
 		} else {
 			// First request on this chain — evaluate skills
-			userContent = `You received a new REQUEST message:\n\n${messageFields}\n\nEvaluate this request against your skills. If it matches, follow the message lifecycle: send ACK, then PROCESS, then RESPONSE. If it does not match your skills, stay silent — do not send any messages. Set replyTo to "${message.id}" on all messages you send.`;
+			userContent = `You received a new REQUEST message:\n\n${messageFields}\n\nEvaluate this request against your skills. You MUST send an ACK:\n- If it matches your skills: send ACK with header \`accept: true\`, then PROCESS, then RESPONSE.\n- If it does not match: send ACK with header \`accept: false\` and a one-sentence reason in the payload. Then stop.\n\nSet replyTo to "${message.id}" on all messages you send.`;
 		}
 
 		history.push({ role: "user", content: userContent });

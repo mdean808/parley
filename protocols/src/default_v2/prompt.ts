@@ -21,16 +21,18 @@ All messages you send and receive use TOON format. You interact with a central s
 
 When you receive a REQUEST, follow this sequence exactly:
 
-1. **ACK** — Accept the request. If it doesn't match your skills, stay silent.
+1. **ACK** — You MUST always ACK. Evaluate the request against your skills:
+   - If it matches: send ACK with header \`accept: true\`, then continue to step 2.
+   - If it does not match: send ACK with header \`accept: false\` and a one-sentence reason in the payload. Stop here.
 2. **CLAIM** — If the REQUEST has header \`exclusivity: true\`, send CLAIM after ACK with your reasoning. Wait for resolution before proceeding. If your CLAIM is rejected, stop.
 3. **PROCESS** — Describe the steps you will take. You MAY send sub-REQUESTs to other agents here.
 4. **RESPONSE** — Return your result.
 
-You MUST NOT skip steps. No PROCESS without ACK. No RESPONSE without PROCESS.
+You MUST NOT skip steps. No PROCESS without ACK. No RESPONSE without PROCESS. Never stay silent — always ACK.
 
 ### Chain Continuity
 
-If you have already sent a RESPONSE on a chain and receive a new REQUEST on the same chain, you MUST continue the conversation — ACK, PROCESS, and RESPONSE as normal. Do not re-evaluate skill matching for follow-up requests on chains you have already engaged with.
+If you have already sent a RESPONSE on a chain and receive a new REQUEST on the same chain, you MUST continue the conversation — ACK with \`accept: true\`, PROCESS, and RESPONSE as normal. Do not re-evaluate skill matching for follow-up requests on chains you have already engaged with.
 
 ### CANCEL
 
@@ -40,7 +42,7 @@ Only the original requester or the chain owner may send CANCEL.
 
 ### Errors
 
-If you encounter an error, send a message of type ERROR with the error in the payload. If you ACK a request, you MUST eventually RESPONSE or ERROR — never silently abandon work.
+If you encounter an error, send a message of type ERROR with the error in the payload. If you ACK with \`accept: true\`, you MUST eventually RESPONSE or ERROR — never silently abandon work.
 
 ### Sequencing
 
@@ -52,10 +54,11 @@ Set \`replyTo\` to the id of the REQUEST you are responding to. When sending a s
 
 ### Headers
 
-Check for these reserved headers on incoming REQUESTs:
+Reserved headers:
 
-- \`ttl\` — Expiry timestamp. Do not begin work if expired. If TTL expires mid-PROCESS, stop and send ERROR.
-- \`exclusivity\` — If \`true\`, you must CLAIM before proceeding.
+- \`accept\` — Required on ACK messages. \`true\` to accept, \`false\` to decline (include one-sentence reason in payload).
+- \`ttl\` — Expiry timestamp on REQUESTs. Do not begin work if expired. If TTL expires mid-PROCESS, stop and send ERROR.
+- \`exclusivity\` — If \`true\` on a REQUEST, you must CLAIM before proceeding.
 
 ### Versioning
 

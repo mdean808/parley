@@ -222,12 +222,14 @@ All messages you send and receive use TOON format. You interact with a central s
 
 When you receive a REQUEST, follow this sequence exactly:
 
-1. **ACK** — Accept the request. If it doesn't match your skills, stay silent.
+1. **ACK** — You MUST always ACK. Evaluate the request against your skills:
+   - If it matches: send ACK with header `accept: true`, then continue to step 2.
+   - If it does not match: send ACK with header `accept: false` and a one-sentence reason in the payload. Stop here.
 2. **CLAIM** — If the REQUEST has header `exclusivity: true`, send CLAIM after ACK with your reasoning. Wait for resolution before proceeding. If your CLAIM is rejected, stop.
 3. **PROCESS** — Describe the steps you will take. You MAY send sub-REQUESTs to other agents here.
 4. **RESPONSE** — Return your result.
 
-You MUST NOT skip steps. No PROCESS without ACK. No RESPONSE without PROCESS.
+You MUST NOT skip steps. No PROCESS without ACK. No RESPONSE without PROCESS. Never stay silent — always ACK.
 
 ### CANCEL
 
@@ -237,7 +239,7 @@ Only the original requester or the chain owner may send CANCEL.
 
 ### Errors
 
-If you encounter an error, send a message of type ERROR with the error in the payload. If you ACK a request, you MUST eventually RESPONSE or ERROR — never silently abandon work.
+If you encounter an error, send a message of type ERROR with the error in the payload. If you ACK with `accept: true`, you MUST eventually RESPONSE or ERROR — never silently abandon work.
 
 ### Sequencing
 
@@ -356,6 +358,7 @@ Headers are key-value string pairs attached to messages. They carry protocol-def
 
 **Reserved Headers**
 
+- **`accept`**: `true` or `false`. Required on ACK messages. `true` means the agent accepts the request and commits to responding. `false` means the agent declines — the payload must contain a concise reason (one sentence).
 - **`ttl`**: A UTC timestamp (ISO 8601) representing the expiry of the chain. Set on the initial REQUEST and inherited by all messages in the chain. Agents receiving a message where the current time exceeds `ttl` must not begin work and should send an ERROR with a timeout reason. Agents mid-PROCESS when TTL expires MUST stop work, send an ERROR, and propagate cancellation to any active sub-chains. When TTL expires, the behavior is equivalent to an implicit CANCEL. The store detects expiry, updates the chain status to `expired`, and agents mid-PROCESS follow the same propagation and cleanup rules as CANCEL. The distinction is that no explicit CANCEL message is sent — agents are expected to check TTL before beginning work and periodically during PROCESS
 - **`exclusivity`**: `true` or `false`. When `true` on a broadcast REQUEST, signals that agents should CLAIM ownership rather than independently proceeding. See Claiming in Extensions.
 
@@ -399,8 +402,8 @@ Messages within a chain follow a defined state lifecycle. Each state transition 
 
 | Current State | Valid Next States | Condition |
 | --- | --- | --- |
-| REQUEST | ACK | Agent accepts the request |
-| REQUEST | (silent) | Agent declines; criteria is implementation-defined |
+| REQUEST | ACK (`accept: true`) | Agent accepts the request |
+| REQUEST | ACK (`accept: false`) | Agent declines with reasoning |
 | ACK | PROCESS | Agent begins work on the request |
 | PROCESS | RESPONSE | Agent completes work |
 | PROCESS | REQUEST | Agent requires delegation or additional information |
@@ -410,10 +413,12 @@ Messages within a chain follow a defined state lifecycle. Each state transition 
 
 ## **Constraints**
 
-- An agent MUST NOT send a RESPONSE without a preceding ACK and PROCESS in the same chain.
-- An agent MUST NOT send PROCESS without first sending ACK.
+- An agent MUST respond to every REQUEST with an ACK. Staying silent is not permitted.
+- An agent MUST NOT send a RESPONSE without a preceding ACK (`accept: true`) and PROCESS in the same chain.
+- An agent MUST NOT send PROCESS without first sending ACK (`accept: true`).
 - A REQUEST initiated from within PROCESS (for delegation or information gathering) begins its own independent state lifecycle, tracked by its own `replyTo` reference.
-- An agent that has sent ACK MUST eventually send either a RESPONSE or an error. It MUST NOT silently abandon work after ACK.
+- An agent that has sent ACK with `accept: true` MUST eventually send either a RESPONSE or an ERROR. It MUST NOT silently abandon work after accepting.
+- An agent that has sent ACK with `accept: false` MUST NOT send any further messages on the chain.
 - A message MUST be sent in TOON format.
 - An agent MUST NOT send CLAIM without a preceding ACK in the same chain.
 - An agent MUST NOT send CLAIM on a REQUEST that does not carry the `exclusivity: true` header.
@@ -440,17 +445,22 @@ Messages within a chain follow a defined state lifecycle. Each state transition 
 
 ## ACK
 
-1. Upon receiving a REQUEST, an agent MUST either respond with an ACK or remain silent. The criteria for this decision is implementation-defined.
-2. Increments `sequence` by `1`.
-3. Agent sends a message of type `ACK`.
-4. Message is stored via Store Message.
+1. Upon receiving a REQUEST, an agent MUST respond with an ACK. Agents MUST NOT stay silent.
+2. The agent evaluates the request against its skills. If it matches, the agent sets the header `accept: true`. If it does not match, the agent sets `accept: false` and includes a brief reasoning in the payload (one sentence).
+3. Increments `sequence` by `1`.
+4. Agent sends a message of type `ACK`.
+5. Message is stored via Store Message.
+
+An ACK with `accept: true` commits the agent to eventually send RESPONSE or ERROR. An ACK with `accept: false` ends the agent's participation on the chain — no further messages are expected.
 
 ### Parameters
 
 - **`replyTo`**: the REQUEST message id
 - **`to`**: if the original REQUEST is a broadcast, `*`. if a direct message, `from` + `to` of the REQUEST, excluding the sender. if a channel, `channel` from the REQUEST.
+- **`headers`**: MUST include `accept: true` or `accept: false`
+- **`payload`**: if `accept: false`, a concise reason for declining (one sentence). If `accept: true`, acknowledgement text.
 
-> When multiple agents ACK a single broadcast REQUEST, resolution of which agent(s) proceed is implementation-defined. See Extensions for delegation and collaboration patterns.
+> When multiple agents ACK with `accept: true` on a single broadcast REQUEST, resolution of which agent(s) proceed is implementation-defined. See Extensions for delegation and collaboration patterns.
 > 
 
 ## CLAIM

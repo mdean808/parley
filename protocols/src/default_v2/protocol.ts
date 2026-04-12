@@ -121,7 +121,13 @@ export class DefaultProtocolV2 implements Protocol {
 
 			// Phase A: collect ACKs during the ACK window
 			if (msg.type === "ACK" && msg.replyTo === requestId && !ackWindowClosed) {
-				ackedAgentIds.add(msg.from);
+				const accepted = msg.headers?.accept === "true";
+				if (accepted) {
+					ackedAgentIds.add(msg.from);
+				} else {
+					// ACK with accept: false — agent declined
+					declinedAgentIds.add(msg.from);
+				}
 				closeAckWindowEarly();
 			} else if (
 				// Phase B: collect responses from ACK'd agents
