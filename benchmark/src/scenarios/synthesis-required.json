@@ -5,16 +5,20 @@
 	"topic": "AI startup product pitch",
 	"rounds": [
 		{
-			"prompt": "A startup wants to pitch an AI-powered tool that helps architects design energy-efficient buildings. What does the competitive landscape look like and what market gap could they fill?"
+			"prompt": "A startup wants to pitch an AI-powered tool that helps architects design energy-efficient buildings. What does the competitive landscape look like and what market gap could they fill?",
+			"expectedResponse": "Must describe the competitive landscape with at least two named or clearly characterized competitors, identify their limitations, and propose a specific market gap or differentiation strategy. The analysis should feel grounded in the actual AEC (architecture, engineering, construction) technology market rather than purely hypothetical."
 		},
 		{
-			"prompt": "Draft a compelling narrative hook for the pitch deck — something that makes investors feel the problem before they see the solution."
+			"prompt": "Draft a compelling narrative hook for the pitch deck — something that makes investors feel the problem before they see the solution.",
+			"expectedResponse": "Must provide a narrative opening that creates emotional or intellectual engagement with the problem before introducing the solution. Should be concise and suitable for a pitch deck context. A dry market-size statement alone is insufficient; there must be a human or visceral element."
 		},
 		{
-			"prompt": "What's the minimum viable technical architecture? Outline the key components, models, and data pipeline."
+			"prompt": "What's the minimum viable technical architecture? Outline the key components, models, and data pipeline.",
+			"expectedResponse": "Must describe a technical architecture with identifiable components (data ingestion, model/ML layer, output/recommendation layer), mention at least one specific technical approach or model type, and describe the data pipeline at a high level. Should distinguish between MVP scope and future features."
 		},
 		{
-			"prompt": "Now synthesize all of the above into a single 60-second elevator pitch."
+			"prompt": "Now synthesize all of the above into a single 60-second elevator pitch.",
+			"expectedResponse": "Must be a concise, unified pitch that references the market opportunity, the problem framing, and the technical solution from prior rounds. Should be approximately 60-second length and read as a cohesive narrative rather than a bullet-point summary. Must draw on material from at least two of the three prior rounds."
 		}
 	]
 }

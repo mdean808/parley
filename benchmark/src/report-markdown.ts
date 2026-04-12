@@ -168,9 +168,21 @@ export function generateMarkdownReport(report: ComparisonReport): string {
 		// Pass/Fail + Quality table
 		const hasJudge = Object.values(sc.results).some((r) => r.judge);
 		if (hasJudge || scenarioErrors.length > 0) {
+			const hasExpectation = Object.values(sc.results).some(
+				(r) => r.judge?.aggregate.expectationAlignment != null,
+			);
 			lines.push("#### Evaluation\n");
-			lines.push(`| Protocol | Result | Quality | Multi-Agent Value |`);
-			lines.push(`|----------|--------|---------|-------------------|`);
+			if (hasExpectation) {
+				lines.push(
+					`| Protocol | Result | Quality | Multi-Agent Value | Expectation |`,
+				);
+				lines.push(
+					`|----------|--------|---------|-------------------|-------------|`,
+				);
+			} else {
+				lines.push(`| Protocol | Result | Quality | Multi-Agent Value |`);
+				lines.push(`|----------|--------|---------|-------------------|`);
+			}
 
 			for (const pid of protocolIds) {
 				const r = sc.results[pid];
@@ -182,7 +194,17 @@ export function generateMarkdownReport(report: ComparisonReport): string {
 				const multiAgent = r.judge
 					? fmtScore(r.judge.aggregate.multiAgentValue)
 					: "—";
-				lines.push(`| ${pid} | ${passFail} | ${quality} | ${multiAgent} |`);
+				if (hasExpectation) {
+					const expectation =
+						r.judge?.aggregate.expectationAlignment != null
+							? fmtScore(r.judge.aggregate.expectationAlignment)
+							: "—";
+					lines.push(
+						`| ${pid} | ${passFail} | ${quality} | ${multiAgent} | ${expectation} |`,
+					);
+				} else {
+					lines.push(`| ${pid} | ${passFail} | ${quality} | ${multiAgent} |`);
+				}
 			}
 			lines.push("");
 		}
@@ -323,8 +345,22 @@ export function generateMarkdownReport(report: ComparisonReport): string {
 			if (!anyPerRound) continue;
 
 			lines.push(`### ${sc.scenario.name}\n`);
-			lines.push("| Protocol | Round | Pass | Quality | Multi-Agent Value |");
-			lines.push("|----------|-------|------|---------|-------------------|");
+
+			const appendixHasExpectation = Object.values(sc.results).some((r) =>
+				r?.rounds.some((round) => round.judge?.expectationAlignment != null),
+			);
+
+			if (appendixHasExpectation) {
+				lines.push(
+					"| Protocol | Round | Pass | Quality | Multi-Agent Value | Expectation |",
+				);
+				lines.push(
+					"|----------|-------|------|---------|-------------------|-------------|",
+				);
+			} else {
+				lines.push("| Protocol | Round | Pass | Quality | Multi-Agent Value |");
+				lines.push("|----------|-------|------|---------|-------------------|");
+			}
 
 			for (const pid of protocolIds) {
 				for (const round of sc.results[pid]?.rounds ?? []) {
@@ -332,9 +368,19 @@ export function generateMarkdownReport(report: ComparisonReport): string {
 					const pass = round.judge.pass ? "PASS" : "FAIL";
 					const quality = fmtScore(round.judge.qualityScore);
 					const multiAgent = fmtScore(round.judge.multiAgentValue);
-					lines.push(
-						`| ${pid} | ${round.roundIndex + 1} | ${pass} | ${quality} | ${multiAgent} |`,
-					);
+					if (appendixHasExpectation) {
+						const expectation =
+							round.judge.expectationAlignment != null
+								? fmtScore(round.judge.expectationAlignment)
+								: "—";
+						lines.push(
+							`| ${pid} | ${round.roundIndex + 1} | ${pass} | ${quality} | ${multiAgent} | ${expectation} |`,
+						);
+					} else {
+						lines.push(
+							`| ${pid} | ${round.roundIndex + 1} | ${pass} | ${quality} | ${multiAgent} |`,
+						);
+					}
 				}
 			}
 			lines.push("");

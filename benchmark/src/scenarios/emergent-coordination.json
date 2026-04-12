@@ -5,13 +5,16 @@
 	"topic": "Tasks requiring agents to discover cross-domain dependencies mid-task",
 	"rounds": [
 		{
-			"prompt": "Write a Python simulation of predator-prey population dynamics using the Lotka-Volterra equations. The simulation should model a realistic ecosystem — use real-world parameter values for a specific predator-prey pair, explain why those values are ecologically valid, and present the results as a compelling narrative with visualizations described in prose."
+			"prompt": "Write a Python simulation of predator-prey population dynamics using the Lotka-Volterra equations. The simulation should model a realistic ecosystem — use real-world parameter values for a specific predator-prey pair, explain why those values are ecologically valid, and present the results as a compelling narrative with visualizations described in prose.",
+			"expectedResponse": "Must include Python code that correctly models Lotka-Volterra dynamics, reference a specific predator-prey system with plausible parameter values, and provide some narrative or prose description of the results. Minor code issues are acceptable if the mathematical model is correct and the ecological grounding is present."
 		},
 		{
-			"prompt": "A city is proposing a new zoning policy to increase urban density by 40%. Write a detailed technical impact analysis that includes: a Monte Carlo simulation in Python to model traffic flow changes, the actual demographic and infrastructure research for a mid-size US city to ground the parameters, and a persuasive executive summary that a non-technical city council member would find compelling."
+			"prompt": "A city is proposing a new zoning policy to increase urban density by 40%. Write a detailed technical impact analysis that includes: a Monte Carlo simulation in Python to model traffic flow changes, the actual demographic and infrastructure research for a mid-size US city to ground the parameters, and a persuasive executive summary that a non-technical city council member would find compelling.",
+			"expectedResponse": "Must address all three requested components: a Monte Carlo simulation approach for traffic modeling, city-specific or realistic demographic/infrastructure parameters, and a plain-language executive summary. The simulation need not be fully runnable but must show correct Monte Carlo methodology. The executive summary must be clearly written for a non-technical audience."
 		},
 		{
-			"prompt": "Design a memorial for climate change displacement. The proposal needs three things that aren't obvious at first: the structural engineering constraints for an outdoor installation (materials, load bearing, weather resistance), historical research on specific displacement events and population figures to inscribe, and an artist's statement that connects the physical form to the human experience of loss."
+			"prompt": "Design a memorial for climate change displacement. The proposal needs three things that aren't obvious at first: the structural engineering constraints for an outdoor installation (materials, load bearing, weather resistance), historical research on specific displacement events and population figures to inscribe, and an artist's statement that connects the physical form to the human experience of loss.",
+			"expectedResponse": "Must substantively address all three requested components: engineering/materials considerations, specific historical displacement events or data, and an expressive artist's statement. Each component should contain at least one concrete detail (a named material, a named event, a specific emotional connection to form)."
 		}
 	]
 }

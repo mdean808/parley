@@ -5,10 +5,12 @@
 	"topic": "Metaphor-driven pedagogy for recursion",
 	"rounds": [
 		{
-			"prompt": "Design a metaphor-driven teaching curriculum for recursion that a poet would enjoy. Include both the literary framing and the technical progression."
+			"prompt": "Design a metaphor-driven teaching curriculum for recursion that a poet would enjoy. Include both the literary framing and the technical progression.",
+			"expectedResponse": "Must blend literary metaphors with a technical progression through recursion concepts. Should cover at least base cases and recursive calls with corresponding metaphors. The response should feel like it serves both a poet (evocative language, narrative structure) and a CS student (accurate technical content)."
 		},
 		{
-			"prompt": "Now critique your own curriculum: where does the metaphor break down, and where does the technical rigor suffer for the sake of beauty?"
+			"prompt": "Now critique your own curriculum: where does the metaphor break down, and where does the technical rigor suffer for the sake of beauty?",
+			"expectedResponse": "Must identify at least one concrete metaphor breakdown and at least one place where technical rigor was weakened. Should demonstrate genuine self-critical analysis rather than surface-level hedging. Must reference the curriculum from Round 1 rather than offering generic critique."
 		}
 	]
 }

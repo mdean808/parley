@@ -74,7 +74,10 @@ function toScenarioConfig(s: Scenario): ScenarioConfig {
 	return {
 		name: s.name,
 		topic: s.topic,
-		rounds: s.rounds.map((r) => ({ prompt: r.prompt })),
+		rounds: s.rounds.map((r) => ({
+			prompt: r.prompt,
+			expectedResponse: r.expectedResponse,
+		})),
 		multiRound: s.multiRound
 			? {
 					rounds: s.multiRound.rounds,

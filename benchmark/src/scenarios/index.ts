@@ -3,6 +3,7 @@ import { join } from "node:path";
 
 export interface ScenarioRound {
 	prompt: string;
+	expectedResponse?: string;
 }
 
 export interface ScenarioMultiRound {

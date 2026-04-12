@@ -5,13 +5,16 @@
 	"topic": "CRISPR gene editing across domains",
 	"rounds": [
 		{
-			"prompt": "What is CRISPR-Cas9 and what are its most important real-world applications so far?"
+			"prompt": "What is CRISPR-Cas9 and what are its most important real-world applications so far?",
+			"expectedResponse": "Must explain the CRISPR-Cas9 mechanism (guide RNA + Cas9 protein cutting DNA at a target site) and list at least two distinct real-world application domains (e.g., human therapeutics, agriculture, diagnostics) with at least one specific named example. General accuracy required; minor omissions acceptable."
 		},
 		{
-			"prompt": "Write a short fiction scene set in 2040 where a family debates whether to use CRISPR on their unborn child."
+			"prompt": "Write a short fiction scene set in 2040 where a family debates whether to use CRISPR on their unborn child.",
+			"expectedResponse": "Must be a fictional scene with dialogue between family members presenting at least two sides of the CRISPR debate. Must feel like a story (characters, setting, spoken lines) rather than a disguised essay. Should touch on at least one ethical dimension (e.g., consent, inequality, medical necessity vs. enhancement)."
 		},
 		{
-			"prompt": "Sketch a Python simulation that models the probability of off-target edits given a guide RNA sequence length and mismatch tolerance."
+			"prompt": "Sketch a Python simulation that models the probability of off-target edits given a guide RNA sequence length and mismatch tolerance.",
+			"expectedResponse": "Must include Python code that takes guide RNA sequence length and mismatch tolerance as inputs and computes or simulates off-target edit probability. The code should be syntactically valid, use a reasonable probabilistic model (even if simplified), and include brief comments or explanation of the approach. Must be more than pseudocode."
 		}
 	]
 }

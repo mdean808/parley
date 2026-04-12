@@ -54,6 +54,17 @@ function buildEvaluateTool(): Anthropic.Messages.Tool {
 					type: "string",
 					maxLength: 500,
 				},
+				expectation_alignment: {
+					type: "integer",
+					minimum: 1,
+					maximum: 5,
+					description:
+						"How well agents addressed the expected response criteria (1-5). Only include when an expected response was provided.",
+				},
+				expectation_alignment_reasoning: {
+					type: "string",
+					maxLength: 300,
+				},
 			},
 			required: [
 				"pass",
@@ -104,11 +115,24 @@ function parseJudgeResponse(
 		passReasoning: String(input.pass_reasoning ?? ""),
 		qualityReasoning: String(input.quality_reasoning ?? ""),
 		multiAgentReasoning: String(input.multi_agent_reasoning ?? ""),
+		expectationAlignment: input.expectation_alignment
+			? Math.min(
+					5,
+					Math.max(1, Math.round(Number(input.expectation_alignment))),
+				)
+			: undefined,
+		expectationAlignmentReasoning: input.expectation_alignment_reasoning
+			? String(input.expectation_alignment_reasoning)
+			: undefined,
 	};
 }
 
 export async function evaluateScenario(
-	rounds: { userMessage: string; results: AgentResult[] }[],
+	rounds: {
+		userMessage: string;
+		expectedResponse?: string;
+		results: AgentResult[];
+	}[],
 	config: JudgeConfig,
 ): Promise<JudgeResult> {
 	const model = config.model ?? process.env.JUDGE_MODEL ?? "claude-sonnet-4-6";
@@ -150,7 +174,11 @@ export async function evaluateScenario(
 }
 
 export async function evaluateRound(
-	conversationSoFar: { userMessage: string; results: AgentResult[] }[],
+	conversationSoFar: {
+		userMessage: string;
+		expectedResponse?: string;
+		results: AgentResult[];
+	}[],
 	targetRoundIndex: number,
 	config: JudgeConfig,
 ): Promise<{ evaluation: JudgeEvaluation; usage: JudgeUsage }> {

@@ -39,6 +39,7 @@ export interface MultiRoundResult {
 
 export interface ScenarioRound {
 	prompt: string;
+	expectedResponse?: string;
 }
 
 export interface ScenarioConfig {
@@ -63,6 +64,7 @@ export interface AgentRoundResult {
 export interface RoundResult {
 	roundIndex: number;
 	prompt: string;
+	expectedResponse?: string;
 	agents: AgentRoundResult[];
 	totalInputTokens: number;
 	totalOutputTokens: number;

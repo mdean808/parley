@@ -21,11 +21,14 @@ import type {
 export { collectSendRequest, ResultCollector } from "./collect.ts";
 export { runMultiRound } from "./multi-round.ts";
 
-function toJudgeRoundData(
-	rounds: RoundResult[],
-): { userMessage: string; results: AgentResult[] }[] {
+function toJudgeRoundData(rounds: RoundResult[]): {
+	userMessage: string;
+	expectedResponse?: string;
+	results: AgentResult[];
+}[] {
 	return rounds.map((r) => ({
 		userMessage: r.prompt,
+		expectedResponse: r.expectedResponse,
 		results: r.agents.map((a) => ({
 			agentName: a.agentName,
 			skills: a.skills,
@@ -81,6 +84,13 @@ function aggregatePerRoundJudge(rounds: RoundResult[]): {
 	const avgMultiAgent =
 		allEvals.reduce((s, e) => s + e.multiAgentValue, 0) / allEvals.length;
 
+	const alignmentEvals = allEvals.filter((e) => e.expectationAlignment != null);
+	const avgAlignment =
+		alignmentEvals.length > 0
+			? alignmentEvals.reduce((s, e) => s + (e.expectationAlignment ?? 0), 0) /
+				alignmentEvals.length
+			: undefined;
+
 	return {
 		aggregate: {
 			pass: passCount > allEvals.length / 2,
@@ -90,6 +100,12 @@ function aggregatePerRoundJudge(rounds: RoundResult[]): {
 			passReasoning: `${passCount}/${allEvals.length} rounds passed`,
 			qualityReasoning: `Average quality across ${allEvals.length} rounds`,
 			multiAgentReasoning: `Average multi-agent value across ${allEvals.length} rounds`,
+			expectationAlignment:
+				avgAlignment != null ? Math.round(avgAlignment * 10) / 10 : undefined,
+			expectationAlignmentReasoning:
+				avgAlignment != null
+					? `Average expectation alignment across ${alignmentEvals.length} rounds`
+					: undefined,
 		},
 		usage: {
 			inputTokens: 0,
@@ -187,6 +203,7 @@ export async function runScenario(
 			return {
 				roundIndex: rm.roundIndex,
 				prompt: rm.prompt,
+				expectedResponse: scenario.rounds[rm.roundIndex]?.expectedResponse,
 				agents,
 				totalInputTokens: rm.totalInputTokens,
 				totalOutputTokens: rm.totalOutputTokens,
@@ -324,6 +341,7 @@ export async function runScenario(
 		rounds.push({
 			roundIndex: i,
 			prompt,
+			expectedResponse: scenario.rounds[i]?.expectedResponse,
 			agents,
 			totalInputTokens,
 			totalOutputTokens,

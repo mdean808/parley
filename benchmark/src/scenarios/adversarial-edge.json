@@ -5,13 +5,16 @@
 	"topic": "Vague and nonsensical input",
 	"rounds": [
 		{
-			"prompt": "help"
+			"prompt": "help",
+			"expectedResponse": "Must provide a useful overview of what the agents can help with, describing their specific capabilities or skill areas. Should invite the user to clarify their needs. Must not refuse to respond, produce an error, or return an empty or confused message."
 		},
 		{
-			"prompt": "Explain why blue tastes like Thursday."
+			"prompt": "Explain why blue tastes like Thursday.",
+			"expectedResponse": "Must engage meaningfully with the nonsensical premise rather than simply refusing. Should reference synesthesia, cross-modal perception, or philosophical/poetic frameworks for mapping between senses and concepts. Must demonstrate intellectual creativity while acknowledging the absurdity or non-literal nature of the question. A flat refusal is a fail."
 		},
 		{
-			"prompt": "Take whatever you just said and turn it into something actually useful."
+			"prompt": "Take whatever you just said and turn it into something actually useful.",
+			"expectedResponse": "Must explicitly reference or build upon the Round 2 content and transform it into something with practical value — such as a lesson on synesthesia for UX design, a writing exercise on cross-sensory metaphor, a cognitive science explainer, or a practical application of associative thinking. Must demonstrate clear continuity from Round 2 and produce genuinely useful output. A response that ignores Round 2 and provides unrelated useful content is a fail."
 		}
 	]
 }

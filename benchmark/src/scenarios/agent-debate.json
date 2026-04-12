@@ -5,7 +5,8 @@
 	"topic": "AI consciousness",
 	"rounds": [
 		{
-			"prompt": "Is it possible for an artificial intelligence to be truly conscious? Why or why not?"
+			"prompt": "Is it possible for an artificial intelligence to be truly conscious? Why or why not?",
+			"expectedResponse": "Must present a reasoned argument about AI consciousness that goes beyond surface-level treatment. Must reference at least one recognized theory or thought experiment related to consciousness and provide substantive reasoning for the position taken. Should not be purely a list of 'pros and cons' without analysis."
 		}
 	],
 	"multiRound": {

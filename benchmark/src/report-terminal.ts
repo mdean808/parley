@@ -90,7 +90,12 @@ export function printTerminalReport(report: ComparisonReport): void {
 				if (!r.metrics) return pad("—", sCols[i + 1]);
 				if (r.metrics.passed) {
 					const q = r.judge?.aggregate.qualityScore;
-					const label = q ? `PASS (${q.toFixed(1)})` : "PASS";
+					const ea = r.judge?.aggregate.expectationAlignment;
+					const parts = [
+						q ? q.toFixed(1) : null,
+						ea ? `E:${ea.toFixed(1)}` : null,
+					].filter(Boolean);
+					const label = parts.length > 0 ? `PASS (${parts.join(" ")})` : "PASS";
 					return pad(chalk.green(label), sCols[i + 1]);
 				}
 				return pad(chalk.red("FAIL"), sCols[i + 1]);

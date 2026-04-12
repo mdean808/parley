@@ -28,10 +28,27 @@ You MUST evaluate using the "evaluate" tool.
 
 ## Guidelines
 - Evaluate agents as a collective system, not individually.
-- For multi-round conversations, evaluate based on the cumulative conversation quality.`;
+- For multi-round conversations, evaluate based on the cumulative conversation quality.
+
+## Expected Response (when provided)
+When an "Expected Response" is provided for a round, use it as a reference for evaluating correctness and completeness.
+- The expected response describes the key elements, topics, or criteria that a good answer should address.
+- Agents do not need to match the expected response verbatim — evaluate whether they cover the substance.
+- Use the "expectation_alignment" field (1-5) in the evaluate tool to score how well agents addressed the expected response criteria.
+  - 1: Response misses nearly all expected elements
+  - 2: Response addresses some expected elements but has major gaps
+  - 3: Response addresses most expected elements adequately
+  - 4: Response covers expected elements well with good detail
+  - 5: Response fully addresses all expected elements with depth
+- If no expected response is provided, omit the "expectation_alignment" field.
+- The expected response should inform your quality_score but not override it — a response can be high quality while diverging from expectations if it provides equally valid alternative content.`;
 
 export function buildJudgeUserPrompt(
-	rounds: { userMessage: string; results: AgentResult[] }[],
+	rounds: {
+		userMessage: string;
+		expectedResponse?: string;
+		results: AgentResult[];
+	}[],
 ): string {
 	const parts: string[] = ["## Scenario\n"];
 
@@ -39,6 +56,10 @@ export function buildJudgeUserPrompt(
 		const round = rounds[i];
 		parts.push(`### Round ${i + 1}`);
 		parts.push(`**User:** ${round.userMessage}\n`);
+
+		if (round.expectedResponse) {
+			parts.push(`**Expected Response:** ${round.expectedResponse}\n`);
+		}
 
 		for (const result of round.results) {
 			parts.push(
@@ -58,7 +79,11 @@ export function buildJudgeUserPrompt(
 }
 
 export function buildJudgeRoundPrompt(
-	rounds: { userMessage: string; results: AgentResult[] }[],
+	rounds: {
+		userMessage: string;
+		expectedResponse?: string;
+		results: AgentResult[];
+	}[],
 	targetRoundIndex: number,
 ): string {
 	const parts: string[] = ["## Scenario\n"];
@@ -67,6 +92,10 @@ export function buildJudgeRoundPrompt(
 		const round = rounds[i];
 		parts.push(`### Round ${i + 1}`);
 		parts.push(`**User:** ${round.userMessage}\n`);
+
+		if (round.expectedResponse) {
+			parts.push(`**Expected Response:** ${round.expectedResponse}\n`);
+		}
 
 		for (const result of round.results) {
 			parts.push(

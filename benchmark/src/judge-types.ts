@@ -6,6 +6,8 @@ export interface JudgeEvaluation {
 	passReasoning: string;
 	qualityReasoning: string;
 	multiAgentReasoning: string;
+	expectationAlignment?: number;
+	expectationAlignmentReasoning?: string;
 }
 
 export interface JudgeUsage {
