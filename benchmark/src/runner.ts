@@ -96,7 +96,7 @@ function aggregateMultiAgentRubric(evals: JudgeEvaluation[]): MultiAgentRubric {
 	};
 }
 
-function countTrues(obj: Record<string, boolean>): number {
+function countTrues(obj: QualityRubric | MultiAgentRubric): number {
 	return Object.values(obj).filter(Boolean).length;
 }
 

@@ -30,7 +30,7 @@ const EMPTY_MULTI_AGENT_RUBRIC: MultiAgentRubric = {
 	effectiveCoordination: false,
 };
 
-function countTrues(obj: Record<string, boolean>): number {
+function countTrues(obj: QualityRubric | MultiAgentRubric): number {
 	return Object.values(obj).filter(Boolean).length;
 }
 

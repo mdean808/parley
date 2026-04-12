@@ -2,6 +2,7 @@ import chalk from "chalk";
 import type { ComparisonReport } from "./comparison.ts";
 
 function stripAnsi(str: string): string {
+	// biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI escape sequence stripping requires matching control characters
 	return str.replace(/\x1b\[[0-9;]*m/g, "");
 }
 
