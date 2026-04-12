@@ -25,7 +25,10 @@ When you receive a REQUEST, follow this sequence exactly:
    - If it matches: send ACK with header \`accept: true\`, then continue to step 2.
    - If it does not match: send ACK with header \`accept: false\` and a one-sentence reason in the payload. Stop here.
 2. **CLAIM** — If the REQUEST has header \`exclusivity: true\`, send CLAIM after ACK with your reasoning. Wait for resolution before proceeding. If your CLAIM is rejected, stop.
-3. **PROCESS** — Describe the steps you will take. You MAY send sub-REQUESTs to other agents here.
+3. **PROCESS** — Before composing your response:
+   - If the REQUEST is addressed to \`*\` (broadcast) or a channel, call \`get_message({ chainId, type: "RESPONSE" })\` to read any responses already posted by other agents on this chain.
+   - Incorporate what others have said — avoid repeating their points, reference their contributions, and fill gaps.
+   - Then describe the steps you will take. You MAY send sub-REQUESTs to other agents here.
 4. **RESPONSE** — Return your result.
 
 You MUST NOT skip steps. No PROCESS without ACK. No RESPONSE without PROCESS. Never stay silent — always ACK.

@@ -7,6 +7,8 @@ import type {
 	JudgeConfig,
 	JudgeEvaluation,
 	JudgeUsage,
+	MultiAgentRubric,
+	QualityRubric,
 } from "./judge-types.ts";
 import { runMultiRound } from "./multi-round.ts";
 import type {
@@ -49,6 +51,55 @@ function toJudgeRoundData(rounds: RoundResult[]): {
 	}));
 }
 
+function majorityVote(values: boolean[]): boolean {
+	const trueCount = values.filter(Boolean).length;
+	return trueCount > values.length / 2;
+}
+
+function aggregateQualityRubric(evals: JudgeEvaluation[]): QualityRubric {
+	return {
+		addressesRequest: majorityVote(
+			evals.map((e) => e.qualityRubric.addressesRequest),
+		),
+		coherentDelivery: majorityVote(
+			evals.map((e) => e.qualityRubric.coherentDelivery),
+		),
+		sufficientDepth: majorityVote(
+			evals.map((e) => e.qualityRubric.sufficientDepth),
+		),
+		noMajorOmissions: majorityVote(
+			evals.map((e) => e.qualityRubric.noMajorOmissions),
+		),
+		efficientResolution: majorityVote(
+			evals.map((e) => e.qualityRubric.efficientResolution),
+		),
+	};
+}
+
+function aggregateMultiAgentRubric(evals: JudgeEvaluation[]): MultiAgentRubric {
+	return {
+		multipleAgentsContributed: majorityVote(
+			evals.map((e) => e.multiAgentRubric.multipleAgentsContributed),
+		),
+		distinctRoles: majorityVote(
+			evals.map((e) => e.multiAgentRubric.distinctRoles),
+		),
+		minimalRedundancy: majorityVote(
+			evals.map((e) => e.multiAgentRubric.minimalRedundancy),
+		),
+		complementaryCoverage: majorityVote(
+			evals.map((e) => e.multiAgentRubric.complementaryCoverage),
+		),
+		effectiveCoordination: majorityVote(
+			evals.map((e) => e.multiAgentRubric.effectiveCoordination),
+		),
+	};
+}
+
+function countTrues(obj: Record<string, boolean>): number {
+	return Object.values(obj).filter(Boolean).length;
+}
+
 function aggregatePerRoundJudge(rounds: RoundResult[]): {
 	aggregate: JudgeEvaluation;
 	usage: JudgeUsage;
@@ -57,16 +108,31 @@ function aggregatePerRoundJudge(rounds: RoundResult[]): {
 		.map((r) => r.judge)
 		.filter((j): j is JudgeEvaluation => j != null);
 
+	const emptyQuality: QualityRubric = {
+		addressesRequest: false,
+		coherentDelivery: false,
+		sufficientDepth: false,
+		noMajorOmissions: false,
+		efficientResolution: false,
+	};
+	const emptyMultiAgent: MultiAgentRubric = {
+		multipleAgentsContributed: false,
+		distinctRoles: false,
+		minimalRedundancy: false,
+		complementaryCoverage: false,
+		effectiveCoordination: false,
+	};
+
 	if (allEvals.length === 0) {
 		return {
 			aggregate: {
 				pass: false,
 				qualityScore: 0,
 				multiAgentValue: 0,
+				qualityRubric: emptyQuality,
+				multiAgentRubric: emptyMultiAgent,
 				summary: "",
 				passReasoning: "",
-				qualityReasoning: "",
-				multiAgentReasoning: "",
 			},
 			usage: {
 				inputTokens: 0,
@@ -79,10 +145,8 @@ function aggregatePerRoundJudge(rounds: RoundResult[]): {
 	}
 
 	const passCount = allEvals.filter((e) => e.pass).length;
-	const avgQuality =
-		allEvals.reduce((s, e) => s + e.qualityScore, 0) / allEvals.length;
-	const avgMultiAgent =
-		allEvals.reduce((s, e) => s + e.multiAgentValue, 0) / allEvals.length;
+	const qualityRubric = aggregateQualityRubric(allEvals);
+	const multiAgentRubric = aggregateMultiAgentRubric(allEvals);
 
 	const alignmentEvals = allEvals.filter((e) => e.expectationAlignment != null);
 	const avgAlignment =
@@ -94,12 +158,12 @@ function aggregatePerRoundJudge(rounds: RoundResult[]): {
 	return {
 		aggregate: {
 			pass: passCount > allEvals.length / 2,
-			qualityScore: Math.round(avgQuality * 10) / 10,
-			multiAgentValue: Math.round(avgMultiAgent * 10) / 10,
+			qualityScore: countTrues(qualityRubric),
+			multiAgentValue: countTrues(multiAgentRubric),
+			qualityRubric,
+			multiAgentRubric,
 			summary: `Aggregate of ${allEvals.length} per-round evaluations`,
 			passReasoning: `${passCount}/${allEvals.length} rounds passed`,
-			qualityReasoning: `Average quality across ${allEvals.length} rounds`,
-			multiAgentReasoning: `Average multi-agent value across ${allEvals.length} rounds`,
 			expectationAlignment:
 				avgAlignment != null ? Math.round(avgAlignment * 10) / 10 : undefined,
 			expectationAlignmentReasoning:
@@ -147,7 +211,7 @@ function computeMetrics(result: ProtocolRunResult): ProtocolMetrics {
 	);
 	const participationBalance = computeNormalizedEntropy(agentTokens);
 
-	const multiAgentJudgeValue = result.judge?.aggregate.multiAgentValue ?? 1;
+	const multiAgentJudgeValue = result.judge?.aggregate.multiAgentValue ?? 0;
 	const multiAgentContribution =
 		0.4 * participationBalance + 0.6 * (multiAgentJudgeValue / 5);
 

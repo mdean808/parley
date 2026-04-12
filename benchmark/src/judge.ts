@@ -10,7 +10,29 @@ import type {
 	JudgeEvaluation,
 	JudgeResult,
 	JudgeUsage,
+	MultiAgentRubric,
+	QualityRubric,
 } from "./judge-types.ts";
+
+const EMPTY_QUALITY_RUBRIC: QualityRubric = {
+	addressesRequest: false,
+	coherentDelivery: false,
+	sufficientDepth: false,
+	noMajorOmissions: false,
+	efficientResolution: false,
+};
+
+const EMPTY_MULTI_AGENT_RUBRIC: MultiAgentRubric = {
+	multipleAgentsContributed: false,
+	distinctRoles: false,
+	minimalRedundancy: false,
+	complementaryCoverage: false,
+	effectiveCoordination: false,
+};
+
+function countTrues(obj: Record<string, boolean>): number {
+	return Object.values(obj).filter(Boolean).length;
+}
 
 function buildEvaluateTool(): Anthropic.Messages.Tool {
 	return {
@@ -29,26 +51,55 @@ function buildEvaluateTool(): Anthropic.Messages.Tool {
 					maxLength: 300,
 					description: "Why pass or fail",
 				},
-				quality_score: {
-					type: "integer",
-					minimum: 1,
-					maximum: 5,
-					description: "Overall quality 1-5",
-				},
-				quality_reasoning: {
-					type: "string",
-					maxLength: 300,
-				},
-				multi_agent_value: {
-					type: "integer",
-					minimum: 1,
-					maximum: 5,
+				// Quality rubric booleans
+				addresses_request: {
+					type: "boolean",
 					description:
-						"Did multiple agents add distinct value? 1-5. Score 1 for single-agent protocols.",
+						"The final output directly answers the question or completes the task.",
 				},
-				multi_agent_reasoning: {
-					type: "string",
-					maxLength: 300,
+				coherent_delivery: {
+					type: "boolean",
+					description:
+						"The response is logically organized and easy to follow as a final product.",
+				},
+				sufficient_depth: {
+					type: "boolean",
+					description:
+						"The response provides enough detail to be useful, not just surface-level.",
+				},
+				no_major_omissions: {
+					type: "boolean",
+					description: "Key aspects of the request are not ignored.",
+				},
+				efficient_resolution: {
+					type: "boolean",
+					description:
+						"The task was completed without excessive back-and-forth or protocol overhead.",
+				},
+				// Multi-agent rubric booleans
+				multiple_agents_contributed: {
+					type: "boolean",
+					description: "More than one agent provided a substantive response.",
+				},
+				distinct_roles: {
+					type: "boolean",
+					description:
+						"Each responding agent addressed the task using different skills or perspectives.",
+				},
+				minimal_redundancy: {
+					type: "boolean",
+					description:
+						"Agents did not substantially duplicate each other's work.",
+				},
+				complementary_coverage: {
+					type: "boolean",
+					description:
+						"Agents addressed different aspects of the request, improving overall completeness.",
+				},
+				effective_coordination: {
+					type: "boolean",
+					description:
+						"Agents built on or referenced each other's contributions without contradiction or wasted cycles.",
 				},
 				summary: {
 					type: "string",
@@ -69,10 +120,16 @@ function buildEvaluateTool(): Anthropic.Messages.Tool {
 			required: [
 				"pass",
 				"pass_reasoning",
-				"quality_score",
-				"quality_reasoning",
-				"multi_agent_value",
-				"multi_agent_reasoning",
+				"addresses_request",
+				"coherent_delivery",
+				"sufficient_depth",
+				"no_major_omissions",
+				"efficient_resolution",
+				"multiple_agents_contributed",
+				"distinct_roles",
+				"minimal_redundancy",
+				"complementary_coverage",
+				"effective_coordination",
 				"summary",
 			],
 		},
@@ -90,31 +147,41 @@ function parseJudgeResponse(
 	if (!toolUse) {
 		return {
 			pass: false,
-			qualityScore: 1,
-			multiAgentValue: 1,
+			qualityScore: 0,
+			multiAgentValue: 0,
+			qualityRubric: { ...EMPTY_QUALITY_RUBRIC },
+			multiAgentRubric: { ...EMPTY_MULTI_AGENT_RUBRIC },
 			summary: "Judge failed to respond with tool use.",
 			passReasoning: "No tool response from judge.",
-			qualityReasoning: "",
-			multiAgentReasoning: "",
 		};
 	}
 
 	const input = toolUse.input as Record<string, unknown>;
 
+	const qualityRubric: QualityRubric = {
+		addressesRequest: Boolean(input.addresses_request),
+		coherentDelivery: Boolean(input.coherent_delivery),
+		sufficientDepth: Boolean(input.sufficient_depth),
+		noMajorOmissions: Boolean(input.no_major_omissions),
+		efficientResolution: Boolean(input.efficient_resolution),
+	};
+
+	const multiAgentRubric: MultiAgentRubric = {
+		multipleAgentsContributed: Boolean(input.multiple_agents_contributed),
+		distinctRoles: Boolean(input.distinct_roles),
+		minimalRedundancy: Boolean(input.minimal_redundancy),
+		complementaryCoverage: Boolean(input.complementary_coverage),
+		effectiveCoordination: Boolean(input.effective_coordination),
+	};
+
 	return {
 		pass: Boolean(input.pass),
-		qualityScore: Math.min(
-			5,
-			Math.max(1, Math.round(Number(input.quality_score) || 3)),
-		),
-		multiAgentValue: Math.min(
-			5,
-			Math.max(1, Math.round(Number(input.multi_agent_value) || 1)),
-		),
+		qualityScore: countTrues(qualityRubric),
+		multiAgentValue: countTrues(multiAgentRubric),
+		qualityRubric,
+		multiAgentRubric,
 		summary: String(input.summary ?? ""),
 		passReasoning: String(input.pass_reasoning ?? ""),
-		qualityReasoning: String(input.quality_reasoning ?? ""),
-		multiAgentReasoning: String(input.multi_agent_reasoning ?? ""),
 		expectationAlignment: input.expectation_alignment
 			? Math.min(
 					5,

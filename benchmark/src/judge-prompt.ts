@@ -10,25 +10,23 @@ You MUST evaluate using the "evaluate" tool.
 - Be lenient on quality — a mediocre answer that addresses the question is still a PASS.
 - If no agents responded or all responses are empty, that is a FAIL.
 
-## Quality Score (1-5)
-- 1: Poor — barely addresses the request, major issues
-- 2: Below average — addresses the request but with significant gaps
-- 3: Acceptable — addresses the request adequately
-- 4: Good — thorough, well-structured response
-- 5: Excellent — comprehensive, insightful, well-organized
-- Be strict but fair. 3 means "acceptable." Reserve 5 for genuinely excellent responses.
+## Quality Rubric
+For each criterion, answer true or false:
+- **addresses_request**: The final output directly answers the question or completes the task.
+- **coherent_delivery**: The response is logically organized and easy to follow as a final product.
+- **sufficient_depth**: The response provides enough detail to be useful, not just surface-level.
+- **no_major_omissions**: Key aspects of the request are not ignored.
+- **efficient_resolution**: The task was completed without excessive back-and-forth, unnecessary messages, or protocol overhead that didn't contribute to the result.
 
-## Multi-Agent Value (1-5)
-- 1: One agent did all meaningful work, or agents repeated each other entirely
-- 2: Minimal differentiation between agents
-- 3: Some complementary contributions, moderate overlap
-- 4: Clear division of expertise, each agent adds distinct value
-- 5: Excellent collaboration — agents cover different aspects with minimal redundancy
-- For single-agent protocols (only one agent responded): score 1. This is expected, not a penalty.
+## Multi-Agent Value Rubric
+For each criterion, answer true or false:
+- **multiple_agents_contributed**: More than one agent provided a substantive response.
+- **distinct_roles**: Each responding agent addressed the task using different skills or perspectives.
+- **minimal_redundancy**: Agents did not substantially duplicate each other's work.
+- **complementary_coverage**: Agents addressed different aspects of the request, improving overall completeness.
+- **effective_coordination**: Agents built on or referenced each other's contributions without contradiction or wasted cycles.
 
-## Guidelines
-- Evaluate agents as a collective system, not individually.
-- For multi-round conversations, evaluate based on the cumulative conversation quality.
+For single-agent protocols (only one agent responded): all multi-agent criteria are false. This is expected, not a penalty.
 
 ## Expected Response (when provided)
 When an "Expected Response" is provided for a round, use it as a reference for evaluating correctness and completeness.
@@ -41,7 +39,11 @@ When an "Expected Response" is provided for a round, use it as a reference for e
   - 4: Response covers expected elements well with good detail
   - 5: Response fully addresses all expected elements with depth
 - If no expected response is provided, omit the "expectation_alignment" field.
-- The expected response should inform your quality_score but not override it — a response can be high quality while diverging from expectations if it provides equally valid alternative content.`;
+
+## Guidelines
+- Evaluate agents as a collective system, not individually.
+- For multi-round conversations, evaluate based on the cumulative conversation quality.
+- Focus on protocol-level performance — how well the system coordinated to produce the result — not on the underlying LLM's knowledge or reasoning ability.`;
 
 export function buildJudgeUserPrompt(
 	rounds: {
