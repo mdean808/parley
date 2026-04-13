@@ -14,6 +14,7 @@ const agentBorderColors: Record<string, string> = {
 	Atlas: "border-blue-400",
 	Sage: "border-green-400",
 	Bolt: "border-yellow-400",
+	Colt: "border-orange-400",
 };
 
 function getBorderColor(name?: string): string {
@@ -29,6 +30,7 @@ function getNameColor(name?: string): string {
 	if (name.startsWith("Atlas")) return "text-blue-400";
 	if (name.startsWith("Sage")) return "text-green-400";
 	if (name.startsWith("Bolt")) return "text-yellow-400";
+	if (name.startsWith("Colt")) return "text-orange-400";
 	return "text-zinc-300";
 }
 

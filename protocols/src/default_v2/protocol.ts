@@ -20,6 +20,7 @@ import type { AgentMeta, MessageV2 } from "./types.ts";
 
 export interface DefaultProtocolV2Config {
 	personas: AgentPersona[];
+	soloAgentName?: string;
 	customTools?: Anthropic.Messages.Tool[];
 	onEvent?: ProtocolEventHandler;
 	onMessage?: ProtocolMessageHandler;
@@ -30,6 +31,7 @@ export class DefaultProtocolV2 implements Protocol {
 	private readonly store: StoreV2 = new StoreV2();
 	private readonly agentMeta: Map<string, AgentMeta> = new Map();
 	private readonly protocolAgents: ProtocolAgentV2[] = [];
+	private soloAgentId: string | undefined;
 
 	/** Per-chain completion tracking: resolves when all agents respond or decline. */
 	private readonly chainTrackers: Map<
@@ -74,6 +76,16 @@ export class DefaultProtocolV2 implements Protocol {
 			this.handleIncomingMessage(msg);
 		});
 
+		if (this.config.soloAgentName) {
+			const soloName = this.config.soloAgentName;
+			const match = this.protocolAgents.find((pa) =>
+				pa.agent.name.startsWith(soloName),
+			);
+			if (match) {
+				this.soloAgentId = match.agent.id;
+			}
+		}
+
 		log.info("init_v2", "agents_ready", { agents });
 
 		return { userId: user.id, userName: user.name, agents };
@@ -93,7 +105,7 @@ export class DefaultProtocolV2 implements Protocol {
 				type: "REQUEST",
 				payload: message,
 				from: userId,
-				to: ["*"],
+				to: this.soloAgentId ? [this.soloAgentId] : ["*"],
 			}),
 		);
 
@@ -108,7 +120,7 @@ export class DefaultProtocolV2 implements Protocol {
 
 		// Create completion tracker — resolves when all agents respond or decline
 		const settled = new Promise<void>((resolve) => {
-			const total = this.protocolAgents.length;
+			const total = this.soloAgentId ? 1 : this.protocolAgents.length;
 			if (total === 0) {
 				resolve();
 				return;
@@ -170,6 +182,7 @@ export class DefaultProtocolV2 implements Protocol {
 	private markAgentDone(chainId: string, agentId: string): void {
 		const tracker = this.chainTrackers.get(chainId);
 		if (!tracker) return;
+		if (this.soloAgentId && agentId !== this.soloAgentId) return;
 		tracker.done.add(agentId);
 		if (tracker.done.size >= tracker.total) {
 			clearTimeout(tracker.hardTimer);

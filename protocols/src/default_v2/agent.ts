@@ -110,6 +110,11 @@ export class ProtocolAgentV2 {
 				from: this.agent.id,
 				to: message.to,
 			});
+			this.onEvent?.({
+				agentName: this.agent.name,
+				type: "state_change",
+				detail: "ACK sent",
+			});
 			log.info(component, "auto_ack_followup", {
 				chainId: message.chainId,
 				requestId: message.id,
@@ -126,6 +131,11 @@ export class ProtocolAgentV2 {
 				headers: { accept: "true" },
 				from: this.agent.id,
 				to: message.to,
+			});
+			this.onEvent?.({
+				agentName: this.agent.name,
+				type: "state_change",
+				detail: "ACK sent",
 			});
 			log.info(component, "auto_ack_direct", {
 				chainId: message.chainId,

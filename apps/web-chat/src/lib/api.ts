@@ -9,6 +9,7 @@ export async function fetchProtocols(): Promise<ProtocolInfo[]> {
 export async function initSession(
 	protocolId: string,
 	userName: string,
+	soloAgentName?: string,
 ): Promise<{
 	sessionId: string;
 	userId: string;
@@ -18,7 +19,7 @@ export async function initSession(
 	const res = await fetch("/api/chat/init", {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify({ protocolId, userName }),
+		body: JSON.stringify({ protocolId, userName, soloAgentName }),
 	});
 	return res.json();
 }

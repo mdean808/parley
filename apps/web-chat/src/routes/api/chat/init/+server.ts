@@ -3,9 +3,11 @@ import { createSession } from "$lib/server/sessions";
 import type { RequestHandler } from "./$types";
 
 export const POST: RequestHandler = async ({ request }) => {
-	const { protocolId, userName } = await request.json();
-	console.log(`[chat] init session: protocol=${protocolId} user=${userName}`);
-	const session = await createSession(protocolId, userName);
+	const { protocolId, userName, soloAgentName } = await request.json();
+	console.log(
+		`[chat] init session: protocol=${protocolId} user=${userName} solo=${soloAgentName ?? "none"}`,
+	);
+	const session = await createSession(protocolId, userName, soloAgentName);
 	console.log(
 		`[chat] session ready: id=${session.id} agents=[${session.agents.map((a) => a.name).join(", ")}]`,
 	);

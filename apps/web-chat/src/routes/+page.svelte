@@ -23,6 +23,7 @@ let messages = $state<ChatMessage[]>([]);
 let protocols = $state<ProtocolInfo[]>([]);
 let currentProtocol = $state("simple");
 let pendingCount = $state(0);
+let coltOnly = $state(false);
 
 let chatContainer: HTMLDivElement;
 let sseController: AbortController | null = null;
@@ -43,7 +44,19 @@ function handleStreamEvent(event: ChatStreamEvent) {
 			if (seenIds.has(message.id)) return;
 			seenIds.add(message.id);
 
-			if (message.type === "RESPONSE") {
+			const isDelegated = coltOnly && !agentName.startsWith("Colt");
+
+			if (isDelegated) {
+				messages.push({
+					id: message.id,
+					role: "trace",
+					messageType: message.type,
+					content: message.payload,
+					agentName: `Colt → ${agentName}`,
+					toonMessage: message.toon,
+					timestamp: message.timestamp,
+				});
+			} else if (message.type === "RESPONSE") {
 				messages.push({
 					id: message.id,
 					role: "agent",
@@ -128,7 +141,8 @@ async function initializeSession(protocolId: string) {
 	seenIds.clear();
 	currentProtocol = protocolId;
 
-	const session = await initSession(protocolId, "User");
+	const soloAgentName = coltOnly ? "Colt" : undefined;
+	const session = await initSession(protocolId, "User", soloAgentName);
 	sessionId = session.sessionId;
 	agents = session.agents;
 
@@ -165,6 +179,11 @@ async function handleProtocolChange(protocolId: string) {
 	await initializeSession(protocolId);
 }
 
+async function handleColtOnlyChange(checked: boolean) {
+	coltOnly = checked;
+	await initializeSession(currentProtocol);
+}
+
 onMount(async () => {
 	protocols = await fetchProtocols();
 	if (protocols.length > 0) {
@@ -183,7 +202,9 @@ onMount(async () => {
 	{protocols}
 	{currentProtocol}
 	{agents}
+	{coltOnly}
 	onProtocolChange={handleProtocolChange}
+	onColtOnlyChange={handleColtOnlyChange}
 />
 
 <main class="flex-1 flex flex-col min-w-0">

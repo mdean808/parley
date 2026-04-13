@@ -156,6 +156,7 @@ function buildEnrichedEvent(
 export async function createSession(
 	protocolId: string,
 	userName: string,
+	soloAgentName?: string,
 ): Promise<Session> {
 	// Session ref needed inside onEvent — populated after construction
 	let session: Session;
@@ -177,7 +178,11 @@ export async function createSession(
 		}
 	};
 
-	const protocol = createProtocol(protocolId, { onEvent, onMessage });
+	const protocol = createProtocol(protocolId, {
+		onEvent,
+		onMessage,
+		soloAgentName,
+	});
 	const { userId, agents } = await protocol.initialize(userName);
 
 	// Extract v2 internals (store, agents) — no-op for other protocols

@@ -15,6 +15,7 @@ export type ProtocolId = string;
 export interface ProtocolOptions {
 	onEvent?: ProtocolEventHandler;
 	onMessage?: ProtocolMessageHandler;
+	soloAgentName?: string;
 }
 
 export interface ProtocolRegistration {
@@ -65,6 +66,7 @@ registerProtocol("v2", {
 		const personas = createAgentPersonas();
 		return new DefaultProtocolV2({
 			personas,
+			soloAgentName: options?.soloAgentName,
 			onEvent: options?.onEvent,
 			onMessage: options?.onMessage,
 		});
@@ -76,7 +78,12 @@ registerProtocol("simple", {
 	description: "direct chat, multi-agent, no overhead",
 	create: (options) => {
 		const personas = createAgentPersonas();
-		return new SimpleProtocol(personas, options?.onEvent, options?.onMessage);
+		return new SimpleProtocol(
+			personas,
+			options?.onEvent,
+			options?.onMessage,
+			options?.soloAgentName,
+		);
 	},
 });
 

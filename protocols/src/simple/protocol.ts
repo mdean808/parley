@@ -22,15 +22,18 @@ export class SimpleProtocol implements Protocol {
 	private readonly history: Anthropic.MessageParam[] = [];
 	private readonly onEvent?: ProtocolEventHandler;
 	private readonly onMessage?: ProtocolMessageHandler;
+	private readonly soloAgentName?: string;
 
 	constructor(
 		personas: AgentPersona[],
 		onEvent?: ProtocolEventHandler,
 		onMessage?: ProtocolMessageHandler,
+		soloAgentName?: string,
 	) {
 		this.personas = personas;
 		this.onEvent = onEvent;
 		this.onMessage = onMessage;
+		this.soloAgentName = soloAgentName;
 	}
 
 	initialize(userName: string): ProtocolInit {
@@ -58,8 +61,12 @@ export class SimpleProtocol implements Protocol {
 			{ role: "user", content: message },
 		];
 
+		const activePersonas = this.soloAgentName
+			? this.personas.filter((p) => p.name.startsWith(this.soloAgentName))
+			: this.personas;
+
 		const results = await Promise.all(
-			this.personas.map(async (persona): Promise<AgentResult> => {
+			activePersonas.map(async (persona): Promise<AgentResult> => {
 				log.info("simple", "agent_start", {
 					agent: persona.name,
 					skills: persona.skills,
