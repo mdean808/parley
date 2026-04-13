@@ -1,6 +1,6 @@
-# simple-implementation
+# parley
 
-A multi-protocol agent-to-agent communication system with benchmarking. Three AI agents (Atlas/Research, Sage/Creative, Bolt/Technical) collaborate to answer user requests across five protocol implementations compared side-by-side.
+A multi-protocol agent-to-agent communication system with benchmarking. Four AI agents (Atlas/Research, Sage/Creative, Bolt/Technical, Colt/Orchestration) collaborate to answer user requests across five protocol implementations compared side-by-side.
 
 Built for COGS 402 to study how protocol design affects multi-agent response quality, token efficiency, and latency.
 
@@ -43,20 +43,26 @@ bun run bench
 Runs all scenarios across all protocols, scores responses with an LLM judge, and generates a terminal summary plus JSON and markdown reports in `benchmark/results/`.
 
 ```bash
-# Select specific protocols and scenarios
-bun run bench --protocols v2,simple --scenarios coding-focused,agent-debate
+# Select specific protocols and probes
+bun run bench --protocols v2,simple --probes simple-factual-question,decline-plumbing
 
-# Filter by category
-bun run bench --category technical
+# Filter by interaction pattern
+bun run bench --pattern handoff,collaborate
 
 # Skip LLM judge (cheaper)
 bun run bench --no-judge
 
 # Override judge model
-bun run bench --judge-model claude-sonnet-4-5-20250929
+bun run bench --judge-model claude-sonnet-4-6
 
 # Custom output directory
 bun run bench --output results/
+
+# Control parallelism
+bun run bench --concurrency 5
+
+# Skip markdown report generation
+bun run bench --no-report
 ```
 
 ### External Protocol Servers (A2A, CrewAI)
@@ -86,6 +92,7 @@ Agent personas are defined in `agents.json` at the project root.
 | Atlas | Research | general-knowledge, research |
 | Sage | Creative | creative-writing, brainstorming |
 | Bolt | Technical | coding, technical |
+| Colt | Collaboration Orchestrator | collaboration, orchestration, project-management, management |
 
 ## Benchmarking
 
@@ -93,36 +100,39 @@ The benchmark system measures how protocol design affects response quality and c
 
 ### What It Measures
 
-- **Task success rate** — binary pass/fail: did the agents answer the question?
-- **Quality score** (1-5) — overall response quality
-- **Multi-agent value** (1-5) — did multiple agents contribute distinct value?
-- **Coordination efficiency** — output tokens / input tokens (higher = less overhead)
-- **Multi-agent contribution** — composite of participation balance + judge's multi-agent value
-- **Cost/tokens/latency per successful task**
+Two-layer evaluation: structural assertions (no LLM) then pattern-aware LLM judge.
 
-### Scenarios
+- **Structural assertions** — agent count (min/max), required/excluded skills. Pure pass/fail, no LLM needed.
+- **Interaction rubric** (0-3) — pattern-specific: routing accuracy, handoff clarity, collaboration coherence.
+- **Content rubric** (0-3) — depth, accuracy, completeness of agent responses.
+- **Composite score** (0-100) — interaction × 0.7 + content × 0.3, normalized.
+- **Cost/tokens/latency per probe**
 
-Eight built-in scenarios across categories:
+### Probes
 
-- **Technical:** coding-focused, build-rest-node
-- **Creative:** creative-philosophical
-- **Multi-round:** agent-debate, synthesis-required
-- **Mixed:** ambiguous-routing, domain-shifting
-- **General:** adversarial-edge
+Seven built-in probes across five interaction patterns:
+
+| Pattern | Probes |
+|---------|--------|
+| **single-route** | simple-factual-question, route-technical-debug |
+| **selective-route** | selective-brainstorm-vs-research |
+| **decline-all** | decline-plumbing |
+| **handoff** | handoff-research-to-technical |
+| **collaborate** | collaborate-startup-pitch, deep-content-coding |
 
 ### Output
 
 `bun run bench` writes to `benchmark/results/`:
-- `benchmark-YYYY-MM-DD.json` — full structured data
-- `benchmark-YYYY-MM-DD.md` — summary table, per-scenario results, key findings, per-round appendix
+- `benchmark-YYYY-MM-DDTHH-MM-SS.json` — full structured data
+- `benchmark-YYYY-MM-DDTHH-MM-SS.md` — summary table, per-probe results, key findings
 
 ## Environment Variables
 
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `ANTHROPIC_API_KEY` | Anthropic API key | (required) |
-| `MODEL` | Claude model for agents | `claude-haiku-4-5-20251001` |
-| `JUDGE_MODEL` | Claude model for LLM judge | `claude-sonnet-4-5-20250929` |
+| `MODEL` | Claude model for agents | `claude-sonnet-4-6` |
+| `JUDGE_MODEL` | Claude model for LLM judge | `claude-sonnet-4-6` |
 | `LOG_LEVEL` | Logging level | `INFO` |
 | `A2A_{KEY}_URL` | Override A2A agent URL per agent | From `agents.json` |
 | `CREWAI_URL` | CrewAI FastAPI wrapper URL | `http://localhost:8000` |

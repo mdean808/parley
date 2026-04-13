@@ -1,5 +1,5 @@
 {
-	"name": "simple-implementation",
+	"name": "parley",
 	"private": true,
 	"type": "module",
 	"workspaces": [

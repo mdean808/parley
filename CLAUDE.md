@@ -53,15 +53,15 @@ protocols/                            — Workspace: protocol implementations
     logger.ts                         — Structured JSON file logger
     index.ts                          — Barrel re-export
     default_v2/                       — v2: agentic tool-use + chain history + TOON
-      protocol.ts, agent.ts, store.ts, toon.ts, tool-definitions.ts, tool-executor.ts, prompt.ts
+      index.ts, protocol.ts, agent.ts, types.ts, prompt.ts, tools.ts, tool-definitions.ts, tool-executor.ts, store.ts, toon.ts
     simple/                           — Simple: direct Claude calls, no protocol overhead
-      protocol.ts
+      index.ts, protocol.ts
     claude-code/                      — Claude Code CLI wrapper
-      protocol.ts
+      index.ts, protocol.ts
     a2a/                              — Google A2A adapter (calls external A2A agents via HTTP)
-      protocol.ts, types.ts
+      index.ts, protocol.ts, types.ts
     crewai/                           — CrewAI adapter (calls FastAPI wrapper via HTTP)
-      protocol.ts, types.ts
+      index.ts, protocol.ts, types.ts
 benchmark/                            — Workspace: benchmarking system
   src/
     cli.ts                            — Benchmark CLI entry point
@@ -70,11 +70,13 @@ benchmark/                            — Workspace: benchmarking system
     assertions.ts                     — Pure function assertion checker (no LLM)
     judge.ts                          — Pattern-aware LLM-as-judge evaluation
     judge-types.ts, judge-prompt.ts   — Judge types and pattern-specific prompts
+    types.ts                          — Benchmark types (InteractionPattern, ProbeConfig, etc.)
     collect.ts                        — ResultCollector for protocol callbacks
     pool.ts                           — Concurrent task runner
     report-terminal.ts                — Terminal report renderer
     report-markdown.ts                — Markdown report generator
     probes/                           — JSON probe definitions (by interaction pattern)
+      index.ts                        — Probe loader (loadAllProbes, loadProbe, loadProbesByPattern)
   results/                            — Benchmark output (gitignored)
 apps/cli-chat/                        — Workspace: terminal chat REPL
   src/
@@ -83,13 +85,16 @@ apps/cli-chat/                        — Workspace: terminal chat REPL
 apps/web-chat/                        — Workspace: SvelteKit web chat app
 external/                             — Python agent servers (not Bun workspaces)
   a2a/                                — A2A agent servers (one per persona, Claude API)
-    agent_server/main.py
+    requirements.txt
+    agent_server/__init__.py, main.py
   crewai/                             — CrewAI FastAPI wrapper (single + crew modes)
-    app/{main.py, models.py, crew.py}
+    requirements.txt
+    app/__init__.py, main.py, models.py, crew.py
 specs/                                — Protocol specification documents
 logs/                                 — Runtime JSON logs (gitignored)
 plans/                                — Implementation plan documents
 docs/                                 — Project documentation
+  plans/                              — Implementation plan documents (dated)
 ```
 
 ## Workspace Dependency Graph
@@ -124,7 +129,7 @@ Probe-based system testing protocol interaction quality (routing, handoff, colla
 
 - **Runner** (`benchmark/src/runner.ts`): Single-shot `runProbe()` — sends prompt, collects agent results, checks assertions, optionally judges.
 - **Assertions** (`benchmark/src/assertions.ts`): Pure function checker for agent count, required/excluded skills.
-- **Judge** (`benchmark/src/judge.ts`): Pattern-aware LLM evaluation with interaction-quality rubrics (0-3 score).
+- **Judge** (`benchmark/src/judge.ts`): Pattern-aware LLM evaluation with dual rubrics — interaction (0-3, pattern-specific) and content (0-3), combined into a composite score (0-100).
 - **Comparison** (`benchmark/src/comparison.ts`): Runs protocols across all probes, groups results by interaction pattern (single-route, selective-route, decline-all, handoff, collaborate).
 - **Probes** (`benchmark/src/probes/*.json`): Single-shot interaction test definitions with expected assertions.
 
