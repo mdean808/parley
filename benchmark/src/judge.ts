@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import type { ProtocolAgentInfo } from "core/types";
 import {
 	buildJudgeSystemPrompt,
 	buildJudgeUserPrompt,
@@ -23,33 +24,44 @@ const RUBRIC_FIELDS: Record<InteractionPattern, string[]> = {
 	collaborate: ["distinct_contributions", "skill_alignment", "coherent_whole"],
 };
 
+const CONTENT_RUBRIC_FIELDS: string[] = [
+	"content_depth",
+	"content_accuracy",
+	"content_completeness",
+];
+
 function buildEvaluateTool(
 	pattern: InteractionPattern,
 ): Anthropic.Messages.Tool {
-	const fields = RUBRIC_FIELDS[pattern];
+	const interactionFields = RUBRIC_FIELDS[pattern];
 	const properties: Record<string, object> = {};
 
 	properties.pass = {
 		type: "boolean",
-		description: "Did the agents interact correctly for this pattern?",
+		description:
+			"Did the agents interact correctly AND produce quality content?",
 	};
 	properties.pass_reasoning = {
 		type: "string",
 		maxLength: 300,
-		description: "Why pass or fail — focus on interaction quality.",
+		description:
+			"Why pass or fail — consider both interaction and content quality.",
 	};
 
-	for (const field of fields) {
+	for (const field of interactionFields) {
 		properties[field] = {
 			type: "boolean",
-			description: `Rubric dimension: ${field.replace(/_/g, " ")}`,
+			description: `Interaction rubric: ${field.replace(/_/g, " ")}`,
 		};
 	}
 
-	properties.content_adequate = {
-		type: "boolean",
-		description: "Minor check: the response is not complete nonsense.",
-	};
+	for (const field of CONTENT_RUBRIC_FIELDS) {
+		properties[field] = {
+			type: "boolean",
+			description: `Content rubric: ${field.replace(/_/g, " ")}`,
+		};
+	}
+
 	properties.summary = {
 		type: "string",
 		maxLength: 300,
@@ -57,15 +69,15 @@ function buildEvaluateTool(
 
 	return {
 		name: "evaluate",
-		description: "Submit interaction quality evaluation.",
+		description: "Submit interaction and content quality evaluation.",
 		input_schema: {
 			type: "object" as const,
 			properties,
 			required: [
 				"pass",
 				"pass_reasoning",
-				...fields,
-				"content_adequate",
+				...interactionFields,
+				...CONTENT_RUBRIC_FIELDS,
 				"summary",
 			],
 		},
@@ -85,6 +97,8 @@ function parseJudgeResponse(
 		return {
 			pass: false,
 			interactionScore: 0,
+			contentScore: 0,
+			compositeScore: 0,
 			contentAdequate: false,
 			rubric: {},
 			summary: "Judge failed to respond with tool use.",
@@ -93,19 +107,27 @@ function parseJudgeResponse(
 	}
 
 	const input = toolUse.input as Record<string, unknown>;
-	const fields = RUBRIC_FIELDS[pattern];
+	const interactionFields = RUBRIC_FIELDS[pattern];
 	const rubric: Record<string, boolean> = {};
 
-	for (const field of fields) {
+	for (const field of interactionFields) {
+		rubric[field] = Boolean(input[field]);
+	}
+	for (const field of CONTENT_RUBRIC_FIELDS) {
 		rubric[field] = Boolean(input[field]);
 	}
 
-	const interactionScore = Object.values(rubric).filter(Boolean).length;
+	const interactionScore = interactionFields.filter((f) => rubric[f]).length;
+	const contentScore = CONTENT_RUBRIC_FIELDS.filter((f) => rubric[f]).length;
+	const compositeScore =
+		(interactionScore / 3) * 0.7 * 100 + (contentScore / 3) * 0.3 * 100;
 
 	return {
 		pass: Boolean(input.pass),
 		interactionScore,
-		contentAdequate: Boolean(input.content_adequate),
+		contentScore,
+		compositeScore,
+		contentAdequate: contentScore >= 1,
 		rubric,
 		summary: String(input.summary ?? ""),
 		passReasoning: String(input.pass_reasoning ?? ""),
@@ -119,6 +141,7 @@ export async function evaluateProbe(
 	pattern: InteractionPattern,
 	config: JudgeConfig,
 	declines?: DeclineInfo[],
+	allAgents?: ProtocolAgentInfo[],
 ): Promise<{ evaluation: JudgeEvaluation; usage: JudgeUsage }> {
 	const model = config.model ?? process.env.JUDGE_MODEL ?? "claude-sonnet-4-6";
 	const client = new Anthropic();
@@ -129,6 +152,7 @@ export async function evaluateProbe(
 		targetSkills,
 		agents,
 		declines,
+		allAgents,
 	);
 	const tool = buildEvaluateTool(pattern);
 

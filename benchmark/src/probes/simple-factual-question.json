@@ -1,0 +1,10 @@
+{
+	"id": "simple-factual-question",
+	"prompt": "What causes tides on Earth? Explain the role of the Moon and Sun.",
+	"pattern": "single-route",
+	"targetSkills": ["general-knowledge"],
+	"expect": {
+		"agentCount": { "min": 1 },
+		"requiredSkills": ["general-knowledge"]
+	}
+}

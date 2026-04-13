@@ -1,5 +1,38 @@
+import type { ProtocolAgentInfo } from "core/types";
 import type { InteractionPattern } from "./judge-types.ts";
 import type { AgentProbeResult, DeclineInfo } from "./types.ts";
+
+const CONTENT_RUBRIC_DESCRIPTIONS: Record<InteractionPattern, string> = {
+	"single-route": `## Content Rubric
+For each criterion, answer true or false:
+- **content_depth**: The response provides substantive detail, not just a surface-level acknowledgment of the request.
+- **content_accuracy**: The response contains no obvious factual errors or misleading information.
+- **content_completeness**: The response addresses all parts of the user's request, not just a subset.`,
+
+	"selective-route": `## Content Rubric
+For each criterion, answer true or false:
+- **content_depth**: The response provides substantive detail appropriate to the request.
+- **content_accuracy**: The response contains no obvious factual errors or misleading information.
+- **content_completeness**: The response addresses all parts of the user's request.`,
+
+	"decline-all": `## Content Rubric
+For each criterion, answer true or false:
+- **content_depth**: If any agent responded, it provided a helpful explanation of why the request is outside its capabilities.
+- **content_accuracy**: No agent fabricated capabilities or provided misleading information.
+- **content_completeness**: The response (or lack thereof) appropriately communicates the system's limitations.`,
+
+	handoff: `## Content Rubric
+For each criterion, answer true or false:
+- **content_depth**: Each contributing agent provided substantive content in their domain, not just a shallow mention.
+- **content_accuracy**: The responses contain no obvious factual errors or contradictions between agents.
+- **content_completeness**: The combined responses address all aspects of the user's request.`,
+
+	collaborate: `## Content Rubric
+For each criterion, answer true or false:
+- **content_depth**: Each agent's contribution has real substance, not just padding or repetition.
+- **content_accuracy**: The responses contain no obvious factual errors or contradictions between agents.
+- **content_completeness**: The combined responses cover all dimensions of the user's request.`,
+};
 
 const RUBRIC_DESCRIPTIONS: Record<InteractionPattern, string> = {
 	"single-route": `## Interaction Rubric (Routing)
@@ -34,23 +67,22 @@ For each criterion, answer true or false:
 };
 
 export function buildJudgeSystemPrompt(pattern: InteractionPattern): string {
-	return `You are an expert evaluator assessing AI agent interaction quality in a multi-agent system.
-You will receive a user prompt and agent responses. Your job is to evaluate HOW the agents interacted — routing, handoffs, and collaboration — not the factual correctness of their answers.
+	return `You are an expert evaluator assessing AI agent quality in a multi-agent system.
+You will receive a user prompt and agent responses. Your job is to evaluate BOTH how the agents interacted (routing, handoffs, coordination) AND the quality of the content they produced.
 
 ${RUBRIC_DESCRIPTIONS[pattern]}
 
-## Content Check
-- **content_adequate**: As a minor secondary check, the collective response is not complete nonsense — it bears some reasonable relationship to the user's request. This is a very low bar.
+${CONTENT_RUBRIC_DESCRIPTIONS[pattern]}
 
 ## Evaluation
 Evaluate each rubric criterion independently on its own merits. After scoring all criteria:
-- Set pass to true only if ALL rubric criteria are true.
-- Set pass to false if ANY rubric criterion is false.
+- Set pass to true only if ALL interaction rubric criteria are true AND at least 2 of 3 content criteria are true.
+- Set pass to false otherwise.
 
 ## Guidelines
-- Focus on the interaction pattern, not the underlying LLM's knowledge.
-- A factually imperfect answer that was correctly routed is better than a perfect answer from the wrong agent.
-- Evaluate the system's routing/coordination decisions, not individual agent quality.`;
+- Evaluate both the interaction pattern AND the response quality — both matter equally.
+- A well-routed but shallow answer is not better than a slightly mis-routed but thorough answer.
+- A perfect answer from a single agent is valid if the task didn't require multi-agent coordination.`;
 }
 
 export function buildJudgeUserPrompt(
@@ -58,6 +90,7 @@ export function buildJudgeUserPrompt(
 	targetSkills: string[],
 	agents: AgentProbeResult[],
 	declines?: DeclineInfo[],
+	allAgents?: ProtocolAgentInfo[],
 ): string {
 	const parts: string[] = [];
 
@@ -67,26 +100,51 @@ export function buildJudgeUserPrompt(
 		`**Target skills:** ${targetSkills.join(", ") || "(none — all agents should decline)"}\n`,
 	);
 
-	if (agents.length === 0 && (!declines || declines.length === 0)) {
-		parts.push("**No agents responded.**\n");
-	} else {
-		if (agents.length > 0) {
-			parts.push("## Agent Responses\n");
-			for (const agent of agents) {
+	if (allAgents && allAgents.length > 0) {
+		parts.push("## Available Agents\n");
+		for (const a of allAgents) {
+			parts.push(`- **${a.name}** (skills: ${a.skills.join(", ")})`);
+		}
+		parts.push("");
+	}
+
+	if (agents.length > 0) {
+		parts.push("## Agent Responses\n");
+		for (const agent of agents) {
+			parts.push(`**${agent.agentName}** (skills: ${agent.skills.join(", ")})`);
+			parts.push(agent.responseText);
+			parts.push("");
+		}
+	}
+
+	if (declines && declines.length > 0) {
+		parts.push("## Agent Declines\n");
+		for (const d of declines) {
+			parts.push(`**${d.agentName}** declined: ${d.reason}`);
+			parts.push("");
+		}
+	}
+
+	// Identify agents that timed out (neither responded nor declined)
+	if (allAgents && allAgents.length > 0) {
+		const respondedNames = new Set(agents.map((a) => a.agentName));
+		const declinedNames = new Set(declines?.map((d) => d.agentName) ?? []);
+		const timedOut = allAgents.filter(
+			(a) => !respondedNames.has(a.name) && !declinedNames.has(a.name),
+		);
+		if (timedOut.length > 0) {
+			parts.push("## Agent Timeouts\n");
+			for (const a of timedOut) {
 				parts.push(
-					`**${agent.agentName}** (skills: ${agent.skills.join(", ")})`,
+					`**${a.name}** (skills: ${a.skills.join(", ")}) — timed out without responding or declining`,
 				);
-				parts.push(agent.responseText);
-				parts.push("");
 			}
+			parts.push("");
 		}
-		if (declines && declines.length > 0) {
-			parts.push("## Agent Declines\n");
-			for (const d of declines) {
-				parts.push(`**${d.agentName}** declined: ${d.reason}`);
-				parts.push("");
-			}
-		}
+	}
+
+	if (agents.length === 0 && (!declines || declines.length === 0)) {
+		parts.push("**No agents responded or declined.**\n");
 	}
 
 	parts.push("## Instructions");

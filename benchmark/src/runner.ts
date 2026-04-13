@@ -25,7 +25,9 @@ export async function runProbe(
 	collector?: ResultCollector,
 	supportsRouting?: boolean,
 ): Promise<ProbeResult> {
-	const { userId } = await protocol.initialize("BenchUser");
+	const init = await protocol.initialize("BenchUser");
+	const userId = init.userId;
+	const allAgents = init.agents;
 	const chainId = crypto.randomUUID();
 
 	let agents: AgentProbeResult[] = [];
@@ -106,6 +108,7 @@ export async function runProbe(
 				probe.pattern,
 				judgeConfig,
 				declines,
+				allAgents,
 			);
 			judge = evaluation;
 		} catch {

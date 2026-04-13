@@ -87,18 +87,29 @@ export interface PatternMetrics {
 	assertionPassRate: number;
 	judgePassRate: number;
 	overallPassRate: number;
-	scoreRate: number; // avgInteractionScore / 3 * 100 — primary metric
+	scoreRate: number; // avgCompositeScore — primary metric (interaction + content)
+	interactionScoreRate: number; // avgInteractionScore / 3 * 100
+	contentScoreRate: number; // avgContentScore / 3 * 100
 	avgInteractionScore: number;
+	avgContentScore: number;
+	avgCompositeScore: number; // (interaction + content) / 6 * 100
 	avgCost: number;
+	avgDurationMs: number;
 	probeCount: number;
 	passedCount: number;
 }
 
 export interface ProtocolAggregateMetrics {
 	overallPassRate: number;
-	scoreRate: number; // avgInteractionScore / 3 * 100 — primary metric
+	scoreRate: number; // avgCompositeScore — primary metric (interaction + content)
+	interactionScoreRate: number; // avgInteractionScore / 3 * 100
+	contentScoreRate: number; // avgContentScore / 3 * 100
 	avgInteractionScore: number;
+	avgContentScore: number;
+	avgCompositeScore: number;
 	avgCost: number;
+	avgDurationMs: number;
+	costEfficiency: number; // compositeScore / avgCost (higher = better)
 	passedCount: number;
 	totalCount: number;
 	byPattern: Record<string, PatternMetrics>;

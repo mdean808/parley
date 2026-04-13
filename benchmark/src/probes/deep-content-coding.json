@@ -1,0 +1,10 @@
+{
+	"id": "deep-content-coding",
+	"prompt": "Write a TypeScript function that implements a least-recently-used (LRU) cache with O(1) get and put operations. Include the data structure choice explanation and edge case handling.",
+	"pattern": "single-route",
+	"targetSkills": ["coding"],
+	"expect": {
+		"agentCount": { "min": 1 },
+		"requiredSkills": ["coding"]
+	}
+}

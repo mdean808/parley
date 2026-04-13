@@ -53,8 +53,14 @@ function computePatternMetrics(
 			assertionPassRate: 0,
 			judgePassRate: 0,
 			overallPassRate: 0,
+			scoreRate: 0,
+			interactionScoreRate: 0,
+			contentScoreRate: 0,
 			avgInteractionScore: 0,
+			avgContentScore: 0,
+			avgCompositeScore: 0,
 			avgCost: 0,
+			avgDurationMs: 0,
 			probeCount: 0,
 			passedCount: 0,
 		};
@@ -68,12 +74,22 @@ function computePatternMetrics(
 	);
 
 	const scoredResults = judged.filter((r) => r.judge);
-	const avgScore =
+	const avgInteraction =
 		scoredResults.length > 0
 			? scoredResults.reduce(
 					(s, r) => s + (r.judge?.interactionScore ?? 0),
 					0,
 				) / scoredResults.length
+			: 0;
+	const avgContent =
+		scoredResults.length > 0
+			? scoredResults.reduce((s, r) => s + (r.judge?.contentScore ?? 0), 0) /
+				scoredResults.length
+			: 0;
+	const avgComposite =
+		scoredResults.length > 0
+			? scoredResults.reduce((s, r) => s + (r.judge?.compositeScore ?? 0), 0) /
+				scoredResults.length
 			: 0;
 
 	return {
@@ -82,10 +98,18 @@ function computePatternMetrics(
 		judgePassRate:
 			judged.length > 0 ? (judgePassed.length / judged.length) * 100 : 0,
 		overallPassRate: (overallPassed.length / patternResults.length) * 100,
-		scoreRate: scoredResults.length > 0 ? (avgScore / 3) * 100 : 0,
-		avgInteractionScore: avgScore,
+		scoreRate: avgComposite,
+		interactionScoreRate:
+			scoredResults.length > 0 ? (avgInteraction / 3) * 100 : 0,
+		contentScoreRate: scoredResults.length > 0 ? (avgContent / 3) * 100 : 0,
+		avgInteractionScore: avgInteraction,
+		avgContentScore: avgContent,
+		avgCompositeScore: avgComposite,
 		avgCost:
 			patternResults.reduce((s, r) => s + r.totalCost, 0) /
+			patternResults.length,
+		avgDurationMs:
+			patternResults.reduce((s, r) => s + r.totalDurationMs, 0) /
 			patternResults.length,
 		probeCount: patternResults.length,
 		passedCount: overallPassed.length,
@@ -230,10 +254,22 @@ export async function runComparison(
 		);
 
 		const scoredResults = allResults.filter((r) => r.judge);
-		const avgScore =
+		const avgInteraction =
 			scoredResults.length > 0
 				? scoredResults.reduce(
 						(s, r) => s + (r.judge?.interactionScore ?? 0),
+						0,
+					) / scoredResults.length
+				: 0;
+		const avgContent =
+			scoredResults.length > 0
+				? scoredResults.reduce((s, r) => s + (r.judge?.contentScore ?? 0), 0) /
+					scoredResults.length
+				: 0;
+		const avgComposite =
+			scoredResults.length > 0
+				? scoredResults.reduce(
+						(s, r) => s + (r.judge?.compositeScore ?? 0),
 						0,
 					) / scoredResults.length
 				: 0;
@@ -246,17 +282,30 @@ export async function runComparison(
 			}
 		}
 
+		const avgCost =
+			allResults.length > 0
+				? allResults.reduce((s, r) => s + r.totalCost, 0) / allResults.length
+				: 0;
+
 		protocolMetrics[pid] = {
 			overallPassRate:
 				allResults.length > 0
 					? (overallPassed.length / allResults.length) * 100
 					: 0,
-			scoreRate: scoredResults.length > 0 ? (avgScore / 3) * 100 : 0,
-			avgInteractionScore: avgScore,
-			avgCost:
+			scoreRate: avgComposite,
+			interactionScoreRate:
+				scoredResults.length > 0 ? (avgInteraction / 3) * 100 : 0,
+			contentScoreRate: scoredResults.length > 0 ? (avgContent / 3) * 100 : 0,
+			avgInteractionScore: avgInteraction,
+			avgContentScore: avgContent,
+			avgCompositeScore: avgComposite,
+			avgCost,
+			avgDurationMs:
 				allResults.length > 0
-					? allResults.reduce((s, r) => s + r.totalCost, 0) / allResults.length
+					? allResults.reduce((s, r) => s + r.totalDurationMs, 0) /
+						allResults.length
 					: 0,
+			costEfficiency: avgCost > 0 ? avgComposite / avgCost : 0,
 			passedCount: overallPassed.length,
 			totalCount: allResults.length,
 			byPattern,

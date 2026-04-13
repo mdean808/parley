@@ -41,7 +41,7 @@ echo "Starting CrewAI server on port 8000..."
 (
     if [ -f "$CREWAI_VENV" ]; then source "$CREWAI_VENV"; fi
     cd "$SCRIPT_DIR/external/crewai"
-    python3 -m uvicorn app.main:app --port 8000 --log-level warning
+    python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --log-level warning
 ) &
 PIDS+=($!)
 
@@ -59,7 +59,7 @@ for i in $(seq 0 $((AGENT_COUNT - 1))); do
         AGENT_NAME="$NAME" \
         AGENT_SKILLS="$SKILLS" \
         AGENT_PORT="$PORT" \
-        python3 -m uvicorn agent_server.main:app --port "$PORT" --log-level warning
+        python3 -m uvicorn agent_server.main:app --host 0.0.0.0 --port "$PORT" --log-level warning
     ) &
     PIDS+=($!)
 done
