@@ -92,18 +92,18 @@ export function printTerminalReport(report: ComparisonReport): void {
 			if (!r) continue;
 			if (r.error) {
 				failures.push({ probeId: r.probeId, protocolId: pid, reason: r.error });
-			} else if (!r.assertions.passed) {
-				const failed = r.assertions.details.filter((d) => !d.passed);
-				const reason = failed
-					.map((d) => `${d.name}: expected ${d.expected}, got ${d.actual}`)
-					.join("; ");
-				failures.push({ probeId: r.probeId, protocolId: pid, reason });
 			} else if (r.judge && !r.judge.pass) {
 				failures.push({
 					probeId: r.probeId,
 					protocolId: pid,
 					reason: r.judge.passReasoning,
 				});
+			} else if (!r.judge && !r.assertions.passed) {
+				const failed = r.assertions.details.filter((d) => !d.passed);
+				const reason = failed
+					.map((d) => `${d.name}: expected ${d.expected}, got ${d.actual}`)
+					.join("; ");
+				failures.push({ probeId: r.probeId, protocolId: pid, reason });
 			}
 		}
 	}

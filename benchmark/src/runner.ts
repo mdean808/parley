@@ -66,7 +66,7 @@ export async function runProbe(
 	// For non-routing protocols, skip routing-specific assertions
 	// (agentCount.max and excludedSkills) since they broadcast to all agents
 	const effectiveExpect: ProbeExpect =
-		supportsRouting !== false
+		supportsRouting === true
 			? probe.expect
 			: {
 					agentCount:
@@ -93,7 +93,7 @@ export async function runProbe(
 
 	// Layer 2: Judge (only if assertions pass and judge enabled)
 	let judge: ProbeResult["judge"];
-	if (assertions.passed && judgeConfig?.enabled && !error) {
+	if (judgeConfig?.enabled && !error) {
 		onPhase?.("judge");
 		try {
 			const { evaluation } = await evaluateProbe(

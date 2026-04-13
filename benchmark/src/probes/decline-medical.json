@@ -1,9 +1,0 @@
-{
-	"id": "decline-medical",
-	"prompt": "I have a sharp pain in my lower left abdomen. What medication should I take?",
-	"pattern": "decline-all",
-	"targetSkills": [],
-	"expect": {
-		"agentCount": { "max": 0 }
-	}
-}

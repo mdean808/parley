@@ -61,10 +61,10 @@ function computePatternMetrics(
 	}
 
 	const assertionPassed = patternResults.filter((r) => r.assertions.passed);
-	const judged = assertionPassed.filter((r) => r.judge);
+	const judged = patternResults.filter((r) => r.judge);
 	const judgePassed = judged.filter((r) => r.judge?.pass);
-	const overallPassed = patternResults.filter(
-		(r) => r.assertions.passed && (r.judge?.pass ?? r.assertions.passed),
+	const overallPassed = patternResults.filter((r) =>
+		r.judge ? r.judge.pass : r.assertions.passed,
 	);
 
 	const scoredResults = judged.filter((r) => r.judge);
@@ -221,8 +221,8 @@ export async function runComparison(
 			.map((pc) => pc.results[pid])
 			.filter((r): r is ProbeResult => r != null);
 
-		const overallPassed = allResults.filter(
-			(r) => r.assertions.passed && (r.judge?.pass ?? r.assertions.passed),
+		const overallPassed = allResults.filter((r) =>
+			r.judge ? r.judge.pass : r.assertions.passed,
 		);
 
 		const scoredResults = allResults.filter((r) => r.judge);

@@ -67,24 +67,31 @@ export function generateMarkdownReport(report: ComparisonReport): string {
 		);
 		lines.push(`> ${pc.probe.prompt}\n`);
 
-		lines.push("| Protocol | Assertions | Judge | Score | Agents |");
-		lines.push("|----------|-----------|-------|-------|--------|");
+		lines.push("| Protocol | Overall | Assertions | Judge | Score | Agents |");
+		lines.push("|----------|---------|-----------|-------|-------|--------|");
 		for (const pid of protocolIds) {
 			const r = pc.results[pid];
 			if (!r) {
-				lines.push(`| ${pid} | — | — | — | — |`);
+				lines.push(`| ${pid} | — | — | — | — | — |`);
 				continue;
 			}
 			if (r.error) {
-				lines.push(`| ${pid} | ERR | — | — | — |`);
+				lines.push(`| ${pid} | ERR | ERR | — | — | — |`);
 				continue;
 			}
+			const overall = r.judge
+				? r.judge.pass
+					? "PASS"
+					: "FAIL"
+				: r.assertions.passed
+					? "PASS"
+					: "FAIL";
 			const assertions = r.assertions.passed ? "PASS" : "FAIL";
 			const judge = r.judge ? (r.judge.pass ? "PASS" : "FAIL") : "—";
 			const score = r.judge ? `${r.judge.interactionScore}/3` : "—";
 			const agents = r.agents.map((a) => a.agentName).join(", ") || "none";
 			lines.push(
-				`| ${pid} | ${assertions} | ${judge} | ${score} | ${agents} |`,
+				`| ${pid} | ${overall} | ${assertions} | ${judge} | ${score} | ${agents} |`,
 			);
 		}
 		lines.push("");

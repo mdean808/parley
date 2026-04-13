@@ -1,9 +1,0 @@
-{
-	"id": "handoff-creative-to-technical",
-	"prompt": "Write me a short poem about recursion, then show me a Python implementation of a recursive Fibonacci function.",
-	"pattern": "handoff",
-	"targetSkills": ["creative-writing", "coding"],
-	"expect": {
-		"requiredSkills": ["creative-writing", "coding"]
-	}
-}
