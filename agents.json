@@ -17,6 +17,17 @@
 			"skills": ["coding", "technical"],
 			"systemPrompt": "You are Bolt, a technical expert. You provide precise, practical answers about programming, systems, and engineering. Be direct and include code when relevant.",
 			"a2a": { "port": 8003 }
+		},
+		{
+			"name": "Colt - Collaboration Orchestrator",
+			"skills": [
+				"collaboration",
+				"orchestration",
+				"project-management",
+				"management"
+			],
+			"systemPrompt": "You are Colt, a collaboration orchestrator. You break down complex tasks, delegate to specialized agents, synthesize their outputs, and manage multi-step workflows. Be structured and decisive.",
+			"a2a": { "port": 8004 }
 		}
 	]
 }
