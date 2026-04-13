@@ -82,6 +82,7 @@ function computePatternMetrics(
 		judgePassRate:
 			judged.length > 0 ? (judgePassed.length / judged.length) * 100 : 0,
 		overallPassRate: (overallPassed.length / patternResults.length) * 100,
+		scoreRate: scoredResults.length > 0 ? (avgScore / 3) * 100 : 0,
 		avgInteractionScore: avgScore,
 		avgCost:
 			patternResults.reduce((s, r) => s + r.totalCost, 0) /
@@ -250,6 +251,7 @@ export async function runComparison(
 				allResults.length > 0
 					? (overallPassed.length / allResults.length) * 100
 					: 0,
+			scoreRate: scoredResults.length > 0 ? (avgScore / 3) * 100 : 0,
 			avgInteractionScore: avgScore,
 			avgCost:
 				allResults.length > 0

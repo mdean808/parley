@@ -16,12 +16,12 @@ export function generateMarkdownReport(report: ComparisonReport): string {
 
 	// Protocol comparison table
 	lines.push("## Protocol Comparison\n");
-	lines.push("| Protocol | Overall Pass | Avg Score | Avg Cost |");
-	lines.push("|----------|-------------|-----------|----------|");
+	lines.push("| Protocol | Score | Pass | Avg Cost |");
+	lines.push("|----------|-------|------|----------|");
 	for (const pid of protocolIds) {
 		const m = metrics[pid];
 		lines.push(
-			`| ${pid} | ${m.passedCount}/${m.totalCount} (${m.overallPassRate.toFixed(1)}%) | ${m.avgInteractionScore.toFixed(1)}/3 | $${m.avgCost.toFixed(4)} |`,
+			`| ${pid} | ${m.scoreRate.toFixed(1)}% | ${m.passedCount}/${m.totalCount} | $${m.avgCost.toFixed(4)} |`,
 		);
 	}
 	lines.push("");
@@ -43,15 +43,15 @@ export function generateMarkdownReport(report: ComparisonReport): string {
 		if (!hasData) continue;
 
 		lines.push(`### ${pattern}\n`);
-		lines.push("| Protocol | Pass Rate | Avg Score | Probes |");
-		lines.push("|----------|-----------|-----------|--------|");
+		lines.push("| Protocol | Score | Pass | Probes |");
+		lines.push("|----------|-------|------|--------|");
 		for (const pid of protocolIds) {
 			const pm = metrics[pid]?.byPattern[pattern];
 			if (!pm || pm.probeCount === 0) {
 				lines.push(`| ${pid} | — | — | 0 |`);
 			} else {
 				lines.push(
-					`| ${pid} | ${pm.overallPassRate.toFixed(1)}% (${pm.passedCount}/${pm.probeCount}) | ${pm.avgInteractionScore.toFixed(1)}/3 | ${pm.probeCount} |`,
+					`| ${pid} | ${pm.scoreRate.toFixed(1)}% (${pm.avgInteractionScore.toFixed(1)}/3) | ${pm.passedCount}/${pm.probeCount} | ${pm.probeCount} |`,
 				);
 			}
 		}

@@ -96,6 +96,7 @@ export class ProtocolAgentV2 {
 
 		const history = this.chainHistory.get(message.chainId) ?? [];
 		const hasRespondedOnChain = this.chainResponded.has(message.chainId);
+		const isDirectRequest = message.to.includes(this.agent.id);
 
 		// For follow-up requests on chains we already responded to,
 		// send ACK immediately (bypass LLM) so it arrives within the ACK window
@@ -115,6 +116,23 @@ export class ProtocolAgentV2 {
 			});
 		}
 
+		// For direct requests (addressed to this agent by ID), auto-ACK
+		if (!hasRespondedOnChain && isDirectRequest) {
+			this.safeStoreMessage(component, {
+				chainId: message.chainId,
+				replyTo: message.id,
+				type: "ACK",
+				payload: `${this.agent.name} accepting direct request`,
+				headers: { accept: "true" },
+				from: this.agent.id,
+				to: message.to,
+			});
+			log.info(component, "auto_ack_direct", {
+				chainId: message.chainId,
+				requestId: message.id,
+			});
+		}
+
 		// Build the user message for the LLM
 		const messageFields = `id: ${message.id}\nversion: ${message.version}\nchainId: ${message.chainId}\nsequence: ${message.sequence}\nreplyTo: ${message.replyTo ?? "undefined"}\ntimestamp: ${message.timestamp}\ntype: ${message.type}\npayload: ${message.payload}\nheaders: ${JSON.stringify(message.headers)}\nfrom: ${message.from}\nto: ${message.to.join(", ")}`;
 
@@ -122,8 +140,11 @@ export class ProtocolAgentV2 {
 		if (hasRespondedOnChain) {
 			// Already responded on this chain — skip skill evaluation and ACK (already sent)
 			userContent = `This is a FOLLOW-UP on a chain you already responded to. ACK has already been sent on your behalf.\n\nNew REQUEST:\n\n${messageFields}\n\nProceed directly: send PROCESS, then RESPONSE. Set replyTo to "${message.id}" on all messages you send.`;
+		} else if (isDirectRequest) {
+			// Direct request addressed to this agent by ID — always accept, skip skill evaluation
+			userContent = `You received a DIRECT REQUEST addressed specifically to you by another agent. ACK with accept: true has already been sent on your behalf.\n\nREQUEST:\n\n${messageFields}\n\nThis request was sent directly to you — do your best to fulfill it regardless of skill match. Proceed directly: send PROCESS, then RESPONSE. Set replyTo to "${message.id}" on all messages you send.`;
 		} else {
-			// First request on this chain — evaluate skills
+			// Broadcast request — evaluate skills
 			userContent = `You received a new REQUEST message:\n\n${messageFields}\n\nEvaluate this request against your skills. You MUST send an ACK:\n- If it matches your skills: send ACK with header \`accept: true\`, then PROCESS, then RESPONSE.\n- If it does not match: send ACK with header \`accept: false\` and a one-sentence reason in the payload. Then stop.\n\nSet replyTo to "${message.id}" on all messages you send.`;
 		}
 

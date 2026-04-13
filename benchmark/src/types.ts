@@ -87,6 +87,7 @@ export interface PatternMetrics {
 	assertionPassRate: number;
 	judgePassRate: number;
 	overallPassRate: number;
+	scoreRate: number; // avgInteractionScore / 3 * 100 — primary metric
 	avgInteractionScore: number;
 	avgCost: number;
 	probeCount: number;
@@ -95,6 +96,7 @@ export interface PatternMetrics {
 
 export interface ProtocolAggregateMetrics {
 	overallPassRate: number;
+	scoreRate: number; // avgInteractionScore / 3 * 100 — primary metric
 	avgInteractionScore: number;
 	avgCost: number;
 	passedCount: number;

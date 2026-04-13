@@ -42,9 +42,10 @@ ${RUBRIC_DESCRIPTIONS[pattern]}
 ## Content Check
 - **content_adequate**: As a minor secondary check, the collective response is not complete nonsense — it bears some reasonable relationship to the user's request. This is a very low bar.
 
-## Pass/Fail
-- PASS: All rubric criteria are true.
-- FAIL: Any rubric criterion is false.
+## Evaluation
+Evaluate each rubric criterion independently on its own merits. After scoring all criteria:
+- Set pass to true only if ALL rubric criteria are true.
+- Set pass to false if ANY rubric criterion is false.
 
 ## Guidelines
 - Focus on the interaction pattern, not the underlying LLM's knowledge.

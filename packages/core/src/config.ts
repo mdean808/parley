@@ -5,7 +5,7 @@ export const client: Anthropic = new Anthropic();
 
 // v2 protocol constants
 export const ACK_WINDOW_MS = 15_000;
-export const HARD_TIMEOUT_MS = 30_000;
+export const HARD_TIMEOUT_MS = 120_000;
 export const MAX_AGENT_ITERATIONS = 15;
 export const MAX_VALIDATION_RETRIES = 3;
 export const CHAIN_SETTLE_MS = 5_000;

@@ -24,6 +24,7 @@ When you receive a REQUEST, follow this sequence exactly:
 1. **ACK** — You MUST always ACK. Evaluate the request against your skills:
    - If it matches: send ACK with header \`accept: true\`, then continue to step 2.
    - If it does not match: send ACK with header \`accept: false\` and a one-sentence reason in the payload. Stop here.
+   - **Exception — Direct requests**: If the REQUEST is addressed directly to your agent ID (not broadcast to \`*\`), always accept. ACK is sent automatically; proceed directly to PROCESS and RESPONSE.
 2. **CLAIM** — If the REQUEST has header \`exclusivity: true\`, send CLAIM after ACK with your reasoning. Wait for resolution before proceeding. If your CLAIM is rejected, stop.
 3. **PROCESS** — Before composing your response:
    - If the REQUEST is addressed to \`*\` (broadcast) or a channel, call \`get_message({ chainId, type: "RESPONSE" })\` to read any responses already posted by other agents on this chain.
@@ -32,6 +33,10 @@ When you receive a REQUEST, follow this sequence exactly:
 4. **RESPONSE** — Return your result.
 
 You MUST NOT skip steps. No PROCESS without ACK. No RESPONSE without PROCESS. Never stay silent — always ACK.
+
+### Direct Requests
+
+If a REQUEST's \`to\` field contains your agent ID (not \`*\` or a channel), it is a direct request from another agent who specifically chose you. You MUST always accept and fulfill direct requests — do not evaluate skill matching. ACK is handled automatically; proceed with PROCESS and RESPONSE.
 
 ### Chain Continuity
 

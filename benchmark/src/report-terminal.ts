@@ -23,11 +23,11 @@ export function printTerminalReport(report: ComparisonReport): void {
 
 	// Summary table
 	console.log(chalk.bold("Protocol Summary"));
-	const cols = [12, 14, 10, 12];
+	const cols = [12, 10, 10, 12];
 	const hdr = [
 		pad("Protocol", cols[0]),
-		pad("Overall Pass", cols[1]),
-		pad("Avg Score", cols[2]),
+		pad("Score", cols[1]),
+		pad("Pass", cols[2]),
 		pad("Avg Cost", cols[3]),
 	].join(" | ");
 	console.log(hdr);
@@ -36,13 +36,17 @@ export function printTerminalReport(report: ComparisonReport): void {
 	for (const pid of protocolIds) {
 		const m = metrics[pid];
 		if (!m) continue;
+		const scoreLabel = `${m.scoreRate.toFixed(1)}%`;
+		const scoreColored =
+			m.scoreRate >= 70
+				? chalk.green(scoreLabel)
+				: m.scoreRate >= 40
+					? chalk.yellow(scoreLabel)
+					: chalk.red(scoreLabel);
 		const row = [
 			pad(pid, cols[0]),
-			pad(
-				`${m.passedCount}/${m.totalCount} (${m.overallPassRate.toFixed(0)}%)`,
-				cols[1],
-			),
-			pad(`${m.avgInteractionScore.toFixed(1)}/3`, cols[2]),
+			pad(scoreColored, cols[1]),
+			pad(`${m.passedCount}/${m.totalCount}`, cols[2]),
 			pad(`$${m.avgCost.toFixed(4)}`, cols[3]),
 		].join(" | ");
 		console.log(row);
@@ -70,12 +74,12 @@ export function printTerminalReport(report: ComparisonReport): void {
 		const vals = protocolIds.map((pid) => {
 			const pm = metrics[pid]?.byPattern[pattern];
 			if (!pm || pm.probeCount === 0) return pad(chalk.dim("—"), protoCol);
-			const pct = pm.overallPassRate.toFixed(0);
-			const label = `${pct}% (${pm.passedCount}/${pm.probeCount})`;
+			const pct = pm.scoreRate.toFixed(0);
+			const label = `${pct}% (${pm.avgInteractionScore.toFixed(1)}/3)`;
 			const colored =
-				pm.overallPassRate >= 70
+				pm.scoreRate >= 70
 					? chalk.green(label)
-					: pm.overallPassRate >= 40
+					: pm.scoreRate >= 40
 						? chalk.yellow(label)
 						: chalk.red(label);
 			return pad(colored, protoCol);
@@ -83,19 +87,29 @@ export function printTerminalReport(report: ComparisonReport): void {
 		console.log([pad(pattern, patternCol), ...vals].join(" | "));
 	}
 
-	// Failures
-	const failures: { probeId: string; protocolId: string; reason: string }[] =
-		[];
+	// Issues (partial scores + failures)
+	const issues: {
+		probeId: string;
+		protocolId: string;
+		score: string;
+		reason: string;
+	}[] = [];
 	for (const pc of report.probes) {
 		for (const pid of protocolIds) {
 			const r = pc.results[pid];
 			if (!r) continue;
 			if (r.error) {
-				failures.push({ probeId: r.probeId, protocolId: pid, reason: r.error });
-			} else if (r.judge && !r.judge.pass) {
-				failures.push({
+				issues.push({
 					probeId: r.probeId,
 					protocolId: pid,
+					score: "ERR",
+					reason: r.error,
+				});
+			} else if (r.judge && r.judge.interactionScore < 3) {
+				issues.push({
+					probeId: r.probeId,
+					protocolId: pid,
+					score: `${r.judge.interactionScore}/3`,
 					reason: r.judge.passReasoning,
 				});
 			} else if (!r.judge && !r.assertions.passed) {
@@ -103,15 +117,26 @@ export function printTerminalReport(report: ComparisonReport): void {
 				const reason = failed
 					.map((d) => `${d.name}: expected ${d.expected}, got ${d.actual}`)
 					.join("; ");
-				failures.push({ probeId: r.probeId, protocolId: pid, reason });
+				issues.push({
+					probeId: r.probeId,
+					protocolId: pid,
+					score: "FAIL",
+					reason,
+				});
 			}
 		}
 	}
 
-	if (failures.length > 0) {
-		console.log(chalk.bold.red(`\nFailures (${failures.length})`));
-		for (const f of failures) {
-			console.log(chalk.red(`  x ${f.protocolId} x ${f.probeId}: ${f.reason}`));
+	if (issues.length > 0) {
+		console.log(chalk.bold.red(`\nIssues (${issues.length})`));
+		for (const f of issues) {
+			const color =
+				f.score === "ERR" || f.score === "FAIL" || f.score === "0/3"
+					? chalk.red
+					: chalk.yellow;
+			console.log(
+				color(`  x ${f.protocolId} x ${f.probeId}: ${f.score} — ${f.reason}`),
+			);
 		}
 	}
 
