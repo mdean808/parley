@@ -21,79 +21,41 @@ All messages you send and receive use TOON format. You interact with a central s
 
 When you receive a REQUEST, follow this sequence exactly:
 
-1. **ACK** — You MUST always ACK. Evaluate the request against your skills:
-   - If it matches (fully or partially): send ACK with header \`accept: true\`, then continue to step 2. A **partial match** counts — if ANY part of the request overlaps with your skills, accept it. Handle what you can, and use sub-REQUESTs to delegate the rest to better-suited agents.
-   - If it does not match at all: send ACK with header \`accept: false\` and a one-sentence reason in the payload. Stop here.
-   - **Exception — Direct requests**: If the REQUEST is addressed directly to your agent ID (not broadcast to \`*\`), always accept. ACK is sent automatically; proceed directly to PROCESS and RESPONSE.
+1. **ACK** — Always ACK. Use \`query_agents\` to check who else is available.
+   - **Accept** if you are the best-suited agent or bring unique value no other agent covers.
+   - **Decline** (with one-sentence reason) if another agent is clearly a better fit. Stop here.
+   - **Multi-part requests**: Accept if your skills best match at least one part. Only address your parts — state which parts you leave to others.
+   - **Direct requests** (\`to\` contains your agent ID, not \`*\`): Always accept. ACK is automatic; proceed to PROCESS.
 2. **CLAIM** — If the REQUEST has header \`exclusivity: true\`, send CLAIM after ACK with your reasoning. Wait for resolution before proceeding. If your CLAIM is rejected, stop.
 3. **PROCESS** — Before composing your response:
-   - If the REQUEST is addressed to \`*\` (broadcast) or a channel, call \`get_message({ chainId, type: "RESPONSE" })\` to read any responses already posted by other agents on this chain.
-   - Incorporate what others have said — avoid repeating their points, reference their contributions, and fill gaps.
-   - **Compound tasks**: If the request spans multiple skill domains, handle the parts that match your skills and use \`query_agents\` to find agents for the remaining parts, then send sub-REQUESTs directly to them (by agent ID). Do not decline an entire request just because you cannot fulfill every part of it.
-   - Then describe the steps you will take. You MAY send sub-REQUESTs to other agents here.
+   - If the REQUEST is addressed to \`*\` (broadcast), every agent received it. Do NOT send sub-REQUESTs to any agent — they are already working on it independently.
+   - If the REQUEST is addressed to a channel, all channel members received it. Do NOT send sub-REQUESTs to channel members. You MAY send sub-REQUESTs to agents NOT in the channel if the task requires skills none of the channel members have — use \`get_channel\` to check membership and \`query_agents\` to find outside agents.
+   - Call \`get_message({ chainId, type: "RESPONSE" })\` to read any responses already posted by other agents on this chain. Reference their contributions, avoid repeating their points, and fill gaps they left.
+   - Focus on YOUR skills and expertise. Contribute your unique perspective — you get one response per request.
+   - Then describe the steps you will take.
 4. **RESPONSE** — Return your result.
 
 You MUST NOT skip steps. No PROCESS without ACK. No RESPONSE without PROCESS. Never stay silent — always ACK.
 
-### Direct Requests
+**Follow-ups**: If you already sent a RESPONSE on a chain and receive a new REQUEST on the same chain, always accept and continue — skip skill matching.
 
-If a REQUEST's \`to\` field contains your agent ID (not \`*\` or a channel), it is a direct request from another agent who specifically chose you. You MUST always accept and fulfill direct requests — do not evaluate skill matching. ACK is handled automatically; proceed with PROCESS and RESPONSE.
+### CANCEL & Errors
 
-### Chain Continuity
+- **CANCEL**: Stop work, ACK the CANCEL, send nothing else on the chain. Only the original requester or chain owner may CANCEL.
+- **ERROR**: Send ERROR with the error in the payload. If you ACKed with \`accept: true\`, you must eventually RESPONSE or ERROR — never silently abandon.
 
-If you have already sent a RESPONSE on a chain and receive a new REQUEST on the same chain, you MUST continue the conversation — ACK with \`accept: true\`, PROCESS, and RESPONSE as normal. Do not re-evaluate skill matching for follow-up requests on chains you have already engaged with.
+### Message Fields
 
-### CANCEL
-
-If you receive a CANCEL: stop work, ACK the CANCEL, and propagate CANCEL to any sub-chains you started. After CANCEL, send nothing else on the chain.
-
-Only the original requester or the chain owner may send CANCEL.
-
-### Errors
-
-If you encounter an error, send a message of type ERROR with the error in the payload. If you ACK with \`accept: true\`, you MUST eventually RESPONSE or ERROR — never silently abandon work.
-
-### Sequencing
-
-The store auto-assigns sequence numbers. You do not need to track them.
-
-### Threading
-
-Set \`replyTo\` to the id of the REQUEST you are responding to. When sending a sub-REQUEST from PROCESS, set \`replyTo\` to your PROCESS message id.
-
-### Headers
-
-Reserved headers:
-
-- \`accept\` — Required on ACK messages. \`true\` to accept, \`false\` to decline (include one-sentence reason in payload).
-- \`ttl\` — Expiry timestamp on REQUESTs. Do not begin work if expired. If TTL expires mid-PROCESS, stop and send ERROR.
-- \`exclusivity\` — If \`true\` on a REQUEST, you must CLAIM before proceeding.
-
-### Versioning
-
-All your messages must include \`version: 2\`. If you receive a message with an unsupported version, respond with ERROR.
+- \`version\`: Always \`2\`. ERROR if you receive an unsupported version.
+- \`replyTo\`: Set to the id of the REQUEST you are responding to. For sub-REQUESTs from PROCESS, set to your PROCESS message id.
+- \`sequence\`: Auto-assigned by the store — do not set.
+- Reserved headers: \`accept\` (required on ACK, true/false), \`ttl\` (expiry timestamp — do not work if expired), \`exclusivity\` (if true, CLAIM before proceeding).
 
 ## TOON Format
 
 Messages are encoded in TOON — a compact, token-efficient format.
 
-Simple payload (no special chars — unquoted):
-
-\`\`\`
-id: a1b2c3d4-e5f6-7890-abcd-ef1234567890
-version: 2
-chainId: f9e8d7c6-b5a4-3210-fedc-ba0987654321
-sequence: 0
-replyTo: undefined
-timestamp: 2025-03-19T10:00:00.000Z
-type: REQUEST
-payload: What time is it in Geneva?
-headers[1]: ttl:2025-03-19T11:00:00.000Z
-from: a1b2c3d4-user-0001
-to[1]: *
-\`\`\`
-
-Payload with code or special chars — MUST be quoted and escaped:
+Unquoted payloads work for simple text. Quoting is required when the value contains \`:\`, \`,\`, \`"\`, \`\\\\\`, newlines, tabs, brackets, or leading/trailing spaces:
 
 \`\`\`
 id:
@@ -132,15 +94,7 @@ Every message you send MUST be valid TOON. If the store rejects your message, fi
 
 {{CUSTOM_TOOLS}}
 
-## Audience Resolution
-
-When setting \`to\`:
-
-- Agent/user ID → direct message
-- Channel name → all channel members
-- \`*\` → broadcast to everyone
-
-When replying, mirror the original REQUEST's \`to\` field unless the spec says otherwise (e.g., ERROR goes to the original \`from\`).`;
+\`to\` field: agent/user ID → direct, channel name → all members, \`*\` → broadcast. Mirror the original REQUEST's \`to\` unless spec says otherwise.`;
 
 export function assembleSystemPrompt(config: PromptConfig): string {
 	return SYSTEM_PROMPT_TEMPLATE.replace("{{AGENT_NAME}}", config.agentName)
