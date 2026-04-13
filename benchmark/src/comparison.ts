@@ -1,5 +1,9 @@
 import { MODEL } from "core/config";
-import { createProtocol, getProtocolIds } from "protocols/factory";
+import {
+	createProtocol,
+	getProtocolIds,
+	getProtocolRegistration,
+} from "protocols/factory";
 import type { JudgeConfig } from "./judge-types.ts";
 import { runPool } from "./pool.ts";
 import {
@@ -128,6 +132,7 @@ export async function runComparison(
 			try {
 				const collector = new ResultCollector();
 				const protocol = createProtocol(pid, { onMessage: collector.handler });
+				const reg = getProtocolRegistration(pid);
 				const result = await runProbe(
 					protocol,
 					pid,
@@ -141,6 +146,7 @@ export async function runComparison(
 							phase,
 						}),
 					collector,
+					reg?.supportsRouting,
 				);
 				progress({
 					type: "complete",

@@ -20,6 +20,7 @@ export interface ProtocolOptions {
 export interface ProtocolRegistration {
 	label: string;
 	description: string;
+	supportsRouting?: boolean;
 	create: (options?: ProtocolOptions) => Protocol;
 }
 
@@ -59,6 +60,7 @@ export function createProtocol(
 registerProtocol("v2", {
 	label: "Default Protocol (v2)",
 	description: "agentic tool-use, chains, channels, TOON",
+	supportsRouting: true,
 	create: (options) => {
 		const personas = createAgentPersonas();
 		return new DefaultProtocolV2({

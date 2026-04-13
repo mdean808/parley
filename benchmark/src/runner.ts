@@ -8,6 +8,7 @@ import type { JudgeConfig } from "./judge-types.ts";
 import type {
 	AgentProbeResult,
 	ProbeConfig,
+	ProbeExpect,
 	ProbeResult,
 	ProtocolId,
 } from "./types.ts";
@@ -21,6 +22,7 @@ export async function runProbe(
 	judgeConfig?: JudgeConfig,
 	onPhase?: (phase: string) => void,
 	collector?: ResultCollector,
+	supportsRouting?: boolean,
 ): Promise<ProbeResult> {
 	const { userId } = await protocol.initialize("BenchUser");
 	const chainId = crypto.randomUUID();
@@ -61,6 +63,19 @@ export async function runProbe(
 	}
 	const totalDurationMs = performance.now() - start;
 
+	// For non-routing protocols, skip routing-specific assertions
+	// (agentCount.max and excludedSkills) since they broadcast to all agents
+	const effectiveExpect: ProbeExpect =
+		supportsRouting !== false
+			? probe.expect
+			: {
+					agentCount:
+						probe.expect.agentCount?.min != null
+							? { min: probe.expect.agentCount.min }
+							: undefined,
+					requiredSkills: probe.expect.requiredSkills,
+				};
+
 	// Layer 1: Assertions
 	const assertions = error
 		? {
@@ -74,7 +89,7 @@ export async function runProbe(
 					},
 				],
 			}
-		: checkAssertions(probe.expect, agents);
+		: checkAssertions(effectiveExpect, agents);
 
 	// Layer 2: Judge (only if assertions pass and judge enabled)
 	let judge: ProbeResult["judge"];

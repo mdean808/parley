@@ -1,5 +1,5 @@
 import type Anthropic from "@anthropic-ai/sdk";
-import { CHAIN_SETTLE_MS } from "core/config";
+import { HARD_TIMEOUT_MS } from "core/config";
 import type {
 	AgentPersona,
 	AgentResult,
@@ -31,10 +31,15 @@ export class DefaultProtocolV2 implements Protocol {
 	private readonly agentMeta: Map<string, AgentMeta> = new Map();
 	private readonly protocolAgents: ProtocolAgentV2[] = [];
 
-	/** Per-chain settling: tracks the timer and resolve callback. */
-	private readonly chainSettlers: Map<
+	/** Per-chain completion tracking: resolves when all agents respond or decline. */
+	private readonly chainTrackers: Map<
 		string,
-		{ timer: ReturnType<typeof setTimeout>; resolve: () => void }
+		{
+			total: number;
+			done: Set<string>;
+			resolve: () => void;
+			hardTimer: ReturnType<typeof setTimeout>;
+		}
 	> = new Map();
 
 	constructor(config: DefaultProtocolV2Config) {
@@ -54,6 +59,9 @@ export class DefaultProtocolV2 implements Protocol {
 				onEvent: this.config.onEvent,
 				onMeta: (chainId: string, meta: AgentMeta) => {
 					this.agentMeta.set(`${agent.id}:${chainId}`, meta);
+				},
+				onDecline: (chainId: string) => {
+					this.markAgentDone(chainId, agent.id);
 				},
 			});
 			protocolAgent.start();
@@ -98,17 +106,30 @@ export class DefaultProtocolV2 implements Protocol {
 
 		const requestToon = encodeMessageV2(request);
 
-		// Create a settling promise for this chain
-		const settled = this.createSettledPromise(chainId);
+		// Create completion tracker — resolves when all agents respond or decline
+		const settled = new Promise<void>((resolve) => {
+			const total = this.protocolAgents.length;
+			if (total === 0) {
+				resolve();
+				return;
+			}
+			const tracker = {
+				total,
+				done: new Set<string>(),
+				resolve,
+				hardTimer: setTimeout(() => {
+					this.chainTrackers.delete(chainId);
+					resolve();
+				}, HARD_TIMEOUT_MS),
+			};
+			this.chainTrackers.set(chainId, tracker);
+		});
 
 		return { chainId, requestId: request.id, requestToon, settled };
 	}
 
 	/** Handles messages delivered to the user via store subscription. */
 	private handleIncomingMessage(msg: MessageV2): void {
-		// Reset the settling timer for this chain on any activity
-		this.resetSettleTimer(msg.chainId);
-
 		if (msg.type !== "RESPONSE" && msg.type !== "ERROR") return;
 
 		const [agent] = this.store.getAgent([msg.from]);
@@ -142,53 +163,18 @@ export class DefaultProtocolV2 implements Protocol {
 		});
 
 		this.config.onMessage?.(result, msg.chainId);
+		this.markAgentDone(msg.chainId, agent.id);
 	}
 
-	/**
-	 * Creates a promise that resolves when chain activity settles
-	 * (no new messages to the user for CHAIN_SETTLE_MS).
-	 */
-	private createSettledPromise(chainId: string): Promise<void> {
-		// If there's already a settler for this chain, return a new one
-		// that chains off the existing timer reset logic
-		const existing = this.chainSettlers.get(chainId);
-		if (existing) {
-			// Reset the timer — new request on same chain
-			this.resetSettleTimer(chainId);
-			return new Promise<void>((resolve) => {
-				const prev = this.chainSettlers.get(chainId);
-				if (prev) {
-					const originalResolve = prev.resolve;
-					prev.resolve = () => {
-						originalResolve();
-						resolve();
-					};
-				}
-			});
+	/** Marks an agent as done on a chain. Resolves the settled promise when all agents are done. */
+	private markAgentDone(chainId: string, agentId: string): void {
+		const tracker = this.chainTrackers.get(chainId);
+		if (!tracker) return;
+		tracker.done.add(agentId);
+		if (tracker.done.size >= tracker.total) {
+			clearTimeout(tracker.hardTimer);
+			this.chainTrackers.delete(chainId);
+			tracker.resolve();
 		}
-
-		return new Promise<void>((resolve) => {
-			const timer = setTimeout(() => {
-				this.chainSettlers.delete(chainId);
-				resolve();
-			}, CHAIN_SETTLE_MS);
-
-			this.chainSettlers.set(chainId, { timer, resolve });
-		});
-	}
-
-	/** Resets the settling timer for a chain (new activity detected). */
-	private resetSettleTimer(chainId: string): void {
-		const settler = this.chainSettlers.get(chainId);
-		if (!settler) return;
-
-		clearTimeout(settler.timer);
-		settler.timer = setTimeout(() => {
-			const s = this.chainSettlers.get(chainId);
-			if (s) {
-				this.chainSettlers.delete(chainId);
-				s.resolve();
-			}
-		}, CHAIN_SETTLE_MS);
 	}
 }
