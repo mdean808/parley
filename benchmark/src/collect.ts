@@ -1,18 +1,35 @@
-import type { AgentResult, Protocol } from "core/types";
+import type { AgentResult, Protocol, ProtocolEvent } from "core/types";
+import type { DeclineInfo } from "./types.ts";
+
+interface Batch {
+	results: AgentResult[];
+	declines: DeclineInfo[];
+}
 
 /**
- * Accumulates AgentResults from the protocol's onMessage callback.
- * Create one per protocol instance and pass collector.handler as the onMessage option.
+ * Accumulates AgentResults from the protocol's onMessage callback
+ * and decline events from the protocol's onEvent callback.
+ * Create one per protocol instance and pass collector.handler as onMessage
+ * and collector.eventHandler as onEvent.
  */
 export class ResultCollector {
-	private activeBatch: { results: AgentResult[] } | null = null;
+	private activeBatch: Batch | null = null;
 
 	readonly handler = (result: AgentResult, _chainId: string) => {
 		this.activeBatch?.results.push(result);
 	};
 
-	startBatch(): { results: AgentResult[] } {
-		const batch = { results: [] as AgentResult[] };
+	readonly eventHandler = (event: ProtocolEvent) => {
+		if (event.type === "decline") {
+			this.activeBatch?.declines.push({
+				agentName: event.agentName,
+				reason: event.detail,
+			});
+		}
+	};
+
+	startBatch(): Batch {
+		const batch: Batch = { results: [], declines: [] };
 		this.activeBatch = batch;
 		return batch;
 	}
@@ -29,9 +46,9 @@ export async function collectSendRequest(
 	userId: string,
 	message: string,
 	chainId: string,
-): Promise<AgentResult[]> {
+): Promise<Batch> {
 	const batch = collector.startBatch();
 	const { settled } = await protocol.sendRequest(userId, message, chainId);
 	await settled;
-	return batch.results;
+	return batch;
 }

@@ -7,6 +7,7 @@ import { evaluateProbe } from "./judge.ts";
 import type { JudgeConfig } from "./judge-types.ts";
 import type {
 	AgentProbeResult,
+	DeclineInfo,
 	ProbeConfig,
 	ProbeExpect,
 	ProbeResult,
@@ -28,19 +29,21 @@ export async function runProbe(
 	const chainId = crypto.randomUUID();
 
 	let agents: AgentProbeResult[] = [];
+	let declines: DeclineInfo[] = [];
 	let error: string | undefined;
 
 	const start = performance.now();
 	try {
 		if (collector) {
-			const results = await collectSendRequest(
+			const batch = await collectSendRequest(
 				protocol,
 				collector,
 				userId,
 				probe.prompt,
 				chainId,
 			);
-			agents = results.map((r) => {
+			declines = batch.declines;
+			agents = batch.results.map((r) => {
 				const inputTokens = r.usage?.inputTokens ?? 0;
 				const outputTokens = r.usage?.outputTokens ?? 0;
 				const model = r.model ?? MODEL;
@@ -102,6 +105,7 @@ export async function runProbe(
 				agents,
 				probe.pattern,
 				judgeConfig,
+				declines,
 			);
 			judge = evaluation;
 		} catch {
@@ -116,6 +120,7 @@ export async function runProbe(
 		pattern: probe.pattern,
 		prompt: probe.prompt,
 		agents,
+		declines: declines.length > 0 ? declines : undefined,
 		assertions,
 		judge,
 		totalInputTokens: agents.reduce((s, a) => s + a.inputTokens, 0),

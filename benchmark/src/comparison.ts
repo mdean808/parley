@@ -131,7 +131,10 @@ export async function runComparison(
 			const taskStart = performance.now();
 			try {
 				const collector = new ResultCollector();
-				const protocol = createProtocol(pid, { onMessage: collector.handler });
+				const protocol = createProtocol(pid, {
+					onMessage: collector.handler,
+					onEvent: collector.eventHandler,
+				});
 				const reg = getProtocolRegistration(pid);
 				const result = await runProbe(
 					protocol,

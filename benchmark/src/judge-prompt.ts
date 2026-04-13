@@ -1,5 +1,5 @@
 import type { InteractionPattern } from "./judge-types.ts";
-import type { AgentProbeResult } from "./types.ts";
+import type { AgentProbeResult, DeclineInfo } from "./types.ts";
 
 const RUBRIC_DESCRIPTIONS: Record<InteractionPattern, string> = {
 	"single-route": `## Interaction Rubric (Routing)
@@ -56,6 +56,7 @@ export function buildJudgeUserPrompt(
 	prompt: string,
 	targetSkills: string[],
 	agents: AgentProbeResult[],
+	declines?: DeclineInfo[],
 ): string {
 	const parts: string[] = [];
 
@@ -65,14 +66,25 @@ export function buildJudgeUserPrompt(
 		`**Target skills:** ${targetSkills.join(", ") || "(none — all agents should decline)"}\n`,
 	);
 
-	if (agents.length === 0) {
+	if (agents.length === 0 && (!declines || declines.length === 0)) {
 		parts.push("**No agents responded.**\n");
 	} else {
-		parts.push("## Agent Responses\n");
-		for (const agent of agents) {
-			parts.push(`**${agent.agentName}** (skills: ${agent.skills.join(", ")})`);
-			parts.push(agent.responseText);
-			parts.push("");
+		if (agents.length > 0) {
+			parts.push("## Agent Responses\n");
+			for (const agent of agents) {
+				parts.push(
+					`**${agent.agentName}** (skills: ${agent.skills.join(", ")})`,
+				);
+				parts.push(agent.responseText);
+				parts.push("");
+			}
+		}
+		if (declines && declines.length > 0) {
+			parts.push("## Agent Declines\n");
+			for (const d of declines) {
+				parts.push(`**${d.agentName}** declined: ${d.reason}`);
+				parts.push("");
+			}
 		}
 	}
 

@@ -55,6 +55,13 @@ export interface AgentProbeResult {
 	model: string;
 }
 
+// --- Decline info (from onEvent, not from agent responses) ---
+
+export interface DeclineInfo {
+	agentName: string;
+	reason: string;
+}
+
 // --- Single probe run result ---
 
 export interface ProbeResult {
@@ -63,6 +70,7 @@ export interface ProbeResult {
 	pattern: InteractionPattern;
 	prompt: string;
 	agents: AgentProbeResult[];
+	declines?: DeclineInfo[];
 	assertions: AssertionResult;
 	judge?: JudgeEvaluation;
 	totalInputTokens: number;
