@@ -541,6 +541,8 @@ REQUEST's to field
     - If the agent has spawned sub-REQUESTs during PROCESS, it must propagate CANCEL to those sub-chains. Each sub-chain follows the same cancellation flow.
 8. The store updates the chain entity's `status` to `cancelled`.
 
+**Authorization.** The store validates the sender of a CANCEL against the chain's origin requester and `owner` (if set) per §Constraints. A CANCEL from any other sender is rejected at the store and an ERROR is returned to the sender.
+
 ### Parameters
 
 - **`replyTo`**: the original REQUEST message id
