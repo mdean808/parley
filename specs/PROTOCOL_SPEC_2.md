@@ -118,7 +118,7 @@ to: list of recipient agent/user ids, channel name(s), or * for broadcast
 
 **Target Resolution:** When a message is received for storage and delivery, the store resolves the `to` field in the following order.
 
-1. **ID match**: Check each value against registered agent and user ids. If matched, deliver directly.
+1. **ID match**: Check each value against registered agent and user ids. If matched, deliver directly. ID match takes precedence over channel match — if a value somehow matches both (possible in non-UUID test fixtures), it is treated as an id.
 2. **Channel match**: Check each value against registered channel names. If matched, resolve to all current channel members and deliver.
 3. **Broadcast**: If the value is `*`, deliver to all registered agents/users.
 4. **No match**: If a value matches none of the above, the message fails validation. Follow Error Handling.
@@ -372,7 +372,7 @@ Headers are key-value string pairs attached to messages. They carry protocol-def
 **Reserved Headers**
 
 - **`accept`**: `true` or `false`. Required on ACK messages. `true` means the agent accepts the request and commits to responding. `false` means the agent declines — the payload must contain a concise reason (one sentence).
-- **`ttl`**: A UTC timestamp (ISO 8601) representing the expiry of the chain. Set on the initial REQUEST and inherited by all messages in the chain. Agents receiving a message where the current time exceeds `ttl` must not begin work and should send an ERROR with a timeout reason. Agents mid-PROCESS when TTL expires MUST stop work, send an ERROR, and propagate cancellation to any active sub-chains. When TTL expires, the behavior is equivalent to an implicit CANCEL. The store detects expiry, updates the chain status to `expired`, and agents mid-PROCESS follow the same propagation and cleanup rules as CANCEL. The distinction is that no explicit CANCEL message is sent — agents are expected to check TTL before beginning work and periodically during PROCESS
+- **`ttl`**: A UTC timestamp (ISO 8601) representing the expiry of the chain. Set on the initial REQUEST and inherited by all messages in the chain. Agents receiving a message where the current time exceeds `ttl` must not begin work and should send an ERROR with a timeout reason. Agents mid-PROCESS when TTL expires MUST stop work, send an ERROR, and propagate cancellation to any active sub-chains. When TTL expires, the behavior is equivalent to an implicit CANCEL. The store detects expiry, updates the chain status to `expired`, and agents mid-PROCESS follow the same propagation and cleanup rules as CANCEL. The distinction is that no explicit CANCEL message is sent — agents are expected to check TTL before beginning work and periodically during PROCESS. The detection mechanism is implementation-defined — the store MAY check `ttl` on every message access, run a background sweep, or combine both. The essential invariant is that (a) no new messages are accepted on a chain whose `ttl` has passed (except ACKs of any CANCEL that was in flight), and (b) the chain's `status` is set to `expired` no later than the next message that would have been accepted on the chain.
 - **`exclusivity`**: `true` or `false`. When `true`, signals that exactly one agent should resolve the REQUEST — recipients MUST CLAIM ownership rather than independently proceeding. Applies to any REQUEST shape (broadcast, channel, or multi-recipient direct). See §CLAIM.
 
 Implementations may define additional headers. Custom headers should use a namespaced key format (e.g., `x-myapp-retry-count`) to avoid collisions with future protocol keys.
@@ -380,6 +380,8 @@ Implementations may define additional headers. Custom headers should use a names
 ### Versioning
 
 The `version` field identifies which protocol version the message originated from. Recipients MUST check the version field before processing. If a message’s version is unsupported, the recipient must respond with ERROR, who’s payload describes the version mismatch. Implementations should not discard version-mismatched messages.
+
+A message that omits the `version` field entirely MUST be treated as version-mismatched — specifically, as v1 or earlier, since v2 is the first version to define the field. Recipients (including the store, for schema validation) MUST respond with ERROR per the version-mismatch rules above rather than silently accept or guess the version.
 
 ## Channels
 
@@ -564,6 +566,8 @@ REQUEST's to field
 # Error Handling
 
 ## Validation
+
+Validation failures are surfaced to the sending agent as synchronous tool-call errors (the response to its `store_message` call), not as chain messages. This keeps failed-validation retry traffic off the chain transcript and ensures the agent sees the feedback on its very next turn.
 
 If a message fails TOON validation, the implementation may inform the agent of the failure, and allow it to retry. If it has failed validation twice, only a single third attempt is allowed. If the third attempt fails as well, a Message is sent of type ERROR, with a payload containing the following: “Agent failed to validate message after 3 attempts.” 
 
