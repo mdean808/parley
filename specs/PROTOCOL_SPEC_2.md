@@ -353,7 +353,7 @@ The store will first attempt to match each value in `to` against agent/user IDs 
 
 ### Chains
 
-A chain is a group of messages sharing a `chainId`. Chains are started from a REQUEST and form a tree-like structure. Sub-REQUESTS initiated during PROCESS can create branches within the same task, tracked via `replyTo` references.
+A chain is a group of messages sharing a `chainId`. A chain is started by an origin REQUEST and contains all subsequent ACK / PROCESS / RESPONSE / ERROR / CANCEL messages for that request. Sub-REQUESTs initiated from within PROCESS MUST use a **new** `chainId` — each delegation is its own independent chain. Chains form a tree via `replyTo`: a sub-REQUEST's `replyTo` points at the PROCESS message that spawned it, even though the two live in different chains. CANCEL does not cascade across chains automatically; agents that spawn sub-chains are responsible for propagating CANCEL (see §CANCEL).
 
 `chainId` is just an identifier. Sequential ordering is determined by the `sequence` field, which is scoped per-agent — each agent maintains it’s own incrementing counter within a chain. 
 
@@ -361,7 +361,7 @@ A chain is a group of messages sharing a `chainId`. Chains are started from a RE
 
 The `replyTo` field creates a parent-child relationship between messages. An origin REQUEST as `replyTo: undefined`. All following messages in the lifecycle set `replyTo` to the id of the REQUEST they are responding to.
 
-When an agent in PROCESS sends a new REQUEST to another agent, the sub-REQUEST set `replyTo` to the PROCESS message that spawned it, preserving the conversational tree.
+When an agent in PROCESS sends a new REQUEST to another agent, the sub-REQUEST starts a new chain (new `chainId`, `sequence: 0`) and sets `replyTo` to the id of the PROCESS message that spawned it. This preserves the conversational tree across chains.
 
 ### Headers
 
