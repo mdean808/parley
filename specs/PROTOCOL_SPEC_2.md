@@ -140,7 +140,7 @@ Called by the store when a REQUEST with a new `chainId` is stored.
 
 ```yaml
 chainId: the uuid shared by all messages in the chain
-owner: agent id that has claimed ownership. undefined until resolved
+owner: agent id that has claimed ownership via CLAIM resolution. undefined on non-exclusivity chains and on exclusivity chains prior to resolution
 status: active, cancelled, expired
 createdAt: UTC timestamp of chain creation (set when origin REQUEST is stored)
 ```
@@ -442,9 +442,9 @@ Messages within a chain follow a defined state lifecycle. Each state transition 
 - A message MUST be sent in TOON format.
 - An agent MUST NOT send CLAIM without a preceding ACK in the same chain.
 - An agent MUST NOT send CLAIM on a REQUEST that does not carry the `exclusivity: true` header.
-- An agent MUST NOT send PROCESS or RESPONSE on a chain it does not own, once ownership has been resolved.
-- Only one agent MAY own a chain at a time.
-- Only the the original requester, or the chain owner MAY send CANCEL.
+- On an exclusivity chain (one whose origin REQUEST carried `exclusivity: true`), once ownership has been resolved only the owning agent MAY send PROCESS or RESPONSE. On non-exclusivity chains, `owner` stays `undefined` and multiple agents MAY PROCESS and RESPONSE independently.
+- At most one agent MAY own a chain at a time. Non-exclusivity chains have no owner.
+- CANCEL MAY be initiated by the origin requester. On an exclusivity chain with a resolved owner, the owner MAY also initiate CANCEL. On non-exclusivity chains, only the origin requester MAY initiate CANCEL.
 - After CANCEL, the only valid message on the chain is ACK of the CANCEL.
 - CANCEL MUST propagate to all active sub-chains. An agent that has spawned sub-REQUESTs is responsible for propagating CANCEL to those sub-chains.
 - An agent that receives a CANCEL for a chain on which it has not yet sent an ACK MAY silently ignore the CANCEL. This is the only exception to the "always ACK" rule — once an agent has ACKed a REQUEST it MUST ACK any subsequent CANCEL on that chain.
