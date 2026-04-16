@@ -7,9 +7,9 @@ import { evaluateProbe } from "./judge.ts";
 import type { JudgeConfig } from "./judge-types.ts";
 import type {
 	AgentProbeResult,
+	AgentTerminalState,
 	DeclineInfo,
 	ProbeConfig,
-	ProbeExpect,
 	ProbeResult,
 	ProtocolId,
 } from "./types.ts";
@@ -68,18 +68,13 @@ export async function runProbe(
 	}
 	const totalDurationMs = performance.now() - start;
 
-	// For non-routing protocols, skip routing-specific assertions
-	// (agentCount.max and excludedSkills) since they broadcast to all agents
-	const effectiveExpect: ProbeExpect =
-		supportsRouting === true
-			? probe.expect
-			: {
-					agentCount:
-						probe.expect.agentCount?.min != null
-							? { min: probe.expect.agentCount.min }
-							: undefined,
-					requiredSkills: probe.expect.requiredSkills,
-				};
+	const terminalStates: AgentTerminalState[] = collector
+		? collector.getTerminalStates(allAgents)
+		: allAgents.map((a) => ({
+				agentName: a.name,
+				skills: a.skills,
+				status: "timed-out" as const,
+			}));
 
 	// Layer 1: Assertions
 	const assertions = error
@@ -89,12 +84,18 @@ export async function runProbe(
 					{
 						name: "execution",
 						passed: false,
+						status: "fail" as const,
 						expected: "no error",
 						actual: error,
 					},
 				],
 			}
-		: checkAssertions(effectiveExpect, agents);
+		: checkAssertions(
+				probe.expect,
+				agents,
+				supportsRouting ?? true,
+				terminalStates,
+			);
 
 	// Layer 2: Judge (only if assertions pass and judge enabled)
 	let judge: ProbeResult["judge"];
@@ -109,6 +110,7 @@ export async function runProbe(
 				judgeConfig,
 				declines,
 				allAgents,
+				terminalStates,
 			);
 			judge = evaluation;
 		} catch {

@@ -1,6 +1,10 @@
 import type { ProtocolAgentInfo } from "core/types";
 import type { InteractionPattern } from "./judge-types.ts";
-import type { AgentProbeResult, DeclineInfo } from "./types.ts";
+import type {
+	AgentProbeResult,
+	AgentTerminalState,
+	DeclineInfo,
+} from "./types.ts";
 
 const CONTENT_RUBRIC_DESCRIPTIONS: Record<InteractionPattern, string> = {
 	"single-route": `## Content Rubric
@@ -49,9 +53,9 @@ For each criterion, answer true or false:
 
 	"decline-all": `## Interaction Rubric (Decline)
 For each criterion, answer true or false:
-- **prompt_relevance**: If any agent responded, the response honestly communicates inability or redirects the user rather than fabricating an answer.
-- **skill_alignment**: No agent claimed expertise they don't have.
-- **clean_boundaries**: Agents did not overreach their skill domains.`,
+- **prompt_relevance**: If any agent RESPONDED, the response honestly communicates inability or redirects the user rather than fabricating an answer. Agents that DECLINED with a coherent reason count as correctly abstaining.
+- **skill_alignment**: No agent claimed expertise they don't have. Explicit declines are correct behavior on this pattern.
+- **clean_boundaries**: Agents did not overreach their skill domains. Silent timeouts on this pattern are NOT equivalent to explicit declines — prefer declines.`,
 
 	handoff: `## Interaction Rubric (Handoff)
 For each criterion, answer true or false:
@@ -69,6 +73,8 @@ For each criterion, answer true or false:
 export function buildJudgeSystemPrompt(pattern: InteractionPattern): string {
 	return `You are an expert evaluator assessing AI agent quality in a multi-agent system.
 You will receive a user prompt and agent responses. Your job is to evaluate BOTH how the agents interacted (routing, handoffs, coordination) AND the quality of the content they produced.
+
+Each agent has a terminal state: RESPONDED, DECLINED (with reason), ERRORED, or TIMED OUT. Treat DECLINED as an intentional protocol-correct abstention when the request is outside the agent's skill domain. Treat ERRORED/TIMED OUT as failures, not correct abstentions — reward explicit declines, penalize silent failures.
 
 ${RUBRIC_DESCRIPTIONS[pattern]}
 
@@ -91,6 +97,7 @@ export function buildJudgeUserPrompt(
 	agents: AgentProbeResult[],
 	declines?: DeclineInfo[],
 	allAgents?: ProtocolAgentInfo[],
+	terminalStates?: AgentTerminalState[],
 ): string {
 	const parts: string[] = [];
 
@@ -108,42 +115,63 @@ export function buildJudgeUserPrompt(
 		parts.push("");
 	}
 
-	if (agents.length > 0) {
-		parts.push("## Agent Responses\n");
-		for (const agent of agents) {
-			parts.push(`**${agent.agentName}** (skills: ${agent.skills.join(", ")})`);
-			parts.push(agent.responseText);
-			parts.push("");
-		}
-	}
-
-	if (declines && declines.length > 0) {
-		parts.push("## Agent Declines\n");
-		for (const d of declines) {
-			parts.push(`**${d.agentName}** declined: ${d.reason}`);
-			parts.push("");
-		}
-	}
-
-	// Identify agents that timed out (neither responded nor declined)
-	if (allAgents && allAgents.length > 0) {
-		const respondedNames = new Set(agents.map((a) => a.agentName));
-		const declinedNames = new Set(declines?.map((d) => d.agentName) ?? []);
-		const timedOut = allAgents.filter(
-			(a) => !respondedNames.has(a.name) && !declinedNames.has(a.name),
-		);
-		if (timedOut.length > 0) {
-			parts.push("## Agent Timeouts\n");
-			for (const a of timedOut) {
-				parts.push(
-					`**${a.name}** (skills: ${a.skills.join(", ")}) — timed out without responding or declining`,
-				);
+	if (terminalStates && terminalStates.length > 0) {
+		parts.push("## Agent Terminal States\n");
+		for (const s of terminalStates) {
+			switch (s.status) {
+				case "responded": {
+					const agent = agents.find((a) => a.agentName === s.agentName);
+					parts.push(
+						`**${s.agentName}** (skills: ${s.skills.join(", ")}) — RESPONDED`,
+					);
+					if (agent) parts.push(agent.responseText);
+					break;
+				}
+				case "declined":
+					parts.push(
+						`**${s.agentName}** (skills: ${s.skills.join(", ")}) — DECLINED: ${s.reason ?? "(no reason given)"}`,
+					);
+					break;
+				case "errored":
+					parts.push(
+						`**${s.agentName}** (skills: ${s.skills.join(", ")}) — ERRORED: ${s.reason ?? "(unknown error)"}`,
+					);
+					break;
+				case "timed-out":
+					parts.push(
+						`**${s.agentName}** (skills: ${s.skills.join(", ")}) — TIMED OUT (no lifecycle messages sent)`,
+					);
+					break;
 			}
 			parts.push("");
 		}
+	} else {
+		// Fallback: no terminal state supplied — preserve legacy rendering
+		if (agents.length > 0) {
+			parts.push("## Agent Responses\n");
+			for (const agent of agents) {
+				parts.push(
+					`**${agent.agentName}** (skills: ${agent.skills.join(", ")})`,
+				);
+				parts.push(agent.responseText);
+				parts.push("");
+			}
+		}
+
+		if (declines && declines.length > 0) {
+			parts.push("## Agent Declines\n");
+			for (const d of declines) {
+				parts.push(`**${d.agentName}** declined: ${d.reason}`);
+				parts.push("");
+			}
+		}
 	}
 
-	if (agents.length === 0 && (!declines || declines.length === 0)) {
+	if (
+		agents.length === 0 &&
+		(!declines || declines.length === 0) &&
+		(!terminalStates || terminalStates.length === 0)
+	) {
 		parts.push("**No agents responded or declined.**\n");
 	}
 

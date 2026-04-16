@@ -18,7 +18,6 @@ export class StoreV2 {
 	private chains: Map<string, Chain> = new Map();
 	private channels: Map<string, Channel> = new Map();
 	private subscribers: Map<string, MessageHandlerV2> = new Map();
-	private sequenceCounters: Map<string, number> = new Map();
 
 	registerUser(name: string): UserV2 {
 		const user: UserV2 = { id: crypto.randomUUID(), name, channels: [] };
@@ -69,13 +68,6 @@ export class StoreV2 {
 		);
 	}
 
-	getNextSequence(agentId: string, chainId: string): number {
-		const key = `${agentId}:${chainId}`;
-		const current = this.sequenceCounters.get(key) ?? 0;
-		this.sequenceCounters.set(key, current + 1);
-		return current;
-	}
-
 	storeMessage(toonString: string): MessageV2 {
 		const decoded = decodeMessageV2(toonString);
 
@@ -93,7 +85,6 @@ export class StoreV2 {
 			...decoded,
 			id: crypto.randomUUID(),
 			timestamp: new Date().toISOString(),
-			sequence: this.getNextSequence(decoded.from, decoded.chainId),
 		};
 
 		// Chain enforcement

@@ -41,15 +41,18 @@ You MUST NOT skip steps. No PROCESS without ACK. No RESPONSE without PROCESS. Ne
 
 ### CANCEL & Errors
 
-- **CANCEL**: Stop work, ACK the CANCEL, send nothing else on the chain. Only the original requester or chain owner may CANCEL.
+- **CANCEL**: Stop work immediately and ACK the CANCEL. If during PROCESS you sent sub-REQUESTs to other agents (new chainIds you started), you are responsible for propagating CANCEL to each of those sub-chains — send a CANCEL to each sub-chain before going silent. Keep track of sub-chains you spawn so you can cancel them. After the CANCEL ACK, send nothing else on the original chain. Only the original requester or chain owner may initiate CANCEL.
 - **ERROR**: Send ERROR with the error in the payload. If you ACKed with \`accept: true\`, you must eventually RESPONSE or ERROR — never silently abandon.
 
 ### Message Fields
 
-- \`version\`: Always \`2\`. ERROR if you receive an unsupported version.
+- \`version\`: Always send \`2\`. If you receive a message whose \`version\` is not \`2\`, do NOT process it — instead send a message of type ERROR with \`replyTo\` set to that message's id and a payload stating the version mismatch (e.g., "Unsupported protocol version: got X, expected 2"). Do not silently discard version-mismatched messages.
 - \`replyTo\`: Set to the id of the REQUEST you are responding to. For sub-REQUESTs from PROCESS, set to your PROCESS message id.
-- \`sequence\`: Auto-assigned by the store — do not set.
-- Reserved headers: \`accept\` (required on ACK, true/false), \`ttl\` (expiry timestamp — do not work if expired), \`exclusivity\` (if true, CLAIM before proceeding).
+- \`sequence\`: Per-agent per-chain counter. Start at 0 for your first message in a chain and increment by 1 for each subsequent message you send in that same chain. Your counter is independent of other agents' counters.
+- Reserved headers:
+  - \`accept\` (required on ACK, true/false).
+  - \`ttl\` — UTC ISO timestamp. Check BEFORE beginning work — if expired, do not start, send ERROR with a timeout reason. Re-check \`ttl\` periodically during long PROCESS work; if it expires mid-PROCESS, stop, send ERROR, and propagate CANCEL to any sub-chains you spawned. Treat TTL expiry as an implicit CANCEL.
+  - \`exclusivity\` (if true, CLAIM before proceeding).
 
 ## TOON Format
 

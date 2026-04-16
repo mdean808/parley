@@ -33,8 +33,10 @@ export interface ProbeConfig {
 export interface AssertionDetail {
 	name: string;
 	passed: boolean;
+	status: "pass" | "fail" | "na";
 	expected: string;
 	actual: string;
+	reason?: string;
 }
 
 export interface AssertionResult {
@@ -60,6 +62,21 @@ export interface AgentProbeResult {
 export interface DeclineInfo {
 	agentName: string;
 	reason: string;
+}
+
+// --- Per-agent terminal state (responded / declined / errored / timed-out) ---
+
+export type AgentTerminalStatus =
+	| "responded"
+	| "declined"
+	| "errored"
+	| "timed-out";
+
+export interface AgentTerminalState {
+	agentName: string;
+	skills: string[];
+	status: AgentTerminalStatus;
+	reason?: string;
 }
 
 // --- Single probe run result ---

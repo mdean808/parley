@@ -133,7 +133,7 @@ export function printTerminalReport(report: ComparisonReport): void {
 					reason: r.judge.passReasoning,
 				});
 			} else if (!r.judge && !r.assertions.passed) {
-				const failed = r.assertions.details.filter((d) => !d.passed);
+				const failed = r.assertions.details.filter((d) => d.status === "fail");
 				const reason = failed
 					.map((d) => `${d.name}: expected ${d.expected}, got ${d.actual}`)
 					.join("; ");

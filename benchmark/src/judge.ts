@@ -10,7 +10,11 @@ import type {
 	JudgeEvaluation,
 	JudgeUsage,
 } from "./judge-types.ts";
-import type { AgentProbeResult, DeclineInfo } from "./types.ts";
+import type {
+	AgentProbeResult,
+	AgentTerminalState,
+	DeclineInfo,
+} from "./types.ts";
 
 const RUBRIC_FIELDS: Record<InteractionPattern, string[]> = {
 	"single-route": ["prompt_relevance", "skill_alignment", "clean_boundaries"],
@@ -142,6 +146,7 @@ export async function evaluateProbe(
 	config: JudgeConfig,
 	declines?: DeclineInfo[],
 	allAgents?: ProtocolAgentInfo[],
+	terminalStates?: AgentTerminalState[],
 ): Promise<{ evaluation: JudgeEvaluation; usage: JudgeUsage }> {
 	const model = config.model ?? process.env.JUDGE_MODEL ?? "claude-sonnet-4-6";
 	const client = new Anthropic();
@@ -153,6 +158,7 @@ export async function evaluateProbe(
 		agents,
 		declines,
 		allAgents,
+		terminalStates,
 	);
 	const tool = buildEvaluateTool(pattern);
 

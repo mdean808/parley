@@ -2,6 +2,17 @@
 
 This is a protocol for token-efficient and “reliable” agent to agent communication. Agents communicate directly with each other and the user using a reliable and validated protocol. Overall context and “job” specification is stored in a central store to ensure agents don’t pollute their contexts. In practice, system prompts define communication steps/rules and structure of the “application.” 
 
+**At its heart, this is a protocol for agent-to-agent communication.** Agents are the principals — they address each other directly, own protocol semantics (ACK discipline, sequencing, CANCEL propagation), and drive the conversation. The central store is a shared facilitator: it validates message format, persists the transcript, and routes messages between agents, but it is not an orchestrator and does not act on agents' behalf.
+
+## Responsibilities
+
+The protocol divides work between two parties:
+
+- **Store** — validates message schema, TOON format, chain integrity (state transitions, ownership, CANCEL/expiry), and delivery target resolution. The store persists messages and forwards them to subscribers. It does NOT police per-agent commitments (e.g., "an agent that ACKed `accept: false` must stay silent") — those are agent-side obligations.
+- **Agents** — own protocol semantics: choosing when to ACK, which `to` field to mirror, maintaining their own `sequence` counter per chain, propagating CANCEL to sub-chains they spawned, and periodically re-checking `ttl` during long PROCESS work. Agents communicate directly with other agents via the store as a bus; the store is not an orchestrator.
+
+Violations of agent-side obligations are treated as prompt/implementation bugs of that agent, not store errors.
+
 This version of the protocol expands on the following discrepancies in v0.0.1
 
 - [x]  Sequential message chaining — include numerical ordering message chains to ensure conversation flow
@@ -233,9 +244,9 @@ You MUST NOT skip steps. No PROCESS without ACK. No RESPONSE without PROCESS. Ne
 
 ### CANCEL
 
-If you receive a CANCEL: stop work, ACK the CANCEL, and propagate CANCEL to any sub-chains you started. After CANCEL, send nothing else on the chain.
+If you receive a CANCEL: stop work immediately and ACK the CANCEL. If during PROCESS you sent sub-REQUESTs to other agents (new chainIds you started), you are responsible for propagating CANCEL to each of those sub-chains — send a CANCEL to each sub-chain before going silent. Keep track of sub-chains you spawn so you can cancel them. After the CANCEL ACK, send nothing else on the original chain.
 
-Only the original requester or the chain owner may send CANCEL.
+Only the original requester or the chain owner may initiate CANCEL.
 
 ### Errors
 
@@ -253,12 +264,12 @@ Set `replyTo` to the id of the REQUEST you are responding to. When sending a sub
 
 Check for these reserved headers on incoming REQUESTs:
 
-- `ttl` — Expiry timestamp. Do not begin work if expired. If TTL expires mid-PROCESS, stop and send ERROR.
+- `ttl` — UTC ISO timestamp. Check BEFORE beginning work — if expired, do not start, send ERROR with a timeout reason. Re-check `ttl` periodically during long PROCESS work; if it expires mid-PROCESS, stop, send ERROR, and propagate CANCEL to any sub-chains you spawned. Treat TTL expiry as an implicit CANCEL.
 - `exclusivity` — If `true`, you must CLAIM before proceeding.
 
 ### Versioning
 
-All your messages must include `version: 2`. If you receive a message with an unsupported version, respond with ERROR.
+Always send `version: 2`. If you receive a message whose `version` is not `2`, do NOT process it — instead send a message of type ERROR with `replyTo` set to that message's id and a payload stating the version mismatch (e.g., "Unsupported protocol version: got X, expected 2"). Do not silently discard version-mismatched messages.
 
 ## TOON Format
 

@@ -93,6 +93,10 @@ export function generateMarkdownReport(report: ComparisonReport): string {
 				lines.push(`| ${pid} | ERR | ERR | — | — | — | — | — |`);
 				continue;
 			}
+			const allNa =
+				r.assertions.details.length > 0 &&
+				r.assertions.details.every((d) => d.status === "na");
+			const hasNa = r.assertions.details.some((d) => d.status === "na");
 			const overall = r.judge
 				? r.judge.pass
 					? "PASS"
@@ -100,7 +104,13 @@ export function generateMarkdownReport(report: ComparisonReport): string {
 				: r.assertions.passed
 					? "PASS"
 					: "FAIL";
-			const assertions = r.assertions.passed ? "PASS" : "FAIL";
+			const assertions = !r.assertions.passed
+				? "FAIL"
+				: allNa
+					? "N/A"
+					: hasNa
+						? "PASS (some N/A)"
+						: "PASS";
 			const judge = r.judge ? (r.judge.pass ? "PASS" : "FAIL") : "—";
 			const interact = r.judge ? `${r.judge.interactionScore}/3` : "—";
 			const content = r.judge ? `${r.judge.contentScore}/3` : "—";

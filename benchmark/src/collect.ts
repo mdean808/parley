@@ -1,5 +1,10 @@
-import type { AgentResult, Protocol, ProtocolEvent } from "core/types";
-import type { DeclineInfo } from "./types.ts";
+import type {
+	AgentResult,
+	Protocol,
+	ProtocolAgentInfo,
+	ProtocolEvent,
+} from "core/types";
+import type { AgentTerminalState, DeclineInfo } from "./types.ts";
 
 interface Batch {
 	results: AgentResult[];
@@ -8,15 +13,19 @@ interface Batch {
 
 /**
  * Accumulates AgentResults from the protocol's onMessage callback
- * and decline events from the protocol's onEvent callback.
+ * and decline/error events from the protocol's onEvent callback.
  * Create one per protocol instance and pass collector.handler as onMessage
  * and collector.eventHandler as onEvent.
  */
 export class ResultCollector {
 	private activeBatch: Batch | null = null;
+	private responded = new Set<string>();
+	private declinedReasons = new Map<string, string>();
+	private errored = new Map<string, string>();
 
 	readonly handler = (result: AgentResult, _chainId: string) => {
 		this.activeBatch?.results.push(result);
+		this.responded.add(result.agentName);
 	};
 
 	readonly eventHandler = (event: ProtocolEvent) => {
@@ -25,13 +34,53 @@ export class ResultCollector {
 				agentName: event.agentName,
 				reason: event.detail,
 			});
+			this.declinedReasons.set(event.agentName, event.detail);
+		} else if (event.type === "error") {
+			this.errored.set(event.agentName, event.detail);
 		}
 	};
 
 	startBatch(): Batch {
 		const batch: Batch = { results: [], declines: [] };
 		this.activeBatch = batch;
+		this.responded = new Set();
+		this.declinedReasons = new Map();
+		this.errored = new Map();
 		return batch;
+	}
+
+	getTerminalStates(allAgents: ProtocolAgentInfo[]): AgentTerminalState[] {
+		const states: AgentTerminalState[] = [];
+		for (const agent of allAgents) {
+			if (this.responded.has(agent.name)) {
+				states.push({
+					agentName: agent.name,
+					skills: agent.skills,
+					status: "responded",
+				});
+			} else if (this.declinedReasons.has(agent.name)) {
+				states.push({
+					agentName: agent.name,
+					skills: agent.skills,
+					status: "declined",
+					reason: this.declinedReasons.get(agent.name),
+				});
+			} else if (this.errored.has(agent.name)) {
+				states.push({
+					agentName: agent.name,
+					skills: agent.skills,
+					status: "errored",
+					reason: this.errored.get(agent.name),
+				});
+			} else {
+				states.push({
+					agentName: agent.name,
+					skills: agent.skills,
+					status: "timed-out",
+				});
+			}
+		}
+		return states;
 	}
 }
 
