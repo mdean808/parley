@@ -224,7 +224,7 @@ When you receive a REQUEST, follow this sequence exactly:
 1. **ACK** — You MUST always ACK. Evaluate the request against your skills:
    - If it matches: send ACK with header `accept: true`, then continue to step 2.
    - If it does not match: send ACK with header `accept: false` and a one-sentence reason in the payload. Stop here.
-2. **CLAIM** — If the REQUEST has header `exclusivity: true`, send CLAIM after ACK with your reasoning. Wait for resolution before proceeding. If your CLAIM is rejected, stop.
+2. **CLAIM** — If the REQUEST has header `exclusivity: true`, send CLAIM after ACK with your reasoning. Wait for resolution before proceeding. You learn the outcome either by seeing yourself set as `owner` on the chain (via `get_chain`) or by receiving a store-emitted ERROR whose `replyTo` matches your CLAIM id. If you receive that ERROR, stop — do not ACK it and do not send anything else on the chain.
 3. **PROCESS** — Describe the steps you will take. You MAY send sub-REQUESTs to other agents here.
 4. **RESPONSE** — Return your result.
 
@@ -412,7 +412,7 @@ Messages within a chain follow a defined state lifecycle. Each state transition 
 | ACK (`accept: true`) | CLAIM | REQUEST carries `exclusivity: true`; agent asserts ownership |
 | ACK (`accept: true`) | ERROR | Agent encounters an error after accepting but before PROCESS — TERMINAL |
 | CLAIM | PROCESS | Winning agent begins work after claim resolution |
-| CLAIM | — | Losing agents: no further messages on the chain — TERMINAL |
+| CLAIM | — | Losing agents receive a store-emitted ERROR (`replyTo` = their CLAIM id) announcing the resolved owner; no further messages on the chain — TERMINAL |
 | PROCESS | RESPONSE | Agent completes work — TERMINAL |
 | PROCESS | REQUEST | Agent delegates or gathers information; the new REQUEST starts a new chain (see §Chains) |
 | PROCESS | ERROR | Agent encounters an error during work — TERMINAL |
@@ -481,7 +481,9 @@ An ACK with `accept: true` commits the agent to eventually send RESPONSE or ERRO
 4. Message is stored via Store Message.
 5. The store (or implementation layer) collects CLAIMs within a resolution window. Resolution strategy is implementation-defined (first-wins, best-fit, timeout-based, etc.).
 6. Upon resolution, the store updates the chain entity's `owner` field to the winning agent's id.
-7. The winning agent is notified and proceeds to PROCESS. Losing agents are notified that their CLAIM was not accepted and MUST NOT send further messages on the chain.
+7. Upon resolution the store notifies CLAIMants on the chain:
+    - The winning agent proceeds to PROCESS. No explicit win-notification is required — an agent learns it won by virtue of being the `owner` on the chain (observable via `get_chain`) and by the absence of a rejection ERROR addressed to its CLAIM.
+    - Each losing agent receives a store-emitted message of type ERROR with `replyTo` set to that agent's CLAIM id and a payload of the form `"CLAIM rejected; owner is {winner_id}"`. Receipt of this ERROR is what drives the losing agent into its TERMINAL state. Losing agents MUST NOT send further messages on the chain after this ERROR (not even an ACK of the ERROR — ERROR is itself terminal, per the state table).
 
 ### Parameters
 
@@ -568,6 +570,8 @@ In the event that an agent fails after ACK’ing due to network error or other i
 ## **Claim Resolution Failures**
 
 If no agent CLAIMs within the resolution window, or all CLAIMs are rejected, the store SHOULD send an ERROR on the chain with a payload indicating that no agent claimed ownership. The chain status is updated to `cancelled`.
+
+When resolution produces a winner, the store emits a per-loser rejection ERROR as described in §CLAIM step 7. The "no winner" case above is the degenerate variant where every CLAIMant receives a rejection and the chain itself is cancelled.
 
 ## **Cancellation Failures**
 

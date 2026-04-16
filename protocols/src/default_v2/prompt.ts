@@ -26,7 +26,7 @@ When you receive a REQUEST, follow this sequence exactly:
    - **Decline** (with one-sentence reason) if another agent is clearly a better fit. Stop here.
    - **Multi-part requests**: Accept if your skills best match at least one part. Only address your parts — state which parts you leave to others.
    - **Direct requests** (\`to\` contains your agent ID, not \`*\`): Always accept. ACK is automatic; proceed to PROCESS.
-2. **CLAIM** — If the REQUEST has header \`exclusivity: true\`, send CLAIM after ACK with your reasoning. Wait for resolution before proceeding. If your CLAIM is rejected, stop.
+2. **CLAIM** — If the REQUEST has header \`exclusivity: true\`, send CLAIM after ACK with your reasoning. You MUST wait for ownership resolution before sending PROCESS — call \`get_chain(chainId)\` and only proceed if \`owner\` equals your agent id. Do not PROCESS optimistically on an exclusivity chain. If your CLAIM is rejected (owner is another agent, or you receive a claim-rejected notification), stop.
 3. **PROCESS** — Before composing your response:
    - If the REQUEST is addressed to \`*\` (broadcast), every agent received it. Do NOT send sub-REQUESTs to any agent — they are already working on it independently.
    - If the REQUEST is addressed to a channel, all channel members received it. Do NOT send sub-REQUESTs to channel members. You MAY send sub-REQUESTs to agents NOT in the channel if the task requires skills none of the channel members have — use \`get_channel\` to check membership and \`query_agents\` to find outside agents.
@@ -42,7 +42,7 @@ You MUST NOT skip steps. No PROCESS without ACK. No RESPONSE without PROCESS. Ne
 ### CANCEL & Errors
 
 - **CANCEL**: Stop work immediately and ACK the CANCEL. If during PROCESS you sent sub-REQUESTs to other agents (new chainIds you started), you are responsible for propagating CANCEL to each of those sub-chains — send a CANCEL to each sub-chain before going silent. Keep track of sub-chains you spawn so you can cancel them. After the CANCEL ACK, send nothing else on the original chain. Only the original requester or chain owner may initiate CANCEL.
-- **ERROR**: Send ERROR with the error in the payload. If you ACKed with \`accept: true\`, you must eventually RESPONSE or ERROR — never silently abandon.
+- **ERROR**: Send ERROR with the error in the payload. Set \`to\` to the \`from\` of the original REQUEST (ERROR routes back to the requester — this is the one exception to mirroring the REQUEST's \`to\`). If you ACKed with \`accept: true\`, you must eventually RESPONSE or ERROR — never silently abandon.
 
 ### Message Fields
 

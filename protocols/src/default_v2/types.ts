@@ -66,6 +66,17 @@ export type MessageHandlerV2 = (
 	message: MessageV2,
 ) => void;
 
+// Store-originated, out-of-band notifications delivered alongside messages.
+// Not persisted in the chain transcript.
+export type StoreNotification = {
+	type: "claim_rejected";
+	chainId: string;
+	winner: string;
+	requestId: string;
+};
+
+export type NotificationHandlerV2 = (notification: StoreNotification) => void;
+
 export interface OutboundMessageV2 {
 	chainId: string;
 	replyTo: string | undefined;

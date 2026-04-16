@@ -12,7 +12,12 @@ import type { StoreV2 } from "./store.ts";
 import { createToolDefinitions } from "./tool-definitions.ts";
 import { executeToolCall } from "./tool-executor.ts";
 import { encodeOutboundV2 } from "./toon.ts";
-import type { AgentMeta, AgentV2, MessageV2 } from "./types.ts";
+import type {
+	AgentMeta,
+	AgentV2,
+	MessageV2,
+	StoreNotification,
+} from "./types.ts";
 
 interface AgentConfig {
 	agent: AgentV2;
@@ -37,6 +42,8 @@ export class ProtocolAgentV2 {
 		Anthropic.Messages.MessageParam[]
 	> = new Map();
 	private readonly chainResponded: Set<string> = new Set();
+	// parent chainId -> set of sub-chainIds this agent spawned while processing it
+	private readonly subChains: Map<string, Set<string>> = new Map();
 
 	constructor(store: StoreV2, config: AgentConfig) {
 		this.agent = config.agent;
@@ -60,6 +67,10 @@ export class ProtocolAgentV2 {
 		this.store.subscribe(this.agent.id, (_toon: string, message: MessageV2) =>
 			this.onMessage(message),
 		);
+		this.store.subscribeNotifications(
+			this.agent.id,
+			(notification: StoreNotification) => this.onNotification(notification),
+		);
 		log.info(`agent_v2:${this.agent.name}`, "subscribed", {
 			agentId: this.agent.id,
 		});
@@ -67,6 +78,31 @@ export class ProtocolAgentV2 {
 
 	stop(): void {
 		this.store.unsubscribe(this.agent.id);
+		this.store.unsubscribeNotifications(this.agent.id);
+	}
+
+	private onNotification(notification: StoreNotification): void {
+		if (notification.type !== "claim_rejected") return;
+		const { chainId, winner } = notification;
+
+		// Only clean up if this agent had state for the chain (i.e. it ACKed
+		// or CLAIMed). Agents with no state harmlessly ignore.
+		const hadState =
+			this.chainHistory.has(chainId) ||
+			this.chainResponded.has(chainId) ||
+			this.subChains.has(chainId);
+		if (!hadState) return;
+
+		const component = `agent_v2:${this.agent.name}`;
+		log.info(component, "claim_rejected_received", {
+			chainId,
+			winner,
+		});
+		this.propagateCancelToSubChains(component, chainId);
+		this.chainHistory.delete(chainId);
+		this.chainResponded.delete(chainId);
+		this.subChains.delete(chainId);
+		this.store.updateAgentStatus(this.agent.id, "idle");
 	}
 
 	private async onMessage(message: MessageV2): Promise<void> {
@@ -76,6 +112,10 @@ export class ProtocolAgentV2 {
 		const component = `agent_v2:${this.agent.name}`;
 
 		if (message.type === "CANCEL") {
+			// Propagate CANCEL to any sub-chains this agent spawned while
+			// processing the parent chain (spec §CANCEL).
+			this.propagateCancelToSubChains(component, message.chainId);
+
 			// ACK the cancel
 			this.safeStoreMessage(component, {
 				chainId: message.chainId,
@@ -87,7 +127,28 @@ export class ProtocolAgentV2 {
 			});
 			this.chainHistory.delete(message.chainId);
 			this.chainResponded.delete(message.chainId);
+			this.subChains.delete(message.chainId);
 			this.store.updateAgentStatus(this.agent.id, "idle");
+			return;
+		}
+
+		// REQUEST: agent-side TTL pre-check (spec §Headers `ttl`).
+		// The store accepts expired REQUESTs; the agent is the gatekeeper.
+		const ttl = message.headers?.ttl;
+		if (ttl && new Date() > new Date(ttl)) {
+			log.info(component, "ttl_expired_pre_start", {
+				chainId: message.chainId,
+				requestId: message.id,
+				ttl,
+			});
+			this.safeStoreMessage(component, {
+				chainId: message.chainId,
+				replyTo: message.id,
+				type: "ERROR",
+				payload: `TTL expired at ${ttl}; refusing to start work`,
+				from: this.agent.id,
+				to: [message.from],
+			});
 			return;
 		}
 
@@ -166,6 +227,26 @@ export class ProtocolAgentV2 {
 		const startTime = performance.now();
 
 		for (let iteration = 0; iteration < MAX_AGENT_ITERATIONS; iteration++) {
+			// Agent-side mid-loop TTL re-check (spec §Headers `ttl`).
+			if (ttl && new Date() > new Date(ttl)) {
+				log.info(component, "ttl_expired_mid_process", {
+					chainId: message.chainId,
+					requestId: message.id,
+					iteration,
+					ttl,
+				});
+				this.safeStoreMessage(component, {
+					chainId: message.chainId,
+					replyTo: message.id,
+					type: "ERROR",
+					payload: `TTL expired at ${ttl} during PROCESS; aborting work`,
+					from: this.agent.id,
+					to: [message.from],
+				});
+				this.propagateCancelToSubChains(component, message.chainId);
+				break;
+			}
+
 			const response = await client.messages.create({
 				model: MODEL,
 				max_tokens: 2048,
@@ -235,7 +316,11 @@ export class ProtocolAgentV2 {
 
 				// Emit events for store_message tool calls
 				if (block.name === "store_message" && result.success && result.data) {
-					const msgType = (result.data as { type?: string }).type;
+					const stored = result.data as {
+						type?: string;
+						chainId?: string;
+					};
+					const msgType = stored.type;
 					if (msgType) {
 						this.onEvent?.({
 							agentName: this.agent.name,
@@ -243,6 +328,20 @@ export class ProtocolAgentV2 {
 							detail: `${msgType} sent`,
 						});
 						if (msgType === "RESPONSE") sentResponse = true;
+					}
+					// Track sub-chains: a REQUEST on a chainId different from the
+					// parent chain is a sub-REQUEST this agent spawned from PROCESS.
+					if (
+						msgType === "REQUEST" &&
+						stored.chainId &&
+						stored.chainId !== message.chainId
+					) {
+						let set = this.subChains.get(message.chainId);
+						if (!set) {
+							set = new Set<string>();
+							this.subChains.set(message.chainId, set);
+						}
+						set.add(stored.chainId);
 					}
 				}
 
@@ -316,6 +415,42 @@ export class ProtocolAgentV2 {
 		});
 	}
 
+	private propagateCancelToSubChains(
+		component: string,
+		parentChainId: string,
+	): void {
+		const subs = this.subChains.get(parentChainId);
+		if (!subs || subs.size === 0) return;
+
+		for (const subChainId of subs) {
+			const originRequests = this.store.getMessage({
+				chainId: subChainId,
+				type: "REQUEST",
+			});
+			const origin = originRequests.find((m) => !m.replyTo);
+			if (!origin) {
+				log.warn(component, "subchain_cancel_no_origin", {
+					parentChainId,
+					subChainId,
+				});
+				continue;
+			}
+			this.safeStoreMessage(component, {
+				chainId: subChainId,
+				replyTo: origin.id,
+				type: "CANCEL",
+				payload: `Parent chain ${parentChainId} cancelled`,
+				from: this.agent.id,
+				to: origin.to,
+			});
+			log.info(component, "subchain_cancel_propagated", {
+				parentChainId,
+				subChainId,
+			});
+		}
+		this.subChains.delete(parentChainId);
+	}
+
 	private safeStoreMessage(
 		component: string,
 		fields: {
@@ -353,6 +488,35 @@ export class ProtocolAgentV2 {
 			chainId: fields.chainId,
 			type: fields.type,
 		});
+
+		// Spec §Error Handling: after 3 failed validation attempts, emit ERROR.
+		// Skip if the exhausted message was itself an ERROR (don't recurse).
+		if (fields.type !== "ERROR") {
+			try {
+				const origin = this.store
+					.getMessage({ chainId: fields.chainId, type: "REQUEST" })
+					.find((m) => !m.replyTo);
+				const errorTo = origin ? [origin.from] : fields.to;
+				this.store.storeMessage(
+					encodeOutboundV2({
+						chainId: fields.chainId,
+						replyTo: fields.replyTo,
+						type: "ERROR",
+						payload: "Agent failed to validate message after 3 attempts.",
+						from: fields.from,
+						to: errorTo,
+					}),
+				);
+			} catch (errError: unknown) {
+				const msg =
+					errError instanceof Error ? errError.message : String(errError);
+				log.error(component, "safe_store_exhausted_error_failed", {
+					chainId: fields.chainId,
+					error: msg,
+				});
+			}
+		}
+
 		return undefined;
 	}
 }

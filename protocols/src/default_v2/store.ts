@@ -8,6 +8,8 @@ import type {
 	MessageFilterV2,
 	MessageHandlerV2,
 	MessageV2,
+	NotificationHandlerV2,
+	StoreNotification,
 	UserV2,
 } from "./types.ts";
 
@@ -18,6 +20,8 @@ export class StoreV2 {
 	private chains: Map<string, Chain> = new Map();
 	private channels: Map<string, Channel> = new Map();
 	private subscribers: Map<string, MessageHandlerV2> = new Map();
+	private notificationSubscribers: Map<string, NotificationHandlerV2> =
+		new Map();
 
 	registerUser(name: string): UserV2 {
 		const user: UserV2 = { id: crypto.randomUUID(), name, channels: [] };
@@ -111,6 +115,7 @@ export class StoreV2 {
 		}
 
 		// CLAIM handling: first-wins
+		let claimJustResolved = false;
 		if (message.type === "CLAIM") {
 			if (!chain) {
 				throw new Error(
@@ -123,6 +128,7 @@ export class StoreV2 {
 				);
 			}
 			chain.owner = message.from;
+			claimJustResolved = true;
 		}
 
 		// TTL enforcement — check if chain has expired
@@ -207,6 +213,28 @@ export class StoreV2 {
 			if (resolvedRecipients.has(entityId)) {
 				const toon = encodeMessageV2(message);
 				queueMicrotask(() => handler(toon, message));
+			}
+		}
+
+		// Emit claim_rejected notifications to all other subscribers when a
+		// CLAIM resolves ownership (spec §CLAIM step 7). Agents without state
+		// for this chain ignore; those that had begun PROCESS/CLAIM clean up.
+		if (claimJustResolved && chain) {
+			const originRequest = this.messages.find(
+				(m) =>
+					m.chainId === message.chainId && m.type === "REQUEST" && !m.replyTo,
+			);
+			if (originRequest) {
+				const notification: StoreNotification = {
+					type: "claim_rejected",
+					chainId: message.chainId,
+					winner: message.from,
+					requestId: originRequest.id,
+				};
+				for (const [entityId, handler] of this.notificationSubscribers) {
+					if (entityId === message.from) continue;
+					queueMicrotask(() => handler(notification));
+				}
 			}
 		}
 
@@ -317,6 +345,17 @@ export class StoreV2 {
 		log.debug("store_v2", "unsubscribed", { entityId });
 	}
 
+	subscribeNotifications(
+		entityId: string,
+		handler: NotificationHandlerV2,
+	): void {
+		this.notificationSubscribers.set(entityId, handler);
+	}
+
+	unsubscribeNotifications(entityId: string): void {
+		this.notificationSubscribers.delete(entityId);
+	}
+
 	private validateStateTransition(
 		message: MessageV2,
 		chain: Chain | undefined,
@@ -425,19 +464,11 @@ export class StoreV2 {
 				break;
 			}
 			case "ERROR": {
-				// Sender must have ACK'd the same REQUEST
-				const hasAck = this.messages.some(
-					(m) =>
-						m.chainId === message.chainId &&
-						m.from === message.from &&
-						m.type === "ACK" &&
-						m.replyTo === requestId,
-				);
-				if (!hasAck) {
-					throw new Error(
-						"Cannot send ERROR without a prior ACK for this REQUEST",
-					);
-				}
+				// ERROR is valid at any point in the chain — per spec §Agent
+				// Message States, REQUEST → ERROR is a valid terminal (pre-ACK
+				// rejection for version mismatch, expired TTL, validation
+				// failure). Only require that the reply target exists, which
+				// was already verified above.
 				break;
 			}
 		}
