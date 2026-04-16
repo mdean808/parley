@@ -242,6 +242,8 @@ When you receive a REQUEST, follow this sequence exactly:
 
 You MUST NOT skip steps. No PROCESS without ACK. No RESPONSE without PROCESS. Never stay silent — always ACK.
 
+Exception: if you receive a CANCEL for a chain before you have ACKed the origin REQUEST on that chain, you MAY silently ignore the CANCEL — you have made no commitment yet.
+
 ### CANCEL
 
 If you receive a CANCEL: stop work immediately and ACK the CANCEL. If during PROCESS you sent sub-REQUESTs to other agents (new chainIds you started), you are responsible for propagating CANCEL to each of those sub-chains — send a CANCEL to each sub-chain before going silent. Keep track of sub-chains you spawn so you can cancel them. After the CANCEL ACK, send nothing else on the original chain.
@@ -438,7 +440,7 @@ Messages within a chain follow a defined state lifecycle. Each state transition 
 - Only the the original requester, or the chain owner MAY send CANCEL.
 - After CANCEL, the only valid message on the chain is ACK of the CANCEL.
 - CANCEL MUST propagate to all active sub-chains. An agent that has spawned sub-REQUESTs is responsible for propagating CANCEL to those sub-chains.
-- An agent that receives CANCEL before ACKing the original REQUEST MAY silently ignore it.
+- An agent that receives a CANCEL for a chain on which it has not yet sent an ACK MAY silently ignore the CANCEL. This is the only exception to the "always ACK" rule — once an agent has ACKed a REQUEST it MUST ACK any subsequent CANCEL on that chain.
 
 # **Protocol Operations**
 
