@@ -61,6 +61,9 @@ bun run bench --output results/
 # Control parallelism
 bun run bench --concurrency 5
 
+# Multiple runs per (protocol, probe) pair for sample std-dev reporting
+bun run bench --runs 3
+
 # Skip markdown report generation
 bun run bench --no-report
 ```
@@ -122,9 +125,25 @@ Seven built-in probes across five interaction patterns:
 
 ### Output
 
-`bun run bench` writes to `benchmark/results/`:
+`bun run bench` writes to `benchmark/results/` by default (gitignored):
 - `benchmark-YYYY-MM-DDTHH-MM-SS.json` — full structured data
-- `benchmark-YYYY-MM-DDTHH-MM-SS.md` — summary table, per-probe results, key findings
+- `benchmark-YYYY-MM-DDTHH-MM-SS.md` — summary table, per-probe results, configuration audit
+
+Canonical reference runs used for the thesis are committed in [`results/`](results/) at the repo root.
+
+### Reference Results
+
+Latest committed run: [`results/benchmark-2026-04-16T23-21-19.md`](results/benchmark-2026-04-16T23-21-19.md) — 5 protocols × 7 probes, judged by `claude-sonnet-4-6`.
+
+| Protocol | Score | Interaction | Content | Pass | Avg Cost | Avg Time |
+|----------|-------|-------------|---------|------|----------|----------|
+| parley | **97.9%** | 98.4% | 96.8% | 6/7 | $0.0724 | 33.5s |
+| crewai | 57.9% | 41.7% | 95.8% | 0/7 | $0.0261 | 34.3s |
+| simple | 56.3% | 39.7% | 95.2% | 0/7 | $0.0586 | 17.8s |
+| a2a | 56.3% | 39.7% | 95.2% | 0/7 | $0.0586 | 18.0s |
+| claude-code | 53.3% | 47.6% | 66.7% | 0/7 | $0.0869 | 33.0s |
+
+parley leads on interaction quality (routing accuracy, handoff clarity, collaboration coherence) because skill-based filtering prevents the "all agents always respond" failure mode that drives the other protocols' low interaction scores. Content scores are comparable across protocols — the gap is structural, not generative. See the linked markdown report for per-pattern breakdowns and the configuration audit (all protocols ran `claude-sonnet-4-6` with matched 2048-token output budgets).
 
 ## Environment Variables
 

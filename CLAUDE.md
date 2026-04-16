@@ -11,7 +11,7 @@ Implementation of an agent-to-agent communication protocol with five protocol va
 - **Install**: `bun install`
 - **CLI Chat**: `bun run chat`
 - **Web Chat**: `bun run web`
-- **Benchmark**: `bun run bench [--protocols parley,simple] [--probes id1,id2] [--pattern single-route,handoff] [--output dir] [--no-judge] [--judge-model model] [--no-report] [--concurrency N]`
+- **Benchmark**: `bun run bench [--protocols parley,simple] [--probes id1,id2] [--pattern single-route,handoff] [--output dir] [--no-judge] [--judge-model model] [--no-report] [--concurrency N] [--runs N]`
 - **Lint**: `bun run lint`
 - **Format**: `bun run format`
 - **Start external servers**: `./start-agents.sh` (requires `jq`; starts CrewAI + A2A servers from `agents.json`)
@@ -77,7 +77,8 @@ benchmark/                            — Workspace: benchmarking system
     report-markdown.ts                — Markdown report generator
     probes/                           — JSON probe definitions (by interaction pattern)
       index.ts                        — Probe loader (loadAllProbes, loadProbe, loadProbesByPattern)
-  results/                            — Benchmark output (gitignored)
+  results/                            — Default benchmark output directory (gitignored)
+results/                              — Committed reference benchmark results (root-level, checked in)
 apps/cli-chat/                        — Workspace: terminal chat REPL
   src/
     index.ts                          — Protocol selection + chat loop
@@ -130,8 +131,9 @@ Probe-based system testing protocol interaction quality (routing, handoff, colla
 - **Runner** (`benchmark/src/runner.ts`): Single-shot `runProbe()` — sends prompt, collects agent results, checks assertions, optionally judges.
 - **Assertions** (`benchmark/src/assertions.ts`): Pure function checker for agent count, required/excluded skills.
 - **Judge** (`benchmark/src/judge.ts`): Pattern-aware LLM evaluation with dual rubrics — interaction (0-3, pattern-specific) and content (0-3), combined into a composite score (0-100).
-- **Comparison** (`benchmark/src/comparison.ts`): Runs protocols across all probes, groups results by interaction pattern (single-route, selective-route, decline-all, handoff, collaborate).
+- **Comparison** (`benchmark/src/comparison.ts`): Runs protocols across all probes, groups results by interaction pattern (single-route, selective-route, decline-all, handoff, collaborate). Supports `--runs N > 1` for sample std-dev reporting.
 - **Probes** (`benchmark/src/probes/*.json`): Single-shot interaction test definitions with expected assertions.
+- **Reference results** (`results/`): Committed benchmark runs used as the canonical reference for the thesis. Latest: `results/benchmark-2026-04-16T23-21-19.{json,md}`. Markdown reports include a Configuration Audit table (per-protocol model + max_tokens actually observed) so score gaps are attributable.
 
 ### TOON Format
 
