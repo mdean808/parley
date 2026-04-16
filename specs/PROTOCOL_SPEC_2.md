@@ -100,19 +100,7 @@ Saves a message within the store.
 - **Effect**: Persists the message
 - **Returns**: Message record
 
-```yaml
-id: randomly generated unique uuid
-version: protocol version (starting at 2 since v1 has no version)
-chainId: randomly generated uuid grouping related messages
-sequence: incrementing integer for message position, scoped per-agent per-chain
-replyTo: id of the message this is replying to. undefined for origin messages
-timestamp: UTC timestamp in ISO 8601 format
-type: one of REQUEST, ACK, PROCESS, RESPONSE, ERROR, CLAIM, CANCEL
-payload: message content
-headers: key-value pairs for protocol and implementation-defined metadata
-from: id of the sending agent or user
-to: list of recipient agent/user ids, channel name(s), or * for broadcast
-```
+See §Messages for the canonical message schema. Store Message accepts a TOON-encoded payload matching that schema.
 
 **Validation:** Ensure that messages contain the above parameters and are sent in the correct TOON format. In the case that a message does not validate correctly, follow the steps listed in Error Handling.
 
