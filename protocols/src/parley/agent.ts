@@ -5,22 +5,24 @@ import {
 	MAX_VALIDATION_RETRIES,
 	MODEL,
 } from "core/config";
+
+const MAX_LLM_VALIDATION_FAILURES = MAX_VALIDATION_RETRIES;
 import type { ProtocolEventHandler } from "core/types";
 import { log } from "../logger.ts";
 import { assembleSystemPrompt } from "./prompt.ts";
-import type { StoreV2 } from "./store.ts";
+import type { StoreParley } from "./store.ts";
 import { createToolDefinitions } from "./tool-definitions.ts";
 import { executeToolCall } from "./tool-executor.ts";
-import { encodeOutboundV2 } from "./toon.ts";
+import { encodeOutboundParley } from "./toon.ts";
 import type {
 	AgentMeta,
-	AgentV2,
-	MessageV2,
+	AgentParley,
+	MessageParley,
 	StoreNotification,
 } from "./types.ts";
 
 interface AgentConfig {
-	agent: AgentV2;
+	agent: AgentParley;
 	systemPrompt: string;
 	customInstructions?: string;
 	customTools?: Anthropic.Messages.Tool[];
@@ -29,9 +31,9 @@ interface AgentConfig {
 	onDecline?: (chainId: string) => void;
 }
 
-export class ProtocolAgentV2 {
-	readonly agent: AgentV2;
-	private readonly store: StoreV2;
+export class ProtocolAgentParley {
+	readonly agent: AgentParley;
+	private readonly store: StoreParley;
 	private readonly systemPrompt: string;
 	private readonly tools: Anthropic.Messages.Tool[];
 	private readonly onMeta?: (chainId: string, meta: AgentMeta) => void;
@@ -41,11 +43,10 @@ export class ProtocolAgentV2 {
 		string,
 		Anthropic.Messages.MessageParam[]
 	> = new Map();
-	private readonly chainResponded: Set<string> = new Set();
 	// parent chainId -> set of sub-chainIds this agent spawned while processing it
 	private readonly subChains: Map<string, Set<string>> = new Map();
 
-	constructor(store: StoreV2, config: AgentConfig) {
+	constructor(store: StoreParley, config: AgentConfig) {
 		this.agent = config.agent;
 		this.store = store;
 		this.onEvent = config.onEvent;
@@ -64,14 +65,14 @@ export class ProtocolAgentV2 {
 	}
 
 	start(): void {
-		this.store.subscribe(this.agent.id, (_toon: string, message: MessageV2) =>
+		this.store.subscribe(this.agent.id, (_toon: string, message: MessageParley) =>
 			this.onMessage(message),
 		);
 		this.store.subscribeNotifications(
 			this.agent.id,
 			(notification: StoreNotification) => this.onNotification(notification),
 		);
-		log.info(`agent_v2:${this.agent.name}`, "subscribed", {
+		log.info(`agent_parley:${this.agent.name}`, "subscribed", {
 			agentId: this.agent.id,
 		});
 	}
@@ -88,28 +89,25 @@ export class ProtocolAgentV2 {
 		// Only clean up if this agent had state for the chain (i.e. it ACKed
 		// or CLAIMed). Agents with no state harmlessly ignore.
 		const hadState =
-			this.chainHistory.has(chainId) ||
-			this.chainResponded.has(chainId) ||
-			this.subChains.has(chainId);
+			this.chainHistory.has(chainId) || this.subChains.has(chainId);
 		if (!hadState) return;
 
-		const component = `agent_v2:${this.agent.name}`;
+		const component = `agent_parley:${this.agent.name}`;
 		log.info(component, "claim_rejected_received", {
 			chainId,
 			winner,
 		});
 		this.propagateCancelToSubChains(component, chainId);
 		this.chainHistory.delete(chainId);
-		this.chainResponded.delete(chainId);
 		this.subChains.delete(chainId);
 		this.store.updateAgentStatus(this.agent.id, "idle");
 	}
 
-	private async onMessage(message: MessageV2): Promise<void> {
+	private async onMessage(message: MessageParley): Promise<void> {
 		// Only react to REQUEST and CANCEL
 		if (message.type !== "REQUEST" && message.type !== "CANCEL") return;
 
-		const component = `agent_v2:${this.agent.name}`;
+		const component = `agent_parley:${this.agent.name}`;
 
 		if (message.type === "CANCEL") {
 			// Propagate CANCEL to any sub-chains this agent spawned while
@@ -126,7 +124,6 @@ export class ProtocolAgentV2 {
 				to: message.to,
 			});
 			this.chainHistory.delete(message.chainId);
-			this.chainResponded.delete(message.chainId);
 			this.subChains.delete(message.chainId);
 			this.store.updateAgentStatus(this.agent.id, "idle");
 			return;
@@ -156,34 +153,10 @@ export class ProtocolAgentV2 {
 		this.store.updateAgentStatus(this.agent.id, "working");
 
 		const history = this.chainHistory.get(message.chainId) ?? [];
-		const hasRespondedOnChain = this.chainResponded.has(message.chainId);
 		const isDirectRequest = message.to.includes(this.agent.id);
 
-		// For follow-up requests on chains we already responded to,
-		// send ACK immediately (bypass LLM) so it arrives within the ACK window
-		if (hasRespondedOnChain) {
-			this.safeStoreMessage(component, {
-				chainId: message.chainId,
-				replyTo: message.id,
-				type: "ACK",
-				payload: `${this.agent.name} continuing chain`,
-				headers: { accept: "true" },
-				from: this.agent.id,
-				to: message.to,
-			});
-			this.onEvent?.({
-				agentName: this.agent.name,
-				type: "state_change",
-				detail: "ACK sent",
-			});
-			log.info(component, "auto_ack_followup", {
-				chainId: message.chainId,
-				requestId: message.id,
-			});
-		}
-
 		// For direct requests (addressed to this agent by ID), auto-ACK
-		if (!hasRespondedOnChain && isDirectRequest) {
+		if (isDirectRequest) {
 			this.safeStoreMessage(component, {
 				chainId: message.chainId,
 				replyTo: message.id,
@@ -208,10 +181,7 @@ export class ProtocolAgentV2 {
 		const messageFields = `id: ${message.id}\nversion: ${message.version}\nchainId: ${message.chainId}\nsequence: ${message.sequence}\nreplyTo: ${message.replyTo ?? "undefined"}\ntimestamp: ${message.timestamp}\ntype: ${message.type}\npayload: ${message.payload}\nheaders: ${JSON.stringify(message.headers)}\nfrom: ${message.from}\nto: ${message.to.join(", ")}`;
 
 		let userContent: string;
-		if (hasRespondedOnChain) {
-			// Already responded on this chain — skip skill evaluation and ACK (already sent)
-			userContent = `This is a FOLLOW-UP on a chain you already responded to. ACK has already been sent on your behalf.\n\nNew REQUEST:\n\n${messageFields}\n\nProceed directly: send PROCESS, then RESPONSE. Set replyTo to "${message.id}" on all messages you send.`;
-		} else if (isDirectRequest) {
+		if (isDirectRequest) {
 			// Direct request addressed to this agent by ID — always accept, skip skill evaluation
 			userContent = `You received a DIRECT REQUEST addressed specifically to you by another agent. ACK with accept: true has already been sent on your behalf.\n\nREQUEST:\n\n${messageFields}\n\nThis request was sent directly to you — do your best to fulfill it regardless of skill match. Proceed directly: send PROCESS, then RESPONSE. Set replyTo to "${message.id}" on all messages you send.`;
 		} else {
@@ -224,6 +194,8 @@ export class ProtocolAgentV2 {
 		let totalInputTokens = 0;
 		let totalOutputTokens = 0;
 		let sentResponse = false;
+		let storeValidationFailures = 0;
+		let validationExhausted = false;
 		const startTime = performance.now();
 
 		for (let iteration = 0; iteration < MAX_AGENT_ITERATIONS; iteration++) {
@@ -250,7 +222,13 @@ export class ProtocolAgentV2 {
 			const response = await client.messages.create({
 				model: MODEL,
 				max_tokens: 2048,
-				system: this.systemPrompt,
+				system: [
+					{
+						type: "text",
+						text: this.systemPrompt,
+						cache_control: { type: "ephemeral" },
+					},
+				],
 				tools: this.tools,
 				messages: history,
 			});
@@ -346,12 +324,23 @@ export class ProtocolAgentV2 {
 				}
 
 				// Log store_message failures — the error result gets fed back
-				// to the LLM so it can retry on the next iteration
-				if (block.name === "store_message" && !result.success) {
-					log.warn(component, "store_message_failed", {
-						chainId: message.chainId,
-						error: result.error,
-					});
+				// to the LLM so it can retry on the next iteration. Per spec
+				// §Validation, after 3 cumulative failures in this handling
+				// session, emit an ERROR on the agent's behalf and stop.
+				if (block.name === "store_message") {
+					if (result.success) {
+						storeValidationFailures = 0;
+					} else {
+						storeValidationFailures += 1;
+						log.warn(component, "store_message_failed", {
+							chainId: message.chainId,
+							error: result.error,
+							attempt: storeValidationFailures,
+						});
+						if (storeValidationFailures >= MAX_LLM_VALIDATION_FAILURES) {
+							validationExhausted = true;
+						}
+					}
 				}
 
 				toolResults.push({
@@ -362,6 +351,24 @@ export class ProtocolAgentV2 {
 			}
 
 			history.push({ role: "user", content: toolResults });
+
+			if (validationExhausted) {
+				log.error(component, "llm_validation_exhausted", {
+					chainId: message.chainId,
+					requestId: message.id,
+					failures: storeValidationFailures,
+				});
+				this.safeStoreMessage(component, {
+					chainId: message.chainId,
+					replyTo: message.id,
+					type: "ERROR",
+					payload: "Agent failed to validate message after 3 attempts.",
+					from: this.agent.id,
+					to: [message.from],
+				});
+				this.propagateCancelToSubChains(component, message.chainId);
+				break;
+			}
 
 			// Update meta incrementally so it's available before the next await
 			if (this.onMeta) {
@@ -401,9 +408,6 @@ export class ProtocolAgentV2 {
 			});
 		}
 
-		if (sentResponse) {
-			this.chainResponded.add(message.chainId);
-		}
 		this.chainHistory.set(message.chainId, history);
 		this.store.updateAgentStatus(this.agent.id, "idle");
 
@@ -462,14 +466,14 @@ export class ProtocolAgentV2 {
 			to: string[];
 			headers?: Record<string, string>;
 		},
-	): MessageV2 | undefined {
+	): MessageParley | undefined {
 		for (let attempt = 0; attempt < MAX_VALIDATION_RETRIES; attempt++) {
 			try {
 				return this.store.storeMessage(
-					encodeOutboundV2({
+					encodeOutboundParley({
 						chainId: fields.chainId,
 						replyTo: fields.replyTo,
-						type: fields.type as MessageV2["type"],
+						type: fields.type as MessageParley["type"],
 						payload: fields.payload,
 						headers: fields.headers,
 						from: fields.from,
@@ -498,7 +502,7 @@ export class ProtocolAgentV2 {
 					.find((m) => !m.replyTo);
 				const errorTo = origin ? [origin.from] : fields.to;
 				this.store.storeMessage(
-					encodeOutboundV2({
+					encodeOutboundParley({
 						chainId: fields.chainId,
 						replyTo: fields.replyTo,
 						type: "ERROR",

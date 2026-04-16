@@ -13,13 +13,13 @@ export interface Agent {
 
 /**
  * Shared message types common to all protocols.
- * v2 extends these with CLAIM and CANCEL in its own MessageTypeV2.
+ * parley extends these with CLAIM and CANCEL in its own MessageTypeParley.
  */
 export type MessageType = "REQUEST" | "ACK" | "PROCESS" | "RESPONSE" | "ERROR";
 
 /**
  * Protocol-agnostic message format used as the common output in AgentResult.
- * Protocol implementations (e.g. v2's MessageV2) map their wire formats to this shape.
+ * Protocol implementations (e.g. parley's MessageParley) map their wire formats to this shape.
  */
 export interface Message {
 	id: string;

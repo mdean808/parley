@@ -57,11 +57,11 @@ export interface Session {
 	chainId: string;
 	agents: ProtocolAgentInfo[];
 	listeners: Set<ChatStreamListener>;
-	/** v2 internal store reference (null for other protocols) */
+	/** parley internal store reference (null for other protocols) */
 	_store: unknown;
-	/** agent name → agent ID mapping (v2 only) */
+	/** agent name → agent ID mapping (parley only) */
 	_agentNameToId: Map<string, string>;
-	/** agent ID → skills mapping (v2 only) */
+	/** agent ID → skills mapping (parley only) */
 	_agentIdToSkills: Map<string, string[]>;
 }
 
@@ -88,7 +88,7 @@ function buildEnrichedEvent(
 		detail: event.detail,
 	};
 
-	// Enrich state_change events with store data (v2 only)
+	// Enrich state_change events with store data (parley only)
 	if (event.type === "state_change" && session._store) {
 		const match = event.detail.match(/^(\w+) sent$/);
 		if (match) {
@@ -185,7 +185,7 @@ export async function createSession(
 	});
 	const { userId, agents } = await protocol.initialize(userName);
 
-	// Extract v2 internals (store, agents) — no-op for other protocols
+	// Extract parley internals (store, agents) — no-op for other protocols
 	const _store = (protocol as unknown as Record<string, unknown>).store ?? null;
 	const _agentNameToId = new Map<string, string>();
 	const _agentIdToSkills = new Map<string, string[]>();

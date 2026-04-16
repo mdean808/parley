@@ -1,10 +1,10 @@
-import type { StoreV2 } from "./store.ts";
+import type { StoreParley } from "./store.ts";
 import type { ToolResult } from "./types.ts";
 
 export function executeToolCall(
 	name: string,
 	input: Record<string, unknown>,
-	store: StoreV2,
+	store: StoreParley,
 	_agentId: string,
 ): ToolResult {
 	try {

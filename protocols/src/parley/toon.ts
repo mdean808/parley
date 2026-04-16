@@ -1,14 +1,14 @@
 import { decode, encode } from "@toon-format/toon";
-import type { MessageV2, OutboundMessageV2 } from "./types.ts";
+import type { MessageParley, OutboundMessageParley } from "./types.ts";
 
-export function encodeMessageV2(message: MessageV2): string {
+export function encodeMessageParley(message: MessageParley): string {
 	return encode({
 		...message,
 		replyTo: message.replyTo ?? null,
 	});
 }
 
-export function decodeMessageV2(toon: string): MessageV2 {
+export function decodeMessageParley(toon: string): MessageParley {
 	const raw = decode(toon) as Record<string, unknown>;
 	const to = Array.isArray(raw.to) ? raw.to : [raw.to];
 	const headers =
@@ -22,10 +22,10 @@ export function decodeMessageV2(toon: string): MessageV2 {
 		version: (raw.version as number) ?? 2,
 		sequence: (raw.sequence as number) ?? 0,
 		replyTo: raw.replyTo === null ? undefined : (raw.replyTo as string),
-	} as MessageV2;
+	} as MessageParley;
 }
 
-export function encodeOutboundV2(fields: OutboundMessageV2): string {
+export function encodeOutboundParley(fields: OutboundMessageParley): string {
 	return encode({
 		...fields,
 		id: "",

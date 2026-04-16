@@ -4,14 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Implementation of an agent-to-agent communication protocol with five protocol variants (v2 tool-use, simple direct, claude-code, Google A2A, CrewAI). The system runs multiple AI agents (powered by Claude) that receive user requests, evaluate relevance based on their skills, and respond. Includes a benchmarking system that compares protocol performance with LLM-as-judge evaluation. External protocols (A2A, CrewAI) are bridged via HTTP — TypeScript adapters in `protocols/src/` call Python agent servers in `external/`.
+Implementation of an agent-to-agent communication protocol with five protocol variants (parley tool-use, simple direct, claude-code, Google A2A, CrewAI). The system runs multiple AI agents (powered by Claude) that receive user requests, evaluate relevance based on their skills, and respond. Includes a benchmarking system that compares protocol performance with LLM-as-judge evaluation. External protocols (A2A, CrewAI) are bridged via HTTP — TypeScript adapters in `protocols/src/` call Python agent servers in `external/`.
 
 ## Commands
 
 - **Install**: `bun install`
 - **CLI Chat**: `bun run chat`
 - **Web Chat**: `bun run web`
-- **Benchmark**: `bun run bench [--protocols v2,simple] [--probes id1,id2] [--pattern single-route,handoff] [--output dir] [--no-judge] [--judge-model model] [--no-report] [--concurrency N]`
+- **Benchmark**: `bun run bench [--protocols parley,simple] [--probes id1,id2] [--pattern single-route,handoff] [--output dir] [--no-judge] [--judge-model model] [--no-report] [--concurrency N]`
 - **Lint**: `bun run lint`
 - **Format**: `bun run format`
 - **Start external servers**: `./start-agents.sh` (requires `jq`; starts CrewAI + A2A servers from `agents.json`)
@@ -52,7 +52,7 @@ protocols/                            — Workspace: protocol implementations
     agents.ts                         — Reads personas from agents.json, exports getA2AUrls()
     logger.ts                         — Structured JSON file logger
     index.ts                          — Barrel re-export
-    default_v2/                       — v2: agentic tool-use + chain history + TOON
+    parley/                           — parley: agentic tool-use + chain history + TOON
       index.ts, protocol.ts, agent.ts, types.ts, prompt.ts, tools.ts, tool-definitions.ts, tool-executor.ts, store.ts, toon.ts
     simple/                           — Simple: direct Claude calls, no protocol overhead
       index.ts, protocol.ts
@@ -117,7 +117,7 @@ Agent personas are defined in `agents.json` at the project root — the single s
 
 Five protocols implement the `Protocol` interface (`initialize()` + `sendRequest()`):
 
-- **v2 (DefaultProtocolV2)**: Agentic tool-use approach. Agents have tools (`send_message`, `get_message`, `evaluate_skills`). Per-chain LLM conversation history. Richer multi-round support.
+- **parley (ParleyProtocol)**: Agentic tool-use approach. Agents have tools (`send_message`, `get_message`, `evaluate_skills`). Per-chain LLM conversation history. Richer multi-round support.
 - **simple (SimpleProtocol)**: Direct Claude SDK calls, no protocol overhead. Per-agent conversation history. All agents always respond (no skill filtering). Baseline for comparison.
 - **claude-code (ClaudeCodeProtocol)**: Wraps the Claude Code CLI for single-agent agentic baseline.
 - **a2a (A2AProtocol)**: Bridges to external A2A-compliant agent servers via `@a2a-js/sdk`. Each persona maps to a separate A2A server. Requires running `external/a2a/` servers.
@@ -135,4 +135,4 @@ Probe-based system testing protocol interaction quality (routing, handoff, colla
 
 ### TOON Format
 
-v2 communication uses TOON (Token Object Over Network). Reference: https://github.com/toon-format/toon
+parley communication uses TOON (Token Object Over Network). Reference: https://github.com/toon-format/toon

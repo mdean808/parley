@@ -44,7 +44,7 @@ Runs all scenarios across all protocols, scores responses with an LLM judge, and
 
 ```bash
 # Select specific protocols and probes
-bun run bench --protocols v2,simple --probes simple-factual-question,decline-plumbing
+bun run bench --protocols parley,simple --probes simple-factual-question,decline-plumbing
 
 # Filter by interaction pattern
 bun run bench --pattern handoff,collaborate
@@ -77,7 +77,7 @@ Requires `jq`. Launches A2A and CrewAI servers from `agents.json`. Required befo
 
 | Protocol | Approach | Skill Filtering | Multi-Round Context |
 |----------|----------|-----------------|---------------------|
-| **v2** (tool-use) | Agentic — agents use tools (`send_message`, `get_message`, `evaluate_skills`) | Tool-based skill evaluation | Per-chain LLM history + store queries |
+| **parley** (tool-use) | Agentic — agents use tools (`send_message`, `get_message`, `evaluate_skills`) | Tool-based skill evaluation | Per-chain LLM history + store queries |
 | **simple** (direct) | Direct Claude API calls, no protocol overhead | None — all agents always respond | Per-agent conversation history |
 | **claude-code** | Wraps Claude Code CLI | Single-agent | Agentic baseline |
 | **a2a** (Google A2A) | Bridges to external A2A-compliant agent servers | Per-server agent cards | A2A task context |
@@ -143,5 +143,5 @@ Seven built-in probes across five interaction patterns:
 - **Runtime**: [Bun](https://bun.sh)
 - **Language**: TypeScript
 - **LLM**: Claude via `@anthropic-ai/sdk`
-- **Wire Format**: [TOON](https://github.com/toon-format/toon) (v2 protocol)
+- **Wire Format**: [TOON](https://github.com/toon-format/toon) (parley protocol)
 - **Linter/Formatter**: [Biome](https://biomejs.dev)

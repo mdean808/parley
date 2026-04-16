@@ -68,7 +68,7 @@ export class ClaudeCodeProtocol implements Protocol {
 			"--model",
 			this.model,
 			"--max-turns",
-			"5",
+			"10",
 		];
 
 		const sessionId = chainId ? this.sessions.get(chainId) : undefined;

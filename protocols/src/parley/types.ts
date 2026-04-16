@@ -1,4 +1,4 @@
-export type MessageTypeV2 =
+export type MessageTypeParley =
 	| "REQUEST"
 	| "ACK"
 	| "PROCESS"
@@ -7,14 +7,14 @@ export type MessageTypeV2 =
 	| "CLAIM"
 	| "CANCEL";
 
-export interface MessageV2 {
+export interface MessageParley {
 	id: string;
 	version: 2;
 	chainId: string;
 	sequence: number;
 	replyTo: string | undefined;
 	timestamp: string;
-	type: MessageTypeV2;
+	type: MessageTypeParley;
 	payload: string;
 	headers: Record<string, string>;
 	from: string;
@@ -23,13 +23,13 @@ export interface MessageV2 {
 
 export type AgentStatus = "idle" | "working" | "offline";
 
-export interface UserV2 {
+export interface UserParley {
 	id: string;
 	name: string;
 	channels: string[];
 }
 
-export interface AgentV2 {
+export interface AgentParley {
 	id: string;
 	name: string;
 	skills: string[];
@@ -50,20 +50,20 @@ export interface Channel {
 	members: string[];
 }
 
-export interface MessageFilterV2 {
+export interface MessageFilterParley {
 	id?: string;
 	chainId?: string;
 	replyTo?: string;
 	timestamp?: string;
 	from?: string;
 	to?: string;
-	type?: MessageTypeV2;
+	type?: MessageTypeParley;
 	payload?: string;
 }
 
-export type MessageHandlerV2 = (
+export type MessageHandlerParley = (
 	toonMessage: string,
-	message: MessageV2,
+	message: MessageParley,
 ) => void;
 
 // Store-originated, out-of-band notifications delivered alongside messages.
@@ -75,12 +75,12 @@ export type StoreNotification = {
 	requestId: string;
 };
 
-export type NotificationHandlerV2 = (notification: StoreNotification) => void;
+export type NotificationHandlerParley = (notification: StoreNotification) => void;
 
-export interface OutboundMessageV2 {
+export interface OutboundMessageParley {
 	chainId: string;
 	replyTo: string | undefined;
-	type: MessageTypeV2;
+	type: MessageTypeParley;
 	payload: string;
 	headers?: Record<string, string>;
 	from: string;

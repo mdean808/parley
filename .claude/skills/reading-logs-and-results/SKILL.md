@@ -23,7 +23,7 @@ ls -t logs/*.json | head -1
 |------|---------|
 | Filter by level | `jq '[.[] \| select(.level == "ERROR")]' FILE` |
 | Filter by event | `jq '[.[] \| select(.event == "agent_complete")]' FILE` |
-| Filter by component | `jq '[.[] \| select(.component \| startswith("agent_v2:"))]' FILE` |
+| Filter by component | `jq '[.[] \| select(.component \| startswith("agent_parley:"))]' FILE` |
 | Trace a chain | `jq '[.[] \| select(.data.chainId == "CHAIN_ID")]' FILE` |
 | Agent token usage | `jq '.[] \| select(.event == "agent_complete") \| {agent: .data.agent, in: .data.inputTokens, out: .data.outputTokens, ms: .data.durationMs}' FILE` |
 | Loop totals | `jq '.[] \| select(.event == "agentic_loop_complete") \| {chain: .data.chainId, in: .data.inputTokens, out: .data.outputTokens, ms: .data.durationMs}' FILE` |
@@ -37,7 +37,7 @@ ls -t logs/*.json | head -1
 
 ### Components
 
-`init` `store_v2` `protocol_v2` `init_v2` `agent_v2:{AgentName}` `simple` `a2a` `crewai`
+`init` `store_parley` `protocol_parley` `init_parley` `agent_parley:{AgentName}` `simple` `a2a` `crewai`
 
 ## Benchmark Results
 
@@ -56,9 +56,9 @@ ls -t benchmark/results/benchmark-*.json | head -1
 | Goal | Command |
 |------|---------|
 | Protocol comparison | `jq '.aggregate.protocolMetrics \| to_entries[] \| {protocol: .key, score: .value.scoreRate, pass: .value.overallPassRate, cost: .value.avgCost}' FILE` |
-| Scores by pattern | `jq '.aggregate.protocolMetrics["v2"].byPattern \| to_entries[] \| {pattern: .key, score: .value.scoreRate}' FILE` |
+| Scores by pattern | `jq '.aggregate.protocolMetrics["parley"].byPattern \| to_entries[] \| {pattern: .key, score: .value.scoreRate}' FILE` |
 | Results for a probe | `jq '.probes[] \| select(.probe.id == "PROBE_ID") \| .results' FILE` |
-| Agent responses | `jq '.probes[] \| select(.probe.id == "PROBE_ID") \| .results["v2"].agents[] \| {agent: .agentName, cost, ms: .durationMs}' FILE` |
+| Agent responses | `jq '.probes[] \| select(.probe.id == "PROBE_ID") \| .results["parley"].agents[] \| {agent: .agentName, cost, ms: .durationMs}' FILE` |
 | Judge summaries | `jq '[.probes[] \| .results \| to_entries[] \| {probe: .value.probeId, protocol: .key, score: .value.judge.interactionScore, summary: .value.judge.summary}]' FILE` |
 | Failed probes | `jq '[.probes[] \| .results \| to_entries[] \| select(.value.judge.pass == false) \| {probe: .value.probeId, protocol: .key, score: .value.judge.interactionScore}]' FILE` |
 | Results by pattern | `jq '[.probes[] \| select(.probe.pattern == "handoff")]' FILE` |
@@ -69,4 +69,4 @@ ls -t benchmark/results/benchmark-*.json | head -1
 - **Primary metric:** `scoreRate` = avgInteractionScore / 3 * 100%
 - **Pass:** requires both `assertions.passed` and `judge.pass`
 - **Patterns:** `single-route` `selective-route` `decline-all` `handoff` `collaborate`
-- **Protocols:** `v2` `simple` `claude-code` `a2a` `crewai`
+- **Protocols:** `parley` `simple` `claude-code` `a2a` `crewai`

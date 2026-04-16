@@ -44,6 +44,7 @@ export async function runProbe(
 				probe.prompt,
 				chainId,
 			);
+			enrichParleyDeclinesFromAcks(protocol, chainId, collector);
 			declines = batch.declines;
 			agents = batch.results.map((r) => {
 				const inputTokens = r.usage?.inputTokens ?? 0;
@@ -134,4 +135,49 @@ export async function runProbe(
 		totalDurationMs,
 		error,
 	};
+}
+
+/**
+ * For parley protocol runs, decline reasons now live inside the ACK message
+ * payload (header `accept: false`), not in the agent's trailing narration.
+ * Pull the reason from the store for any decline that arrived without one.
+ * No-op for other protocols (structural check on `store.getMessage`).
+ */
+function enrichParleyDeclinesFromAcks(
+	protocol: Protocol,
+	chainId: string,
+	collector: ResultCollector,
+): void {
+	const store = (protocol as unknown as { store?: unknown }).store as
+		| {
+				getMessage: (
+					filter: { chainId: string; type: string },
+				) => Array<{
+					from: string;
+					payload: string;
+					headers?: Record<string, string>;
+				}>;
+				getAgent: (
+					ids: string[],
+				) => Array<{ id: string; name: string }>;
+		  }
+		| undefined;
+	if (!store?.getMessage || !store.getAgent) return;
+
+	const acks = store.getMessage({ chainId, type: "ACK" });
+	for (const ack of acks) {
+		const [agent] = store.getAgent([ack.from]);
+		if (!agent) continue;
+		const accept = ack.headers?.accept;
+		const payload = ack.payload?.trim();
+		if (accept === "false") {
+			collector.setDeclineReason(
+				agent.name,
+				payload || "(explicit ACK decline; no reason in payload)",
+			);
+		} else if (accept !== "true" && payload) {
+			// Missing accept header but non-empty payload — surface it anyway
+			collector.setDeclineReason(agent.name, payload);
+		}
+	}
 }

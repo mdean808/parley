@@ -1,41 +1,41 @@
 import { log } from "../logger.ts";
-import { decodeMessageV2, encodeMessageV2 } from "./toon.ts";
+import { decodeMessageParley, encodeMessageParley } from "./toon.ts";
 import type {
 	AgentStatus,
-	AgentV2,
+	AgentParley,
 	Chain,
 	Channel,
-	MessageFilterV2,
-	MessageHandlerV2,
-	MessageV2,
-	NotificationHandlerV2,
+	MessageFilterParley,
+	MessageHandlerParley,
+	MessageParley,
+	NotificationHandlerParley,
 	StoreNotification,
-	UserV2,
+	UserParley,
 } from "./types.ts";
 
-export class StoreV2 {
-	private users: UserV2[] = [];
-	private agents: AgentV2[] = [];
-	private messages: MessageV2[] = [];
+export class StoreParley {
+	private users: UserParley[] = [];
+	private agents: AgentParley[] = [];
+	private messages: MessageParley[] = [];
 	private chains: Map<string, Chain> = new Map();
 	private channels: Map<string, Channel> = new Map();
-	private subscribers: Map<string, MessageHandlerV2> = new Map();
-	private notificationSubscribers: Map<string, NotificationHandlerV2> =
+	private subscribers: Map<string, MessageHandlerParley> = new Map();
+	private notificationSubscribers: Map<string, NotificationHandlerParley> =
 		new Map();
 
-	registerUser(name: string): UserV2 {
-		const user: UserV2 = { id: crypto.randomUUID(), name, channels: [] };
+	registerUser(name: string): UserParley {
+		const user: UserParley = { id: crypto.randomUUID(), name, channels: [] };
 		this.users.push(user);
-		log.info("store_v2", "user_registered", { id: user.id, name });
+		log.info("store_parley", "user_registered", { id: user.id, name });
 		return user;
 	}
 
-	getUser(ids: string[]): UserV2[] {
+	getUser(ids: string[]): UserParley[] {
 		return this.users.filter((u) => ids.includes(u.id));
 	}
 
-	registerAgent(name: string, skills: string[]): AgentV2 {
-		const agent: AgentV2 = {
+	registerAgent(name: string, skills: string[]): AgentParley {
+		const agent: AgentParley = {
 			id: crypto.randomUUID(),
 			name,
 			skills,
@@ -43,7 +43,7 @@ export class StoreV2 {
 			status: "idle",
 		};
 		this.agents.push(agent);
-		log.info("store_v2", "agent_registered", {
+		log.info("store_parley", "agent_registered", {
 			id: agent.id,
 			name,
 			skills,
@@ -51,7 +51,7 @@ export class StoreV2 {
 		return agent;
 	}
 
-	getAgent(ids: string[]): AgentV2[] {
+	getAgent(ids: string[]): AgentParley[] {
 		return this.agents.filter((a) => ids.includes(a.id));
 	}
 
@@ -60,7 +60,7 @@ export class StoreV2 {
 		if (agent) agent.status = status;
 	}
 
-	queryAgents(skills: string[]): AgentV2[] {
+	queryAgents(skills: string[]): AgentParley[] {
 		const lowerSkills = skills.map((s) => s.toLowerCase());
 		return this.agents.filter((agent) =>
 			agent.skills.some((agentSkill) => {
@@ -72,8 +72,8 @@ export class StoreV2 {
 		);
 	}
 
-	storeMessage(toonString: string): MessageV2 {
-		const decoded = decodeMessageV2(toonString);
+	storeMessage(toonString: string): MessageParley {
+		const decoded = decodeMessageParley(toonString);
 
 		if (decoded.version !== 2) {
 			throw new Error(`Invalid version: expected 2, got ${decoded.version}`);
@@ -85,7 +85,7 @@ export class StoreV2 {
 			);
 		}
 
-		const message: MessageV2 = {
+		const message: MessageParley = {
 			...decoded,
 			id: crypto.randomUUID(),
 			timestamp: new Date().toISOString(),
@@ -196,14 +196,18 @@ export class StoreV2 {
 		}
 
 		// Re-encode for validation
-		encodeMessageV2(message);
+		encodeMessageParley(message);
 
 		this.messages.push(message);
-		log.debug("store_v2", "message_stored", {
+		log.debug("store_parley", "message_stored", {
 			id: message.id,
 			type: message.type,
 			chainId: message.chainId,
 			from: message.from,
+			to: message.to,
+			headers: message.headers,
+			payload: message.payload,
+			replyTo: message.replyTo,
 		});
 
 		// Notify subscribers via queueMicrotask
@@ -211,7 +215,7 @@ export class StoreV2 {
 		for (const [entityId, handler] of this.subscribers) {
 			if (entityId === senderId) continue;
 			if (resolvedRecipients.has(entityId)) {
-				const toon = encodeMessageV2(message);
+				const toon = encodeMessageParley(message);
 				queueMicrotask(() => handler(toon, message));
 			}
 		}
@@ -241,13 +245,13 @@ export class StoreV2 {
 		return message;
 	}
 
-	getMessage(filter: MessageFilterV2): MessageV2[] {
+	getMessage(filter: MessageFilterParley): MessageParley[] {
 		return this.messages.filter((m) => {
 			for (const [key, value] of Object.entries(filter)) {
 				if (value === undefined) continue;
 				if (key === "to") {
 					if (!m.to.includes(value as string)) return false;
-				} else if (m[key as keyof MessageV2] !== value) {
+				} else if (m[key as keyof MessageParley] !== value) {
 					return false;
 				}
 			}
@@ -263,7 +267,7 @@ export class StoreV2 {
 			createdAt,
 		};
 		this.chains.set(chainId, chain);
-		log.debug("store_v2", "chain_created", { chainId });
+		log.debug("store_parley", "chain_created", { chainId });
 		return chain;
 	}
 
@@ -287,7 +291,7 @@ export class StoreV2 {
 		}
 		const channel: Channel = { id: crypto.randomUUID(), name, members };
 		this.channels.set(channel.id, channel);
-		log.debug("store_v2", "channel_created", { id: channel.id, name });
+		log.debug("store_parley", "channel_created", { id: channel.id, name });
 		return channel;
 	}
 
@@ -335,19 +339,19 @@ export class StoreV2 {
 		return all;
 	}
 
-	subscribe(entityId: string, handler: MessageHandlerV2): void {
+	subscribe(entityId: string, handler: MessageHandlerParley): void {
 		this.subscribers.set(entityId, handler);
-		log.debug("store_v2", "subscribed", { entityId });
+		log.debug("store_parley", "subscribed", { entityId });
 	}
 
 	unsubscribe(entityId: string): void {
 		this.subscribers.delete(entityId);
-		log.debug("store_v2", "unsubscribed", { entityId });
+		log.debug("store_parley", "unsubscribed", { entityId });
 	}
 
 	subscribeNotifications(
 		entityId: string,
-		handler: NotificationHandlerV2,
+		handler: NotificationHandlerParley,
 	): void {
 		this.notificationSubscribers.set(entityId, handler);
 	}
@@ -357,7 +361,7 @@ export class StoreV2 {
 	}
 
 	private validateStateTransition(
-		message: MessageV2,
+		message: MessageParley,
 		chain: Chain | undefined,
 	): void {
 		// REQUEST and CANCEL are always valid at the store level

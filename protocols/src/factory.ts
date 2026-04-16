@@ -7,7 +7,7 @@ import { A2AProtocol } from "./a2a/index.ts";
 import { createAgentPersonas, getA2AUrls } from "./agents.ts";
 import { ClaudeCodeProtocol } from "./claude-code/index.ts";
 import { CrewAIProtocol } from "./crewai/index.ts";
-import { DefaultProtocolV2 } from "./default_v2/index.ts";
+import { ParleyProtocol } from "./parley/index.ts";
 import { SimpleProtocol } from "./simple/index.ts";
 
 export type ProtocolId = string;
@@ -58,13 +58,13 @@ export function createProtocol(
 }
 
 // Register built-in protocols
-registerProtocol("v2", {
-	label: "Default Protocol (v2)",
+registerProtocol("parley", {
+	label: "Parley Protocol",
 	description: "agentic tool-use, chains, channels, TOON",
 	supportsRouting: true,
 	create: (options) => {
 		const personas = createAgentPersonas();
-		return new DefaultProtocolV2({
+		return new ParleyProtocol({
 			personas,
 			soloAgentName: options?.soloAgentName,
 			onEvent: options?.onEvent,

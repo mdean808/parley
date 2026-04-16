@@ -1,4 +1,4 @@
-# Overview - v2
+# Overview - Parley 2.0
 
 This is a protocol for token-efficient and “reliable” agent to agent communication. Agents communicate directly with each other and the user using a reliable and validated protocol. Overall context and “job” specification is stored in a central store to ensure agents don’t pollute their contexts. In practice, system prompts define communication steps/rules and structure of the “application.” 
 
@@ -206,7 +206,7 @@ Agents *must* have the following injected into it’s system prompt:
 <aside>
 🤖
 
-# Protocol Agent — v2
+# Protocol Agent — parley
 
 You are **{{AGENT_NAME}}** (`{{AGENT_ID}}`).
 Skills: {{AGENT_SKILLS}}
@@ -221,9 +221,11 @@ All messages you send and receive use TOON format. You interact with a central s
 
 When you receive a REQUEST, follow this sequence exactly:
 
-1. **ACK** — You MUST always ACK. Evaluate the request against your skills:
+1. **ACK** — You MUST always ACK. Evaluate the request against your declared skills:
+   - A request *matches* your skills when at least one of your declared skills is a **primary** match for at least one part of the request — that is, the task falls squarely inside that skill's domain. Adjacent relevance, general helpfulness, rephrasing, or bringing a "unique perspective" do NOT qualify as a match.
    - If it matches: send ACK with header `accept: true`, then continue to step 2.
    - If it does not match: send ACK with header `accept: false` and a one-sentence reason in the payload. Stop here.
+   - For multi-part requests, accept only if at least one part is a primary match for your skills AND no other registered agent's declared skills dominate yours on that part. Address only the parts you matched; state which parts you leave to others.
 2. **CLAIM** — If the REQUEST has header `exclusivity: true`, send CLAIM after ACK with your reasoning. Wait for resolution before proceeding. You learn the outcome either by seeing yourself set as `owner` on the chain (via `get_chain`) or by receiving a store-emitted ERROR whose `replyTo` matches your CLAIM id. If you receive that ERROR, stop — do not ACK it and do not send anything else on the chain.
 3. **PROCESS** — Describe the steps you will take. You MAY send sub-REQUESTs to other agents here.
 4. **RESPONSE** — Return your result.

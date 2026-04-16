@@ -40,6 +40,23 @@ export class ResultCollector {
 		}
 	};
 
+	/**
+	 * Overwrites a decline reason for an agent (and the corresponding entry
+	 * in the active batch). Used to backfill reasons from protocol-specific
+	 * sources (e.g. parley ACK payloads) when the `decline` event carried no prose.
+	 */
+	setDeclineReason(agentName: string, reason: string): void {
+		this.declinedReasons.set(agentName, reason);
+		const entry = this.activeBatch?.declines.find(
+			(d) => d.agentName === agentName,
+		);
+		if (entry) {
+			entry.reason = reason;
+		} else {
+			this.activeBatch?.declines.push({ agentName, reason });
+		}
+	}
+
 	startBatch(): Batch {
 		const batch: Batch = { results: [], declines: [] };
 		this.activeBatch = batch;

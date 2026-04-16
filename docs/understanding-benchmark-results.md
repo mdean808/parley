@@ -27,7 +27,7 @@ The comparison report is the primary artifact for analysis. The JSON file is use
 
 States which protocol scored highest on average. This is the quick answer to "which protocol produced the best responses?"
 
-> **v2** achieved the highest average judge score of **4.7/5.0**.
+> **parley** achieved the highest average judge score of **4.7/5.0**.
 
 A high average judge score doesn't mean a protocol is "best" in all dimensions — it may come with much higher token cost or latency.
 
@@ -36,7 +36,7 @@ A high average judge score doesn't mean a protocol is "best" in all dimensions �
 ```
 | Protocol | Input Tok | Output Tok | Cost     | Duration | Judge Avg |
 |----------|-----------|------------|----------|----------|-----------|
-| v2       | 298,304   | 19,041     | $0.3148  | 169.3s   | 4.7       |
+| parley       | 298,304   | 19,041     | $0.3148  | 169.3s   | 4.7       |
 | simple   | 33,687    | 18,322     | $0.1002  | 75.0s    | 4.0       |
 ```
 
@@ -49,7 +49,7 @@ A high average judge score doesn't mean a protocol is "best" in all dimensions �
 
 **What to look for:**
 
-- Compare **cost vs. judge score** to assess the quality/cost tradeoff. In the example, v2 costs 3x more than simple but scores 0.7 points higher.
+- Compare **cost vs. judge score** to assess the quality/cost tradeoff. In the example, parley costs 3x more than simple but scores 0.7 points higher.
 - Compare **duration** to understand user-perceived latency. Simple is fastest because it makes parallel direct calls with no protocol overhead.
 
 ### Protocol Overhead Table
@@ -57,21 +57,21 @@ A high average judge score doesn't mean a protocol is "best" in all dimensions �
 ```
 | vs Simple | +Input Tok        | +Output Tok       | +Duration          |
 |-----------|-------------------|-------------------|--------------------|
-| v2        | 66,154 (+876.5%)  | 180 (+33.0%)       | 23.6s (+131.0%)    |
+| parley        | 66,154 (+876.5%)  | 180 (+33.0%)       | 23.6s (+131.0%)    |
 ```
 
-This measures v2's overhead compared to `simple` (the baseline with no protocol machinery).
+This measures parley's overhead compared to `simple` (the baseline with no protocol machinery).
 
 **How to read it:**
 
 - **Positive values** mean the protocol used *more* tokens/time than simple.
 - **Negative values** mean the protocol used *fewer* tokens/time. This can happen when skill-based routing filters agents — fewer agents responding means fewer total tokens.
-- **Percentages** show the relative difference. "+876.5%" means v2 used nearly 10x the input tokens of simple.
+- **Percentages** show the relative difference. "+876.5%" means parley used nearly 10x the input tokens of simple.
 
 **What to look for:**
 
-- v2 shows **high input overhead** because its tool-use architecture requires sending tool definitions, chain history, and store queries in every LLM call.
-- Duration overhead reflects extra LLM round-trips (v2 may require multiple tool-use turns per agent response).
+- parley shows **high input overhead** because its tool-use architecture requires sending tool definitions, chain history, and store queries in every LLM call.
+- Duration overhead reflects extra LLM round-trips (parley may require multiple tool-use turns per agent response).
 
 ### Per-Scenario Sections
 
@@ -82,7 +82,7 @@ Each scenario has four subsections:
 ```
 | Protocol | Round | Input | Output | Duration |
 |----------|-------|-------|--------|----------|
-| v2       | 1     | 0     | 0      | 9.5s     |
+| parley       | 1     | 0     | 0      | 9.5s     |
 | simple   | 1     | 694   | 2,668  | 5.7s     |
 ```
 
@@ -90,13 +90,13 @@ Shows per-round, per-protocol token usage.
 
 **What to look for:**
 
-- **v2 showing 0/0 tokens**: This means the v2 agents responded but their token usage was tracked at the aggregate level (through tool-use turns), not attributed to individual rounds. Check the overall scenario totals instead.
+- **parley showing 0/0 tokens**: This means the parley agents responded but their token usage was tracked at the aggregate level (through tool-use turns), not attributed to individual rounds. Check the overall scenario totals instead.
 - **Input tokens growing across rounds**: Normal for `simple` — it sends full conversation history each round. Round 3 input > Round 1 input because the full history is sent.
 
 #### Judge Scores
 
 ```
-| Dimension             | v2 | simple |
+| Dimension             | parley | simple |
 |-----------------------|----|--------|
 | relevance             | 5  | 4      |
 | information_density   | 4  | 3      |
@@ -123,12 +123,12 @@ Shows per-round, per-protocol token usage.
 **What to look for:**
 
 - **simple redundancy = 2**: Simple always sends every agent, so all three respond even when only one is relevant. The overlapping responses score poorly on redundancy.
-- **v2 high across the board**: v2 maintains per-chain LLM history and has tool access to the message store, giving it the richest context. The tradeoff is token cost.
+- **parley high across the board**: parley maintains per-chain LLM history and has tool access to the message store, giving it the richest context. The tradeoff is token cost.
 
 #### Agent Participation
 
 ```
-| Agent              | v2  | simple |
+| Agent              | parley  | simple |
 |--------------------|-----|--------|
 | Bolt - Technical   | 2/3 | 3/3    |
 | Atlas - Research   | 0/3 | 3/3    |
@@ -145,8 +145,8 @@ Shows how many rounds each agent responded in (out of total rounds).
 
 **What to look for:**
 
-- **v2 filtering correctly**: For a "Coding Focused" scenario, only Bolt responding is the *desired* behavior — Atlas and Sage have nothing useful to add.
-- **v2 filtering incorrectly**: If a relevant agent shows 0/N, the skill evaluation may be too aggressive. Check the judge's relevance score to see if it noticed.
+- **parley filtering correctly**: For a "Coding Focused" scenario, only Bolt responding is the *desired* behavior — Atlas and Sage have nothing useful to add.
+- **parley filtering incorrectly**: If a relevant agent shows 0/N, the skill evaluation may be too aggressive. Check the judge's relevance score to see if it noticed.
 - **Simple's redundancy cost**: All agents responding every round explains simple's high redundancy scores and higher total output tokens.
 
 #### Notable Observations
@@ -154,21 +154,21 @@ Shows how many rounds each agent responded in (out of total rounds).
 Auto-generated bullets flagging patterns:
 
 - **"significant protocol overhead"**: Input tokens >50% higher than simple.
-- **"protocol routing filtered to N agent(s)"**: v2 used skill-based selection to reduce responding agents.
+- **"protocol routing filtered to N agent(s)"**: parley used skill-based selection to reduce responding agents.
 
 These are heuristic — read them as starting points for investigation, not conclusions.
 
 ### Agent Analysis
 
 ```
-| Agent              | v2 | simple |
+| Agent              | parley | simple |
 |--------------------|----|----|
 | Bolt - Technical   | 6  | 14     |
 | Atlas - Research   | 9  | 14     |
 | Sage - Creative    | 7  | 14     |
 ```
 
-Aggregate response counts across all scenarios. Simple is always equal (all agents, all rounds). v2 numbers reveal routing behavior — lower counts indicate skill filtering is working to exclude irrelevant agents.
+Aggregate response counts across all scenarios. Simple is always equal (all agents, all rounds). parley numbers reveal routing behavior — lower counts indicate skill filtering is working to exclude irrelevant agents.
 
 ### Key Findings
 
@@ -203,16 +203,16 @@ Each entry is a `ScenarioComparison`:
     "rounds": [{ "message": "..." }, ...]
   },
   "results": {
-    "v2": { ... },
+    "parley": { ... },
     "simple": { ... }
   },
   "protocolOverhead": {
-    "v2VsSimple": { ... }
+    "parleyVsSimple": { ... }
   }
 }
 ```
 
-Each protocol result (`results.v2`, etc.) contains:
+Each protocol result (`results.parley`, etc.) contains:
 
 - `rounds[]`: Per-round data with `agents[]` (each agent's `responseText`, `inputTokens`, `outputTokens`, `cost`, `durationMs`), round-level totals, and `respondingAgentCount`.
 - `aggregate`: Totals across all rounds (`totalInputTokens`, `totalOutputTokens`, `totalCost`, `totalDurationMs`, `averageAgentsPerRound`, `roundCount`).
@@ -251,10 +251,10 @@ Each protocol result (`results.v2`, etc.) contains:
 
 ```json
 {
-  "avgScores": { "v2": 4.7, "simple": 4.0 },
-  "avgOverhead": { "v2VsSimple": { ... } },
+  "avgScores": { "parley": 4.7, "simple": 4.0 },
+  "avgOverhead": { "parleyVsSimple": { ... } },
   "agentParticipation": {
-    "Bolt - Technical": { "v2": 6, "simple": 14 },
+    "Bolt - Technical": { "parley": 6, "simple": 14 },
     ...
   }
 }
@@ -268,10 +268,10 @@ Each protocol result (`results.v2`, etc.) contains:
 
 ## Common Patterns to Watch For
 
-**v2 has very high input tokens but comparable output**: v2's tool-use architecture sends tool schemas, chain history, and store query results as input context. The actual agent responses (output) are similar in length to simple.
+**parley has very high input tokens but comparable output**: parley's tool-use architecture sends tool schemas, chain history, and store query results as input context. The actual agent responses (output) are similar in length to simple.
 
-**v2 shows 0/0 tokens for early rounds**: v2's token accounting attributes usage to the round where the final RESPONSE is sent. Earlier rounds may show zero if the agent's tool-use turns haven't resolved yet.
+**parley shows 0/0 tokens for early rounds**: parley's token accounting attributes usage to the round where the final RESPONSE is sent. Earlier rounds may show zero if the agent's tool-use turns haven't resolved yet.
 
 **Simple always has the lowest cost but middling quality**: No overhead, but also no intelligent routing — every agent responds to every message, including irrelevant ones. Good baseline, but the redundancy penalty drags scores down.
 
-**Judge scores cluster around 3-4 for simple**: The judge considers 3 "acceptable." Simple produces serviceable but not exceptional output since it lacks the context management and routing of v2.
+**Judge scores cluster around 3-4 for simple**: The judge considers 3 "acceptable." Simple produces serviceable but not exceptional output since it lacks the context management and routing of parley.

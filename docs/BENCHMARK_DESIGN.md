@@ -184,7 +184,7 @@ report (terminal + optional markdown/JSON)
 Protocol Comparison (model: haiku-4.5)
 ═══════════════════════════════════════
 
-                  v2        simple    a2a
+                  parley    simple    a2a
 ──────────────────────────────────────────
 Overall Pass     85%        40%       78%
 Avg Score        2.8/3      1.2/3     2.5/3
@@ -199,5 +199,5 @@ By Pattern:
 
 Failures:
   x simple x route-clear-technical: excluded skill 'creative' responded
-  x v2 x handoff-creative-to-tech: only 1 skill domain in responses
+  x parley x handoff-creative-to-tech: only 1 skill domain in responses
 ```
