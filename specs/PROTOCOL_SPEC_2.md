@@ -371,7 +371,7 @@ Headers are key-value string pairs attached to messages. They carry protocol-def
 
 - **`accept`**: `true` or `false`. Required on ACK messages. `true` means the agent accepts the request and commits to responding. `false` means the agent declines — the payload must contain a concise reason (one sentence).
 - **`ttl`**: A UTC timestamp (ISO 8601) representing the expiry of the chain. Set on the initial REQUEST and inherited by all messages in the chain. Agents receiving a message where the current time exceeds `ttl` must not begin work and should send an ERROR with a timeout reason. Agents mid-PROCESS when TTL expires MUST stop work, send an ERROR, and propagate cancellation to any active sub-chains. When TTL expires, the behavior is equivalent to an implicit CANCEL. The store detects expiry, updates the chain status to `expired`, and agents mid-PROCESS follow the same propagation and cleanup rules as CANCEL. The distinction is that no explicit CANCEL message is sent — agents are expected to check TTL before beginning work and periodically during PROCESS
-- **`exclusivity`**: `true` or `false`. When `true` on a broadcast REQUEST, signals that agents should CLAIM ownership rather than independently proceeding. See Claiming in Extensions.
+- **`exclusivity`**: `true` or `false`. When `true`, signals that exactly one agent should resolve the REQUEST — recipients MUST CLAIM ownership rather than independently proceeding. Applies to any REQUEST shape (broadcast, channel, or multi-recipient direct). See §CLAIM.
 
 Implementations may define additional headers. Custom headers should use a namespaced key format (e.g., `x-myapp-retry-count`) to avoid collisions with future protocol keys.
 
@@ -476,7 +476,7 @@ An ACK with `accept: true` commits the agent to eventually send RESPONSE or ERRO
 
 ## CLAIM
 
-1. Agent receives a broadcast REQUEST containing the reserved header `exclusivity: true`.
+1. Agent receives a REQUEST containing the reserved header `exclusivity: true`. `exclusivity` is valid on any REQUEST shape (broadcast, channel, or multi-recipient direct message) where more than one agent could otherwise resolve the request.
 2. Agent sends ACK as usual.
 3. Agent sends a message of type `CLAIM`. The payload should contain reasoning or capability justification for ownership, as well as increment `sequence` by `1`.
 4. Message is stored via Store Message.
