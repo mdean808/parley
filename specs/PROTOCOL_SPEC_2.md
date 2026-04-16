@@ -413,16 +413,23 @@ to[2]: asdcd-2dfv3-vvsa3-kadk2,asdcd-2dfv3-vvsa3-af3ba
 
 Messages within a chain follow a defined state lifecycle. Each state transition represents a valid protocol operation. Any message sent outside of these transitions is invalid and MUST be rejected.
 
-| Current State | Valid Next States | Condition |
+| Current State | Valid Next States | Condition / Notes |
 | --- | --- | --- |
 | REQUEST | ACK (`accept: true`) | Agent accepts the request |
-| REQUEST | ACK (`accept: false`) | Agent declines with reasoning |
-| ACK | PROCESS | Agent begins work on the request |
-| PROCESS | RESPONSE | Agent completes work |
-| PROCESS | REQUEST | Agent requires delegation or additional information |
-| ACK | CLAIM | Agent asserts ownership of a broadcast REQUEST with `exclusivity: true` |
-| (any) | CANCEL | Chain cancellation is requested |
-| CANCEL | ACK | Recipient confirms cancellation |
+| REQUEST | ACK (`accept: false`) | Agent declines with reasoning — TERMINAL for this agent on this chain |
+| REQUEST | ERROR | Agent rejects before ACK (version mismatch, expired TTL, validation failure) — TERMINAL |
+| ACK (`accept: true`) | PROCESS | Agent begins work |
+| ACK (`accept: true`) | CLAIM | REQUEST carries `exclusivity: true`; agent asserts ownership |
+| ACK (`accept: true`) | ERROR | Agent encounters an error after accepting but before PROCESS — TERMINAL |
+| CLAIM | PROCESS | Winning agent begins work after claim resolution |
+| CLAIM | — | Losing agents: no further messages on the chain — TERMINAL |
+| PROCESS | RESPONSE | Agent completes work — TERMINAL |
+| PROCESS | REQUEST | Agent delegates or gathers information; the new REQUEST starts a new chain (see §Chains) |
+| PROCESS | ERROR | Agent encounters an error during work — TERMINAL |
+| (any non-terminal) | CANCEL | Origin requester or chain owner aborts the chain |
+| CANCEL | ACK | Recipient confirms cancellation; this ACK's `replyTo` is the CANCEL message id (not the origin REQUEST id) |
+
+"TERMINAL" marks end states for a given agent on a given chain: no further messages from that agent on that chain are valid. A chain itself ends when all active participants have reached a terminal state, or when its status transitions to `cancelled` / `expired`.
 
 ## **Constraints**
 
