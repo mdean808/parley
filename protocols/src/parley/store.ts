@@ -1,8 +1,8 @@
 import { log } from "../logger.ts";
 import { decodeMessageParley, encodeMessageParley } from "./toon.ts";
 import type {
-	AgentStatus,
 	AgentParley,
+	AgentStatus,
 	Chain,
 	Channel,
 	MessageFilterParley,

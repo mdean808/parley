@@ -10,10 +10,11 @@ import os
 import time
 from pathlib import Path
 
-from crewai import Agent, Crew, Process, Task
+from crewai import LLM, Agent, Crew, Process, Task
 
 CONFIG_PATH = Path(__file__).resolve().parent.parent.parent.parent / "agents.json"
-DEFAULT_MODEL = "claude-haiku-4-5-20251001"
+DEFAULT_MODEL = "claude-sonnet-4-6"
+DEFAULT_MAX_OUTPUT_TOKENS = 2048
 
 # Conversation history keyed by chain_id for multi-round support
 # Each entry maps chain_id -> list of {"role": "user"|"assistant", "content": str}
@@ -22,6 +23,17 @@ _conversation_histories: dict[str, list[dict[str, str]]] = {}
 
 def _get_model() -> str:
     return os.environ.get("MODEL", DEFAULT_MODEL)
+
+
+def _get_max_output_tokens() -> int:
+    return int(os.environ.get("AGENT_MAX_OUTPUT_TOKENS", DEFAULT_MAX_OUTPUT_TOKENS))
+
+
+def _build_llm() -> LLM:
+    return LLM(
+        model=f"anthropic/{_get_model()}",
+        max_tokens=_get_max_output_tokens(),
+    )
 
 
 def _load_personas() -> list[dict]:
@@ -34,6 +46,7 @@ def _load_personas() -> list[dict]:
 def run_single_agent(agent_name: str, system_prompt: str, message: str, chain_id: str | None = None) -> dict:
     """Run a single-agent CrewAI crew and return the result."""
     model = _get_model()
+    llm = _build_llm()
 
     # Build task description with conversation history for multi-round support
     history_key = f"{chain_id}:{agent_name}" if chain_id else None
@@ -55,7 +68,7 @@ def run_single_agent(agent_name: str, system_prompt: str, message: str, chain_id
         role=agent_name,
         goal="Respond to user queries accurately and helpfully",
         backstory=system_prompt,
-        llm=f"anthropic/{model}",
+        llm=llm,
         verbose=False,
     )
     task = Task(
@@ -98,6 +111,7 @@ def run_single_agent(agent_name: str, system_prompt: str, message: str, chain_id
 def run_full_crew(message: str, chain_id: str | None = None) -> list[dict]:
     """Run the full multi-agent crew and return per-agent results."""
     model = _get_model()
+    llm = _build_llm()
     personas = _load_personas()
 
     # Build task descriptions with conversation history for multi-round support
@@ -117,7 +131,7 @@ def run_full_crew(message: str, chain_id: str | None = None) -> list[dict]:
             role=persona["name"],
             goal=f"Respond from the perspective of {persona['name']} using skills: {', '.join(persona['skills'])}",
             backstory=persona["systemPrompt"],
-            llm=f"anthropic/{model}",
+            llm=llm,
             verbose=False,
         )
         agents.append(agent)

@@ -75,7 +75,9 @@ export type StoreNotification = {
 	requestId: string;
 };
 
-export type NotificationHandlerParley = (notification: StoreNotification) => void;
+export type NotificationHandlerParley = (
+	notification: StoreNotification,
+) => void;
 
 export interface OutboundMessageParley {
 	chainId: string;

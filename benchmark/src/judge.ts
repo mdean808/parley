@@ -13,6 +13,7 @@ import type {
 import type {
 	AgentProbeResult,
 	AgentTerminalState,
+	AssertionResult,
 	DeclineInfo,
 } from "./types.ts";
 
@@ -147,6 +148,7 @@ export async function evaluateProbe(
 	declines?: DeclineInfo[],
 	allAgents?: ProtocolAgentInfo[],
 	terminalStates?: AgentTerminalState[],
+	assertions?: AssertionResult,
 ): Promise<{ evaluation: JudgeEvaluation; usage: JudgeUsage }> {
 	const model = config.model ?? process.env.JUDGE_MODEL ?? "claude-sonnet-4-6";
 	const client = new Anthropic();
@@ -159,6 +161,7 @@ export async function evaluateProbe(
 		declines,
 		allAgents,
 		terminalStates,
+		assertions,
 	);
 	const tool = buildEvaluateTool(pattern);
 

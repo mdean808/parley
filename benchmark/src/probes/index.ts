@@ -30,6 +30,16 @@ async function parseProbeFile(filePath: string): Promise<ProbeConfig> {
 	if (!data.expect || typeof data.expect !== "object") {
 		throw new Error(`Probe missing 'expect': ${filePath}`);
 	}
+	if (data.eligibleProtocols !== undefined) {
+		if (
+			!Array.isArray(data.eligibleProtocols) ||
+			data.eligibleProtocols.some((p) => typeof p !== "string")
+		) {
+			throw new Error(
+				`Probe 'eligibleProtocols' must be a string array if set: ${filePath}`,
+			);
+		}
+	}
 
 	return data;
 }

@@ -2,11 +2,13 @@ import type Anthropic from "@anthropic-ai/sdk";
 import {
 	client,
 	MAX_AGENT_ITERATIONS,
+	MAX_OUTPUT_TOKENS,
 	MAX_VALIDATION_RETRIES,
 	MODEL,
 } from "core/config";
 
 const MAX_LLM_VALIDATION_FAILURES = MAX_VALIDATION_RETRIES;
+
 import type { ProtocolEventHandler } from "core/types";
 import { log } from "../logger.ts";
 import { assembleSystemPrompt } from "./prompt.ts";
@@ -65,8 +67,9 @@ export class ProtocolAgentParley {
 	}
 
 	start(): void {
-		this.store.subscribe(this.agent.id, (_toon: string, message: MessageParley) =>
-			this.onMessage(message),
+		this.store.subscribe(
+			this.agent.id,
+			(_toon: string, message: MessageParley) => this.onMessage(message),
 		);
 		this.store.subscribeNotifications(
 			this.agent.id,
@@ -221,7 +224,7 @@ export class ProtocolAgentParley {
 
 			const response = await client.messages.create({
 				model: MODEL,
-				max_tokens: 2048,
+				max_tokens: MAX_OUTPUT_TOKENS,
 				system: [
 					{
 						type: "text",

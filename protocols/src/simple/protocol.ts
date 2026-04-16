@@ -1,5 +1,5 @@
 import type Anthropic from "@anthropic-ai/sdk";
-import { client, MODEL } from "core/config";
+import { client, MAX_OUTPUT_TOKENS, MODEL } from "core/config";
 import type {
 	AgentPersona,
 	AgentResult,
@@ -80,7 +80,7 @@ export class SimpleProtocol implements Protocol {
 				const start: number = performance.now();
 				const completion = await client.messages.create({
 					model: MODEL,
-					max_tokens: 1024,
+					max_tokens: MAX_OUTPUT_TOKENS,
 					system: persona.systemPrompt,
 					messages,
 				});

@@ -5,7 +5,9 @@
 	"exports": {
 		".": "./src/index.ts",
 		"./factory": "./src/factory.ts",
-		"./agents": "./src/agents.ts"
+		"./agents": "./src/agents.ts",
+		"./parley/toon": "./src/parley/toon.ts",
+		"./parley/types": "./src/parley/types.ts"
 	},
 	"dependencies": {
 		"@a2a-js/sdk": "^0.3.13",

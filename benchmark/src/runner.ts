@@ -1,8 +1,10 @@
 import { MODEL } from "core/config";
 import { computeCost } from "core/cost";
 import type { Protocol } from "core/types";
+import { encodeMessageParley } from "protocols/parley/toon";
 import { checkAssertions } from "./assertions.ts";
 import { collectSendRequest, type ResultCollector } from "./collect.ts";
+import { checkParleyInvariants } from "./invariants.ts";
 import { evaluateProbe } from "./judge.ts";
 import type { JudgeConfig } from "./judge-types.ts";
 import type {
@@ -13,6 +15,7 @@ import type {
 	ProbeResult,
 	ProtocolId,
 } from "./types.ts";
+import { measureParleyWireEfficiency } from "./wire-analysis.ts";
 
 export { ResultCollector } from "./collect.ts";
 
@@ -98,7 +101,9 @@ export async function runProbe(
 				terminalStates,
 			);
 
-	// Layer 2: Judge (only if assertions pass and judge enabled)
+	// Layer 2: Judge (runs regardless of assertion result so content still gets
+	// evaluated; but the judge receives the structural results and is instructed
+	// to treat them as authoritative for routing-related rubric items).
 	let judge: ProbeResult["judge"];
 	if (judgeConfig?.enabled && !error) {
 		onPhase?.("judge");
@@ -112,6 +117,7 @@ export async function runProbe(
 				declines,
 				allAgents,
 				terminalStates,
+				assertions,
 			);
 			judge = evaluation;
 		} catch {
@@ -119,6 +125,20 @@ export async function runProbe(
 			judge = undefined;
 		}
 	}
+
+	// Wire-efficiency snapshot (parley only; returns undefined for other protocols).
+	const wireEfficiency =
+		protocolId === "parley" && !error
+			? measureParleyWireEfficiency(protocol, chainId, (m) =>
+					encodeMessageParley(m as Parameters<typeof encodeMessageParley>[0]),
+				)
+			: undefined;
+
+	// Protocol-integrity invariants (parley-only).
+	const integrity =
+		protocolId === "parley" && !error
+			? checkParleyInvariants(protocol, chainId)
+			: undefined;
 
 	return {
 		probeId: probe.id,
@@ -133,6 +153,8 @@ export async function runProbe(
 		totalOutputTokens: agents.reduce((s, a) => s + a.outputTokens, 0),
 		totalCost: agents.reduce((s, a) => s + a.cost, 0),
 		totalDurationMs,
+		wireEfficiency,
+		integrity,
 		error,
 	};
 }
@@ -150,16 +172,12 @@ function enrichParleyDeclinesFromAcks(
 ): void {
 	const store = (protocol as unknown as { store?: unknown }).store as
 		| {
-				getMessage: (
-					filter: { chainId: string; type: string },
-				) => Array<{
+				getMessage: (filter: { chainId: string; type: string }) => Array<{
 					from: string;
 					payload: string;
 					headers?: Record<string, string>;
 				}>;
-				getAgent: (
-					ids: string[],
-				) => Array<{ id: string; name: string }>;
+				getAgent: (ids: string[]) => Array<{ id: string; name: string }>;
 		  }
 		| undefined;
 	if (!store?.getMessage || !store.getAgent) return;

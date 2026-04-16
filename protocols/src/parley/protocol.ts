@@ -36,8 +36,16 @@ You hold orchestration skills, so you are responsible for coordinating multi-ski
 
 If the request is single-skill and a specialist is clearly better suited, decline per the normal ACK rules — orchestration is only for multi-skill work.`;
 
+// Fairness knob: when testing parley against protocols that have no equivalent
+// orchestration handholding (A2A, CrewAI, simple), set PARLEY_ORCHESTRATOR_BONUS=off
+// to strip this block and evaluate parley on its protocol primitives alone.
+// Default is "off" for apples-to-apples benchmarks; set "on" to reinstate.
+const ORCHESTRATOR_BONUS_ENABLED =
+	(process.env.PARLEY_ORCHESTRATOR_BONUS ?? "off").toLowerCase() === "on";
+
 function deriveCustomInstructions(persona: AgentPersona): string {
 	const base = persona.systemPrompt + CONVERSATION_CONTEXT_NOTE;
+	if (!ORCHESTRATOR_BONUS_ENABLED) return base;
 	const isOrchestrator = persona.skills.some(
 		(s) => s === "orchestration" || s === "collaboration",
 	);

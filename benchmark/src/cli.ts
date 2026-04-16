@@ -21,6 +21,7 @@ let judgeEnabled = true;
 let judgeModel: string | undefined;
 let noReport = false;
 let concurrency = 3;
+let runs = 1;
 
 const KNOWN_FLAGS = new Set([
 	"--protocols",
@@ -32,6 +33,7 @@ const KNOWN_FLAGS = new Set([
 	"--judge-model",
 	"--no-report",
 	"--concurrency",
+	"--runs",
 ]);
 const VALUE_FLAGS = new Set([
 	"--protocols",
@@ -40,6 +42,7 @@ const VALUE_FLAGS = new Set([
 	"--output",
 	"--judge-model",
 	"--concurrency",
+	"--runs",
 ]);
 
 const VALID_PATTERNS: Set<string> = new Set([
@@ -84,6 +87,9 @@ for (let i = 0; i < args.length; i++) {
 	} else if (args[i] === "--concurrency" && args[i + 1]) {
 		concurrency = Math.max(1, Number.parseInt(args[i + 1], 10) || 3);
 		i++;
+	} else if (args[i] === "--runs" && args[i + 1]) {
+		runs = Math.max(1, Number.parseInt(args[i + 1], 10) || 1);
+		i++;
 	} else if (KNOWN_FLAGS.has(args[i]) && VALUE_FLAGS.has(args[i])) {
 		console.error(`Error: Flag "${args[i]}" requires a value.`);
 		process.exit(1);
@@ -111,7 +117,13 @@ if (probeIds) console.log(`Probes: ${chalk.cyan(probeIds.join(", "))}`);
 else if (patterns) console.log(`Patterns: ${chalk.cyan(patterns.join(", "))}`);
 else console.log(`Probes: ${chalk.cyan("all")}`);
 console.log(`Judge: ${chalk.cyan(judgeEnabled ? "enabled" : "disabled")}`);
-console.log(`Concurrency: ${chalk.cyan(String(concurrency))}\n`);
+console.log(`Concurrency: ${chalk.cyan(String(concurrency))}`);
+if (runs > 1) {
+	console.log(
+		`Runs per pair: ${chalk.cyan(String(runs))} (std-dev reporting enabled)`,
+	);
+}
+console.log("");
 
 // Progress display
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
@@ -206,13 +218,15 @@ const report = await runComparison({
 	protocols: protocolIds,
 	judgeConfig,
 	concurrency,
+	runs,
 	onProgress: (event) => {
-		const key = `${event.probeId}::${event.protocolId}`;
+		const key = `${event.probeId}::${event.protocolId}::${event.runIndex}`;
+		const labelSuffix = runs > 1 ? ` #${event.runIndex + 1}` : "";
 		switch (event.type) {
 			case "start": {
 				totalTasks = event.totalTasks;
 				taskDisplays.push({
-					probeId: event.probeId,
+					probeId: event.probeId + labelSuffix,
 					protocolId: event.protocolId,
 					status: "running",
 				});

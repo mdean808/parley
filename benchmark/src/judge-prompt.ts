@@ -3,6 +3,7 @@ import type { InteractionPattern } from "./judge-types.ts";
 import type {
 	AgentProbeResult,
 	AgentTerminalState,
+	AssertionResult,
 	DeclineInfo,
 } from "./types.ts";
 
@@ -76,12 +77,19 @@ You will receive a user prompt and agent responses. Your job is to evaluate BOTH
 
 Each agent has a terminal state: RESPONDED, DECLINED (with reason), ERRORED, or TIMED OUT. Treat DECLINED as an intentional protocol-correct abstention when the request is outside the agent's skill domain. Treat ERRORED/TIMED OUT as failures, not correct abstentions — reward explicit declines, penalize silent failures.
 
+## Structural Checks are Authoritative for Routing
+Before the interaction rubric, you will see a "Structural Checks" block listing pass/fail/N/A findings from deterministic checks (agent counts, required/excluded skills). Treat those findings as ground truth for routing questions:
+- If the structural check for agent count or excluded skills FAILED, set \`clean_boundaries\` to false. Wrong agents responding is a routing failure, not a content nuance.
+- If a required-skill structural check FAILED (no agent with the needed skill responded), set \`skill_alignment\` to false.
+- If all routing checks were N/A (the protocol can't route), judge skill_alignment and clean_boundaries on the response content only.
+You may still rate \`prompt_relevance\` and content rubric items independently — the structural checks are specifically about routing correctness, not response quality.
+
 ${RUBRIC_DESCRIPTIONS[pattern]}
 
 ${CONTENT_RUBRIC_DESCRIPTIONS[pattern]}
 
 ## Evaluation
-Evaluate each rubric criterion independently on its own merits. After scoring all criteria:
+Evaluate each rubric criterion independently on its own merits (subject to the structural-check rule above). After scoring all criteria:
 - Set pass to true only if ALL interaction rubric criteria are true AND at least 2 of 3 content criteria are true.
 - Set pass to false otherwise.
 
@@ -98,6 +106,7 @@ export function buildJudgeUserPrompt(
 	declines?: DeclineInfo[],
 	allAgents?: ProtocolAgentInfo[],
 	terminalStates?: AgentTerminalState[],
+	assertions?: AssertionResult,
 ): string {
 	const parts: string[] = [];
 
@@ -111,6 +120,23 @@ export function buildJudgeUserPrompt(
 		parts.push("## Available Agents\n");
 		for (const a of allAgents) {
 			parts.push(`- **${a.name}** (skills: ${a.skills.join(", ")})`);
+		}
+		parts.push("");
+	}
+
+	if (assertions && assertions.details.length > 0) {
+		parts.push("## Structural Checks");
+		parts.push(
+			"Deterministic pass/fail findings. Failed checks are authoritative for routing-related rubric items (see system prompt).\n",
+		);
+		for (const d of assertions.details) {
+			const marker =
+				d.status === "pass" ? "PASS" : d.status === "fail" ? "FAIL" : "N/A";
+			parts.push(
+				`- [${marker}] **${d.name}** — expected ${d.expected}; got ${d.actual}${
+					d.reason ? ` (${d.reason})` : ""
+				}`,
+			);
 		}
 		parts.push("");
 	}

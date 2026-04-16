@@ -8,10 +8,11 @@ Run 3 instances of this server, one per persona:
     python -m uvicorn agent_server.main:app --port 8003  # Bolt
 
 Configure the agent via environment variables:
-    AGENT_NAME    - e.g. "Atlas - Research"
-    AGENT_SKILLS  - comma-separated, e.g. "general-knowledge,research"
-    AGENT_PORT    - port number (used in agent card URL)
-    MODEL         - Claude model (default: claude-haiku-4-5-20251001)
+    AGENT_NAME               - e.g. "Atlas - Research"
+    AGENT_SKILLS             - comma-separated, e.g. "general-knowledge,research"
+    AGENT_PORT               - port number (used in agent card URL)
+    MODEL                    - Claude model (default: claude-sonnet-4-6, same as TS protocols)
+    AGENT_MAX_OUTPUT_TOKENS  - per-completion output cap (default: 2048, same as TS protocols)
 """
 
 import json
@@ -27,7 +28,8 @@ from fastapi.responses import JSONResponse
 AGENT_NAME = os.environ.get("AGENT_NAME", "Atlas - Research")
 AGENT_SKILLS = os.environ.get("AGENT_SKILLS", "general-knowledge,research").split(",")
 AGENT_PORT = os.environ.get("AGENT_PORT", "8001")
-MODEL = os.environ.get("MODEL", "claude-haiku-4-5-20251001")
+MODEL = os.environ.get("MODEL", "claude-sonnet-4-6")
+MAX_OUTPUT_TOKENS = int(os.environ.get("AGENT_MAX_OUTPUT_TOKENS", "2048"))
 
 # Load system prompt from shared config
 CONFIG_PATH = Path(__file__).resolve().parent.parent.parent.parent / "agents.json"
@@ -118,7 +120,7 @@ async def handle_send_message(params: dict, request_id) -> JSONResponse:
     try:
         completion = await llm_client.messages.create(
             model=MODEL,
-            max_tokens=1024,
+            max_tokens=MAX_OUTPUT_TOKENS,
             system=SYSTEM_PROMPT,
             messages=history,
         )

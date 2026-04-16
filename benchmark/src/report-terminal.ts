@@ -21,17 +21,54 @@ export function printTerminalReport(report: ComparisonReport): void {
 	console.log(`Probes: ${chalk.cyan(String(report.probes.length))}`);
 	console.log("");
 
+	// Configuration audit — surfaces model/max_tokens disparities across protocols
+	if (report.configAudit?.length) {
+		console.log(chalk.bold("Configuration Audit"));
+		const auditCols = [12, 32, 16, 16];
+		const auditHdr = [
+			pad("Protocol", auditCols[0]),
+			pad("Models observed", auditCols[1]),
+			pad("max_tokens", auditCols[2]),
+			pad("Source", auditCols[3]),
+		].join(" | ");
+		console.log(auditHdr);
+		console.log(chalk.dim("-".repeat(stripAnsi(auditHdr).length)));
+		for (const audit of report.configAudit) {
+			const modelLabel = audit.models.length
+				? audit.models.join(", ")
+				: chalk.dim("(no responses)");
+			const tokenLabel =
+				audit.maxOutputTokens === "unknown"
+					? chalk.dim("unknown")
+					: String(audit.maxOutputTokens);
+			console.log(
+				[
+					pad(audit.protocolId, auditCols[0]),
+					pad(modelLabel, auditCols[1]),
+					pad(tokenLabel, auditCols[2]),
+					pad(chalk.dim(audit.source), auditCols[3]),
+				].join(" | "),
+			);
+		}
+		console.log("");
+	}
+
 	// Summary table
+	const hasVariance = protocolIds.some(
+		(pid) => (metrics[pid]?.scoreRateStdDev ?? 0) > 0,
+	);
 	console.log(chalk.bold("Protocol Summary"));
-	const cols = [12, 10, 10, 10, 10, 12, 10];
+	const scoreCol = hasVariance ? 18 : 10;
+	const cols = [12, scoreCol, 10, 10, 10, 11, 12, 10];
 	const hdr = [
 		pad("Protocol", cols[0]),
-		pad("Score", cols[1]),
+		pad(hasVariance ? "Score (±σ)" : "Score", cols[1]),
 		pad("Interact", cols[2]),
 		pad("Content", cols[3]),
 		pad("Pass", cols[4]),
-		pad("Avg Cost", cols[5]),
-		pad("Avg Time", cols[6]),
+		pad("Out Tokens", cols[5]),
+		pad("Avg Cost", cols[6]),
+		pad("Avg Time", cols[7]),
 	].join(" | ");
 	console.log(hdr);
 	console.log(chalk.dim("-".repeat(stripAnsi(hdr).length)));
@@ -40,8 +77,11 @@ export function printTerminalReport(report: ComparisonReport): void {
 		const m = metrics[pid];
 		if (!m) continue;
 
-		const colorScore = (rate: number) => {
-			const label = `${rate.toFixed(1)}%`;
+		const colorScore = (rate: number, stddev?: number) => {
+			const label =
+				stddev && stddev > 0
+					? `${rate.toFixed(1)}% ±${stddev.toFixed(1)}`
+					: `${rate.toFixed(1)}%`;
 			return rate >= 70
 				? chalk.green(label)
 				: rate >= 40
@@ -54,17 +94,115 @@ export function printTerminalReport(report: ComparisonReport): void {
 			timeSec >= 60
 				? `${(timeSec / 60).toFixed(1)}m`
 				: `${timeSec.toFixed(1)}s`;
+		const outTokLabel =
+			m.avgOutputTokens >= 1000
+				? `${(m.avgOutputTokens / 1000).toFixed(1)}k`
+				: `${Math.round(m.avgOutputTokens)}`;
 
 		const row = [
 			pad(pid, cols[0]),
-			pad(colorScore(m.scoreRate), cols[1]),
+			pad(colorScore(m.scoreRate, m.scoreRateStdDev), cols[1]),
 			pad(colorScore(m.interactionScoreRate), cols[2]),
 			pad(colorScore(m.contentScoreRate), cols[3]),
 			pad(`${m.passedCount}/${m.totalCount}`, cols[4]),
-			pad(`$${m.avgCost.toFixed(4)}`, cols[5]),
-			pad(timeLabel, cols[6]),
+			pad(outTokLabel, cols[5]),
+			pad(`$${m.avgCost.toFixed(4)}`, cols[6]),
+			pad(timeLabel, cols[7]),
 		].join(" | ");
 		console.log(row);
+	}
+	if (hasVariance) {
+		console.log(
+			chalk.dim(
+				`  (σ = sample standard deviation across runs; requires --runs > 1)`,
+			),
+		);
+	}
+
+	// Efficiency row: score per $0.01 and score per 1K output tokens
+	console.log(chalk.bold("\nEfficiency (higher = more score per unit)"));
+	const effCols = [12, 18, 22, 18];
+	const effHdr = [
+		pad("Protocol", effCols[0]),
+		pad("Score / $0.01", effCols[1]),
+		pad("Score / 1K out-tokens", effCols[2]),
+		pad("Wire TOON/JSON", effCols[3]),
+	].join(" | ");
+	console.log(effHdr);
+	console.log(chalk.dim("-".repeat(stripAnsi(effHdr).length)));
+	for (const pid of protocolIds) {
+		const m = metrics[pid];
+		if (!m) continue;
+		const perCent = m.avgCost > 0 ? m.scoreRate / (m.avgCost * 100) : 0;
+		const perKOut =
+			m.avgOutputTokens > 0 ? (m.scoreRate / m.avgOutputTokens) * 1000 : 0;
+		const wireLabel =
+			m.avgWireRatio != null
+				? `${(m.avgWireRatio * 100).toFixed(1)}% (${Math.round(m.avgWireSamples ?? 0)} msgs)`
+				: chalk.dim("—");
+		console.log(
+			[
+				pad(pid, effCols[0]),
+				pad(perCent.toFixed(2), effCols[1]),
+				pad(perKOut.toFixed(2), effCols[2]),
+				pad(wireLabel, effCols[3]),
+			].join(" | "),
+		);
+	}
+	if (protocolIds.some((pid) => metrics[pid]?.avgWireRatio != null)) {
+		console.log(
+			chalk.dim(
+				`  (wire ratio = avg TOON char count ÷ JSON char count for parley store messages; lower = more compact)`,
+			),
+		);
+	}
+
+	// Protocol integrity (parley-only): per-chain sequence + ACK invariants
+	const integrityEntries = protocolIds.filter(
+		(pid) => metrics[pid]?.integrityRate != null,
+	);
+	if (integrityEntries.length > 0) {
+		console.log(chalk.bold("\nProtocol Integrity (parley invariants)"));
+		const intCols = [12, 18];
+		const intHdr = [
+			pad("Protocol", intCols[0]),
+			pad("Integrity Pass", intCols[1]),
+		].join(" | ");
+		console.log(intHdr);
+		console.log(chalk.dim("-".repeat(stripAnsi(intHdr).length)));
+		for (const pid of integrityEntries) {
+			const rate = metrics[pid]?.integrityRate ?? 0;
+			const label = `${rate.toFixed(1)}%`;
+			const colored =
+				rate === 100
+					? chalk.green(label)
+					: rate >= 80
+						? chalk.yellow(label)
+						: chalk.red(label);
+			console.log([pad(pid, intCols[0]), pad(colored, intCols[1])].join(" | "));
+		}
+
+		// Surface any violations seen across probes
+		const violationList: string[] = [];
+		for (const pc of report.probes) {
+			for (const pid of integrityEntries) {
+				const r = pc.results[pid];
+				if (!r?.integrity || r.integrity.passed) continue;
+				for (const v of r.integrity.violations) {
+					violationList.push(
+						`  ${chalk.red("!")} ${pid} / ${r.probeId}: [${v.rule}] ${v.detail}`,
+					);
+				}
+			}
+		}
+		if (violationList.length > 0) {
+			console.log(
+				chalk.bold.red(`\nIntegrity violations (${violationList.length})`),
+			);
+			for (const line of violationList.slice(0, 20)) console.log(line);
+			if (violationList.length > 20)
+				console.log(chalk.dim(`  … and ${violationList.length - 20} more`));
+		}
 	}
 
 	// By-pattern breakdown

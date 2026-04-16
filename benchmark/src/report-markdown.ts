@@ -14,13 +14,40 @@ export function generateMarkdownReport(report: ComparisonReport): string {
 		`Tested ${protocolIds.length} protocol(s) across ${report.probes.length} interaction probes using model \`${report.model}\`.\n`,
 	);
 
+	// Configuration audit
+	if (report.configAudit?.length) {
+		lines.push("## Configuration Audit\n");
+		lines.push(
+			"Per-protocol model + output-token budget actually used during this run. Disparities here usually explain score gaps.\n",
+		);
+		lines.push("| Protocol | Models observed | max_tokens | Source | Notes |");
+		lines.push("|----------|-----------------|------------|--------|-------|");
+		for (const audit of report.configAudit) {
+			const modelLabel = audit.models.length
+				? audit.models.map((m) => `\`${m}\``).join(", ")
+				: "—";
+			const tokenLabel =
+				audit.maxOutputTokens === "unknown"
+					? "unknown"
+					: String(audit.maxOutputTokens);
+			const notes = audit.notes ?? "";
+			lines.push(
+				`| ${audit.protocolId} | ${modelLabel} | ${tokenLabel} | ${audit.source} | ${notes} |`,
+			);
+		}
+		lines.push("");
+	}
+
 	// Protocol comparison table
+	const hasVariance = protocolIds.some(
+		(pid) => (metrics[pid]?.scoreRateStdDev ?? 0) > 0,
+	);
 	lines.push("## Protocol Comparison\n");
 	lines.push(
-		"| Protocol | Score | Interaction | Content | Pass | Avg Cost | Avg Time |",
+		`| Protocol | ${hasVariance ? "Score (± σ)" : "Score"} | Interaction | Content | Pass | Runs | Avg Cost | Avg Time |`,
 	);
 	lines.push(
-		"|----------|-------|-------------|---------|------|----------|----------|",
+		"|----------|-------|-------------|---------|------|------|----------|----------|",
 	);
 	for (const pid of protocolIds) {
 		const m = metrics[pid];
@@ -29,8 +56,18 @@ export function generateMarkdownReport(report: ComparisonReport): string {
 			timeSec >= 60
 				? `${(timeSec / 60).toFixed(1)}m`
 				: `${timeSec.toFixed(1)}s`;
+		const scoreLabel =
+			m.scoreRateStdDev > 0
+				? `${m.scoreRate.toFixed(1)}% ± ${m.scoreRateStdDev.toFixed(1)}`
+				: `${m.scoreRate.toFixed(1)}%`;
 		lines.push(
-			`| ${pid} | ${m.scoreRate.toFixed(1)}% | ${m.interactionScoreRate.toFixed(1)}% | ${m.contentScoreRate.toFixed(1)}% | ${m.passedCount}/${m.totalCount} | $${m.avgCost.toFixed(4)} | ${timeLabel} |`,
+			`| ${pid} | ${scoreLabel} | ${m.interactionScoreRate.toFixed(1)}% | ${m.contentScoreRate.toFixed(1)}% | ${m.passedCount}/${m.totalCount} | ${m.runs} | $${m.avgCost.toFixed(4)} | ${timeLabel} |`,
+		);
+	}
+	if (hasVariance) {
+		lines.push("");
+		lines.push(
+			"*σ = sample standard deviation across all runs; enable with `--runs N > 1`.*",
 		);
 	}
 	lines.push("");
@@ -97,13 +134,19 @@ export function generateMarkdownReport(report: ComparisonReport): string {
 				r.assertions.details.length > 0 &&
 				r.assertions.details.every((d) => d.status === "na");
 			const hasNa = r.assertions.details.some((d) => d.status === "na");
-			const overall = r.judge
-				? r.judge.pass
-					? "PASS"
-					: "FAIL"
-				: r.assertions.passed
-					? "PASS"
-					: "FAIL";
+			const ineligible =
+				r.assertions.details.length === 1 &&
+				r.assertions.details[0].name === "eligibility" &&
+				r.assertions.details[0].status === "na";
+			const overall = ineligible
+				? "N/A"
+				: r.judge
+					? r.judge.pass
+						? "PASS"
+						: "FAIL"
+					: r.assertions.passed
+						? "PASS"
+						: "FAIL";
 			const assertions = !r.assertions.passed
 				? "FAIL"
 				: allNa
