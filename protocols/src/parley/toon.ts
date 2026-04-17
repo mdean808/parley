@@ -15,11 +15,14 @@ export function decodeMessageParley(toon: string): MessageParley {
 		raw.headers && typeof raw.headers === "object"
 			? (raw.headers as Record<string, string>)
 			: {};
+	// Per spec §Versioning: an omitted `version` field MUST be treated as
+	// version-mismatched (pre-v2). Do not default here — the store rejects
+	// anything that isn't exactly 2.
 	return {
 		...raw,
 		to,
 		headers,
-		version: (raw.version as number) ?? 2,
+		version: raw.version as number,
 		sequence: (raw.sequence as number) ?? 0,
 		replyTo: raw.replyTo === null ? undefined : (raw.replyTo as string),
 	} as MessageParley;

@@ -12,16 +12,11 @@ const MAX_LLM_VALIDATION_FAILURES = MAX_VALIDATION_RETRIES;
 import type { ProtocolEventHandler } from "core/types";
 import { log } from "../logger.ts";
 import { assembleSystemPrompt } from "./prompt.ts";
-import type { StoreParley } from "./store.ts";
+import { STORE_SENDER, type StoreParley } from "./store.ts";
 import { createToolDefinitions } from "./tool-definitions.ts";
 import { executeToolCall } from "./tool-executor.ts";
 import { encodeOutboundParley } from "./toon.ts";
-import type {
-	AgentMeta,
-	AgentParley,
-	MessageParley,
-	StoreNotification,
-} from "./types.ts";
+import type { AgentMeta, AgentParley, MessageParley } from "./types.ts";
 
 interface AgentConfig {
 	agent: AgentParley;
@@ -71,10 +66,6 @@ export class ProtocolAgentParley {
 			this.agent.id,
 			(_toon: string, message: MessageParley) => this.onMessage(message),
 		);
-		this.store.subscribeNotifications(
-			this.agent.id,
-			(notification: StoreNotification) => this.onNotification(notification),
-		);
 		log.info(`agent_parley:${this.agent.name}`, "subscribed", {
 			agentId: this.agent.id,
 		});
@@ -82,35 +73,33 @@ export class ProtocolAgentParley {
 
 	stop(): void {
 		this.store.unsubscribe(this.agent.id);
-		this.store.unsubscribeNotifications(this.agent.id);
-	}
-
-	private onNotification(notification: StoreNotification): void {
-		if (notification.type !== "claim_rejected") return;
-		const { chainId, winner } = notification;
-
-		// Only clean up if this agent had state for the chain (i.e. it ACKed
-		// or CLAIMed). Agents with no state harmlessly ignore.
-		const hadState =
-			this.chainHistory.has(chainId) || this.subChains.has(chainId);
-		if (!hadState) return;
-
-		const component = `agent_parley:${this.agent.name}`;
-		log.info(component, "claim_rejected_received", {
-			chainId,
-			winner,
-		});
-		this.propagateCancelToSubChains(component, chainId);
-		this.chainHistory.delete(chainId);
-		this.subChains.delete(chainId);
-		this.store.updateAgentStatus(this.agent.id, "idle");
 	}
 
 	private async onMessage(message: MessageParley): Promise<void> {
+		const component = `agent_parley:${this.agent.name}`;
+
+		// Store-synthesized CLAIM-rejection ERROR (spec §CLAIM step 7):
+		// `from: "store"`, `replyTo` points at this agent's CLAIM id.
+		// Receipt is terminal — do NOT ACK, clean up state.
+		if (message.type === "ERROR" && message.from === STORE_SENDER) {
+			const hadState =
+				this.chainHistory.has(message.chainId) ||
+				this.subChains.has(message.chainId);
+			if (!hadState) return;
+			log.info(component, "claim_rejected_received", {
+				chainId: message.chainId,
+				replyTo: message.replyTo,
+				payload: message.payload,
+			});
+			this.propagateCancelToSubChains(component, message.chainId);
+			this.chainHistory.delete(message.chainId);
+			this.subChains.delete(message.chainId);
+			this.store.updateAgentStatus(this.agent.id, "idle");
+			return;
+		}
+
 		// Only react to REQUEST and CANCEL
 		if (message.type !== "REQUEST" && message.type !== "CANCEL") return;
-
-		const component = `agent_parley:${this.agent.name}`;
 
 		if (message.type === "CANCEL") {
 			// Propagate CANCEL to any sub-chains this agent spawned while

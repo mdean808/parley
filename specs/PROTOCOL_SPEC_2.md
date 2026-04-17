@@ -8,8 +8,8 @@ This is a protocol for token-efficient and “reliable” agent to agent communi
 
 The protocol divides work between two parties:
 
-- **Store** — validates message schema, TOON format, chain integrity (state transitions, ownership, CANCEL/expiry), and delivery target resolution. The store persists messages and forwards them to subscribers. It does NOT police per-agent commitments (e.g., "an agent that ACKed `accept: false` must stay silent") — those are agent-side obligations.
-- **Agents** — own protocol semantics: choosing when to ACK, which `to` field to mirror, maintaining their own `sequence` counter per chain, propagating CANCEL to sub-chains they spawned, and periodically re-checking `ttl` during long PROCESS work. Agents communicate directly with other agents via the store as a bus; the store is not an orchestrator.
+- **Store** — validates message schema, TOON format, chain integrity (state transitions, ownership, CANCEL/expiry), and delivery target resolution. The store persists messages, forwards them to subscribers, and assigns authoritative `id`, `timestamp`, and `sequence` (per-entity per-chain counter). It does NOT police every per-agent commitment — those are agent-side obligations.
+- **Agents** — own protocol semantics: choosing when to ACK, which `to` field to mirror, propagating CANCEL to sub-chains they spawned, and periodically re-checking `ttl` during long PROCESS work. Agents SHOULD send an intended `sequence` but the store is authoritative. Agents communicate directly with other agents via the store as a bus; the store is not an orchestrator.
 
 Violations of agent-side obligations are treated as prompt/implementation bugs of that agent, not store errors.
 
@@ -221,63 +221,84 @@ All messages you send and receive use TOON format. You interact with a central s
 
 When you receive a REQUEST, follow this sequence exactly:
 
-1. **ACK** — You MUST always ACK. Evaluate the request against your declared skills:
-   - A request *matches* your skills when at least one of your declared skills is a **primary** match for at least one part of the request — that is, the task falls squarely inside that skill's domain. Adjacent relevance, general helpfulness, rephrasing, or bringing a "unique perspective" do NOT qualify as a match.
-   - If it matches: send ACK with header `accept: true`, then continue to step 2.
-   - If it does not match: send ACK with header `accept: false` and a one-sentence reason in the payload. Stop here.
-   - For multi-part requests, accept only if at least one part is a primary match for your skills AND no other registered agent's declared skills dominate yours on that part. Address only the parts you matched; state which parts you leave to others.
-2. **CLAIM** — If the REQUEST has header `exclusivity: true`, send CLAIM after ACK with your reasoning. Wait for resolution before proceeding. You learn the outcome either by seeing yourself set as `owner` on the chain (via `get_chain`) or by receiving a store-emitted ERROR whose `replyTo` matches your CLAIM id. If you receive that ERROR, stop — do not ACK it and do not send anything else on the chain.
-3. **PROCESS** — Describe the steps you will take. You MAY send sub-REQUESTs to other agents here.
+1. **ACK** — Always ACK. Every ACK message MUST include an `accept` header set to either `true` or `false`. An ACK without the `accept` header is malformed. Encode it in TOON exactly like this:
+
+   ```
+   headers:
+     accept: "false"
+   ```
+
+   Evaluate the request against your declared skills:
+   - **Accept** (`accept: "true"`) only if at least one of your declared skills is a *primary* match for at least one part of the request. "Primary match" means the task falls squarely inside that skill's domain (e.g. a coding task for `coding`, a research question for `research`). Adjacent relevance, general helpfulness, the ability to rephrase, or bringing a "unique perspective" do NOT qualify as a match.
+   - **Decline** (`accept: "false"`, with a one-sentence reason in the `payload`). Stop for now — ACK is a non-binding declaration of intent. If the conversation develops such that your skills become relevant, you MAY re-ACK with `accept: "true"` on the same chain and proceed to PROCESS.
+   - **Multi-part requests**: Use `query_agents` to check coverage before deciding. Accept only if at least one part is a primary match for your skills AND no other registered agent's declared skills dominate yours on that part. Address only the parts you matched; state which parts you leave to others.
+   - **Direct requests** (`to` contains your agent ID, not `*`): Always accept. ACK is automatic; proceed to PROCESS.
+2. **CLAIM** — If the REQUEST has header `exclusivity: true`, send CLAIM after ACK with your reasoning. You MUST wait for ownership resolution before sending PROCESS — call `get_chain(chainId)` and only proceed if `owner` equals your agent id. Do not PROCESS optimistically on an exclusivity chain. If your CLAIM is rejected, you will receive a store-synthesized ERROR (`from: "store"`, `replyTo` = your CLAIM id). That ERROR is terminal — do not ACK it, do not send anything else on the chain.
+3. **PROCESS** — Before composing your response:
+   - If the REQUEST is addressed to `*` (broadcast), every agent received it. Do NOT send sub-REQUESTs to any agent — they are already working on it independently.
+   - If the REQUEST is addressed to a channel, all channel members received it. Do NOT send sub-REQUESTs to channel members. You MAY send sub-REQUESTs to agents NOT in the channel if the task requires skills none of the channel members have — use `get_channel` to check membership and `query_agents` to find outside agents.
+   - Call `get_message({ chainId, type: "RESPONSE" })` to read any responses already posted by other agents on this chain. Reference their contributions, avoid repeating their points, and fill gaps they left.
+   - Focus on YOUR skills and expertise. Contribute your unique perspective — you get one response per request.
+   - Then describe the steps you will take.
 4. **RESPONSE** — Return your result.
 
 You MUST NOT skip steps. No PROCESS without ACK. No RESPONSE without PROCESS. Never stay silent — always ACK.
 
-Exception: if you receive a CANCEL for a chain before you have ACKed the origin REQUEST on that chain, you MAY silently ignore the CANCEL — you have made no commitment yet.
+### Output Discipline
 
-### CANCEL
+Produce no natural-language narration alongside or after your tool calls. Do not summarize what you just did, do not explain your decision in free text, do not sign off. Put any reasoning a human would need inside the `payload` of the message you are sending (e.g., the one-sentence decline reason on an ACK). After your final tool call for this turn, end your turn with an empty response — no commentary.
 
-If you receive a CANCEL: stop work immediately and ACK the CANCEL. If during PROCESS you sent sub-REQUESTs to other agents (new chainIds you started), you are responsible for propagating CANCEL to each of those sub-chains — send a CANCEL to each sub-chain before going silent. Keep track of sub-chains you spawn so you can cancel them. After the CANCEL ACK, send nothing else on the original chain.
+### CANCEL & Errors
 
-Only the original requester or the chain owner may initiate CANCEL.
+- **CANCEL**: Stop work immediately and ACK the CANCEL. If during PROCESS you sent sub-REQUESTs to other agents (new chainIds you started), you are responsible for propagating CANCEL to each of those sub-chains — send a CANCEL to each sub-chain before going silent. Keep track of sub-chains you spawn so you can cancel them. After the CANCEL ACK, send nothing else on the original chain. Only the original requester or chain owner may initiate CANCEL.
+- **ERROR**: Send ERROR with the error in the payload. Set `to` to the `from` of the original REQUEST (ERROR routes back to the requester — this is the one exception to mirroring the REQUEST's `to`). If you ACKed with `accept: true`, you must eventually RESPONSE or ERROR — never silently abandon.
 
-### Errors
+### Message Fields
 
-If you encounter an error, send a message of type ERROR with the error in the payload. If you ACK with `accept: true`, you MUST eventually RESPONSE or ERROR — never silently abandon work.
-
-### Sequencing
-
-Increment your `sequence` by 1 for each message you send within a chain. Your counter is independent of other agents.
-
-### Threading
-
-Set `replyTo` to the id of the REQUEST you are responding to. When sending a sub-REQUEST from PROCESS, set `replyTo` to your PROCESS message id.
-
-### Headers
-
-Check for these reserved headers on incoming REQUESTs:
-
-- `ttl` — UTC ISO timestamp. Check BEFORE beginning work — if expired, do not start, send ERROR with a timeout reason. Re-check `ttl` periodically during long PROCESS work; if it expires mid-PROCESS, stop, send ERROR, and propagate CANCEL to any sub-chains you spawned. Treat TTL expiry as an implicit CANCEL.
-- `exclusivity` — If `true`, you must CLAIM before proceeding.
-
-### Versioning
-
-Always send `version: 2`. If you receive a message whose `version` is not `2`, do NOT process it — instead send a message of type ERROR with `replyTo` set to that message's id and a payload stating the version mismatch (e.g., "Unsupported protocol version: got X, expected 2"). Do not silently discard version-mismatched messages.
+- `version`: Always send `2`. If you receive a message whose `version` is not `2`, do NOT process it — instead send a message of type ERROR with `replyTo` set to that message's id and a payload stating the version mismatch (e.g., "Unsupported protocol version: got X, expected 2"). Do not silently discard version-mismatched messages.
+- `replyTo`: Set to the id of the REQUEST you are responding to. For sub-REQUESTs from PROCESS, set to your PROCESS message id.
+- `sequence`: Per-sender per-chain counter. The store is authoritative — it assigns a monotonic value per `(chainId, from)` on storage. You SHOULD send an intended value (start at `0` for your first message in a chain and increment by 1 for each subsequent message you send), but the stored value is the source of truth.
+- Reserved headers:
+  - `accept` (required on ACK replying to a REQUEST; not required on ACK-of-CANCEL). Values: `"true"` or `"false"`.
+  - `ttl` — UTC ISO timestamp. Check BEFORE beginning work — if expired, do not start, send ERROR with a timeout reason. Re-check `ttl` periodically during long PROCESS work; if it expires mid-PROCESS, stop, send ERROR, and propagate CANCEL to any sub-chains you spawned. Treat TTL expiry as an implicit CANCEL.
+  - `exclusivity` (if true, CLAIM before proceeding).
 
 ## TOON Format
 
-Messages are encoded in TOON — a compact, token-efficient format. Example:
+Messages are encoded in TOON — a compact, token-efficient format.
+
+Unquoted payloads work for simple text. Quoting is required when the value contains `:`, `,`, `"`, `\\`, newlines, tabs, brackets, or leading/trailing spaces:
+
+RESPONSE example (no headers set):
 
 ```
-id: a1b2c3d4-e5f6-7890-abcd-ef1234567890
+id:
+version: 2
+chainId: f9e8d7c6-b5a4-3210-fedc-ba0987654321
+sequence: 3
+replyTo: a1b2c3d4-e5f6-7890-abcd-ef1234567890
+timestamp: 2025-03-19T10:00:05.000Z
+type: RESPONSE
+payload: "Here is the implementation:\\n\\nclass LRUCache {\\n  private cache = new Map<string, number>();\\n  constructor(private capacity: number) {}\\n  get(key: string): number {\\n    const val = this.cache.get(key);\\n    if (val === undefined) return -1;\\n    this.cache.delete(key);\\n    this.cache.set(key, val);\\n    return val;\\n  }\\n}"
+headers:
+from: a1b2c3d4-agent-0001
+to[1]: *
+```
+
+ACK decline example (note the `accept` header — this is REQUIRED on every ACK):
+
+```
+id:
 version: 2
 chainId: f9e8d7c6-b5a4-3210-fedc-ba0987654321
 sequence: 0
-replyTo: undefined
-timestamp: 2025-03-19T10:00:00.000Z
-type: REQUEST
-payload: What time is it in Geneva?
-headers[1]: ttl:2025-03-19T11:00:00.000Z
-from: a1b2c3d4-user-0001
+replyTo: a1b2c3d4-e5f6-7890-abcd-ef1234567890
+timestamp: 2025-03-19T10:00:01.000Z
+type: ACK
+payload: This request is outside my declared skill domains.
+headers:
+  accept: "false"
+from: a1b2c3d4-agent-0001
 to[1]: *
 ```
 
@@ -285,10 +306,11 @@ Rules:
 
 - Key-value pairs use `key: value` (YAML-like)
 - Arrays use `key[N]: val1,val2` for primitives or tabular `key[N]{f1,f2}: \\n v1,v2` for objects
-- Strings containing commas, colons, or special chars must be quoted
 - `undefined` for absent values, `true`/`false` for booleans
+- **Quoting**: wrap the value in double quotes (`"`) if it contains any of: colon, comma, quote, backslash, newline, tab, brackets, or leading/trailing spaces
+- **Escaping** (inside quoted strings only): `\\\\` → backslash, `\\"` → quote, `\\n` → newline, `\\r` → CR, `\\t` → tab. No other escapes exist.
 
-Every message you send MUST be valid TOON. If the store rejects your message, fix the format and retry.
+Every message you send MUST be valid TOON. If a `store_message` tool call returns an error, your next action MUST be another `store_message` tool call with the corrected TOON. Do NOT emit text. Do NOT summarize or explain. Fix the format and retry. You have 3 attempts total per handling session — after the third failure the store emits an ERROR on your behalf and the chain terminates.
 
 ## Available Tools
 
@@ -303,15 +325,7 @@ Every message you send MUST be valid TOON. If the store rejects your message, fi
 
 {{CUSTOM_TOOLS}}
 
-## Audience Resolution
-
-When setting `to`:
-
-- Agent/user ID → direct message
-- Channel name → all channel members
-- → broadcast to everyone
-
-When replying, mirror the original REQUEST's `to` field unless the spec says otherwise (e.g., ERROR goes to the original `from`).
+`to` field: agent/user ID → direct, channel name → all members, `*` → broadcast. Mirror the original REQUEST's `to` unless spec says otherwise.
 
 </aside>
 
@@ -329,7 +343,7 @@ A message is the fundamental unit of communication in the protocol. All messages
 id: randomly generated unique uuid
 version: protocol version (starting at 2 since v1 has no version)
 chainId: randomly generated uuid grouping related messages
-sequence: incrementing integer for message position, scoped per-agent per-chain
+sequence: per-sender per-chain monotonic integer, assigned by the store (see §Sequencing)
 replyTo: id of the message this is replying to. undefined for origin messages
 timestamp: UTC timestamp in ISO 8601 format
 type: one of REQUEST, ACK, PROCESS, RESPONSE, ERROR, CLAIM, CANCEL
@@ -339,6 +353,10 @@ from: id of the sending agent or user
 to: list of recipient agent/user ids, channel name(s), or * for broadcast
 ```
 
+### Reserved Sender: `"store"`
+
+The literal string `"store"` is a reserved sender id used by the store itself for synthesized messages (e.g., CLAIM-rejection ERRORs — see §CLAIM). Agents and users MUST NOT use `"store"` as their `from`, and the store MUST NOT register an agent or user with this id. Messages whose `from` is `"store"` are treated as authoritative store-level communication and are exempt from a few normal agent-side rules (e.g., the ERROR's `to` is not mirrored from the original REQUEST).
+
 ### Sending (`to`)
 
 The store will first attempt to match each value in `to` against agent/user IDs first, then channel names, and finally `*` for broadcast. If nothing matches, the store sends an ERROR to the requester.
@@ -347,7 +365,23 @@ The store will first attempt to match each value in `to` against agent/user IDs 
 
 A chain is a group of messages sharing a `chainId`. A chain is started by an origin REQUEST and contains all subsequent ACK / PROCESS / RESPONSE / ERROR / CANCEL messages for that request. Sub-REQUESTs initiated from within PROCESS MUST use a **new** `chainId` — each delegation is its own independent chain. Chains form a tree via `replyTo`: a sub-REQUEST's `replyTo` points at the PROCESS message that spawned it, even though the two live in different chains. CANCEL does not cascade across chains automatically; agents that spawn sub-chains are responsible for propagating CANCEL (see §CANCEL).
 
-`chainId` is just an identifier. Sequential ordering is determined by the `sequence` field, which is scoped per-agent — each agent maintains it’s own incrementing counter within a chain. 
+`chainId` is just an identifier. Sequential ordering is determined by the `sequence` field, which is scoped per-agent within a chain (see §Sequencing for how the counter is managed).
+
+### Multi-turn chains
+
+A chain MAY contain multiple origin REQUESTs — REQUEST messages whose `replyTo` is `undefined`. Each origin REQUEST initiates its own independent ACK/PROCESS/RESPONSE lifecycle, but all messages share the chain's context (agent conversation history is preserved across turns). Whether to reuse a `chainId` across follow-ups or start a fresh chain per turn is **implementation-defined** — a chat UI might keep one chain per conversation session so agents remember prior exchanges, while an orchestrator might prefer one chain per high-level task.
+
+Clarifications for chains with multiple origin REQUESTs:
+
+- **TTL**: the `ttl` header on the **first** origin REQUEST governs chain expiry. Subsequent origins inherit; their own `ttl` headers are ignored for chain-level expiry purposes (the store MAY still reject a newly-arriving origin whose own `ttl` has already passed, since the agent that would handle it cannot start work).
+- **CANCEL authorization**: anyone who has sent an origin REQUEST on the chain, plus the chain `owner` (if resolved on an exclusivity chain), MAY initiate CANCEL. Non-origin participants may not.
+- **Follow-ups are REQUEST, not RESPONSE**: RESPONSE is terminal for the sender ("work completed"). Follow-up turns from a user or agent that wish to continue the conversation remain `type: REQUEST`. RESPONSE is never used to reopen discussion on a chain.
+
+### Sequencing
+
+Each message carries a `sequence` field — a per-sender per-chain monotonically increasing integer, starting at `0` for the sender's first message in the chain. The `sequence` field is **advisory on the wire**: agents SHOULD send an intended sequence (incremented by 1 for each message they send in a chain), but the store MAY overwrite the value with its own authoritative per-entity per-chain counter — analogous to how the store assigns `id` and `timestamp`. The stored value is authoritative. This lets implementations side-step coordination problems between automatically-generated messages (e.g., auto-ACKs) and LLM-composed messages that share a chain.
+
+Counters are scoped per `(chainId, from)`: each sender has its own independent counter within a chain, and starting a new chain resets the counter to `0`.
 
 ### Threading
 
@@ -361,7 +395,7 @@ Headers are key-value string pairs attached to messages. They carry protocol-def
 
 **Reserved Headers**
 
-- **`accept`**: `true` or `false`. Required on ACK messages. `true` means the agent accepts the request and commits to responding. `false` means the agent declines — the payload must contain a concise reason (one sentence).
+- **`accept`**: `true` or `false`. Required on ACKs that reply to a REQUEST. `true` means the agent accepts the request and commits to responding. `false` means the agent declines — the payload must contain a concise reason (one sentence). ACKs that reply to a CANCEL do not require `accept` (they are bookkeeping, not work commitments).
 - **`ttl`**: A UTC timestamp (ISO 8601) representing the expiry of the chain. Set on the initial REQUEST and inherited by all messages in the chain. Agents receiving a message where the current time exceeds `ttl` must not begin work and should send an ERROR with a timeout reason. Agents mid-PROCESS when TTL expires MUST stop work, send an ERROR, and propagate cancellation to any active sub-chains. When TTL expires, the behavior is equivalent to an implicit CANCEL. The store detects expiry, updates the chain status to `expired`, and agents mid-PROCESS follow the same propagation and cleanup rules as CANCEL. The distinction is that no explicit CANCEL message is sent — agents are expected to check TTL before beginning work and periodically during PROCESS. The detection mechanism is implementation-defined — the store MAY check `ttl` on every message access, run a background sweep, or combine both. The essential invariant is that (a) no new messages are accepted on a chain whose `ttl` has passed (except ACKs of any CANCEL that was in flight), and (b) the chain's `status` is set to `expired` no later than the next message that would have been accepted on the chain.
 - **`exclusivity`**: `true` or `false`. When `true`, signals that exactly one agent should resolve the REQUEST — recipients MUST CLAIM ownership rather than independently proceeding. Applies to any REQUEST shape (broadcast, channel, or multi-recipient direct). See §CLAIM.
 
@@ -408,7 +442,7 @@ Messages within a chain follow a defined state lifecycle. Each state transition 
 | Current State | Valid Next States | Condition / Notes |
 | --- | --- | --- |
 | REQUEST | ACK (`accept: true`) | Agent accepts the request |
-| REQUEST | ACK (`accept: false`) | Agent declines with reasoning — TERMINAL for this agent on this chain |
+| REQUEST | ACK (`accept: false`) | Agent declines with reasoning. Not obligated to continue, but MAY re-ACK later with `accept: true` if circumstances change |
 | REQUEST | ERROR | Agent rejects before ACK (version mismatch, expired TTL, validation failure) — TERMINAL |
 | ACK (`accept: true`) | PROCESS | Agent begins work |
 | ACK (`accept: true`) | CLAIM | REQUEST carries `exclusivity: true`; agent asserts ownership |
@@ -430,7 +464,7 @@ Messages within a chain follow a defined state lifecycle. Each state transition 
 - An agent MUST NOT send PROCESS without first sending ACK (`accept: true`).
 - A REQUEST initiated from within PROCESS (for delegation or information gathering) begins its own independent state lifecycle, tracked by its own `replyTo` reference.
 - An agent that has sent ACK with `accept: true` MUST eventually send either a RESPONSE or an ERROR. It MUST NOT silently abandon work after accepting.
-- An agent that has sent ACK with `accept: false` MUST NOT send any further messages on the chain.
+- An agent that has sent ACK with `accept: false` is not obligated to contribute further on the chain. However, `accept: false` is NOT terminal — if the conversation develops such that the agent's skills become relevant, the agent MAY re-ACK with `accept: true` on the same chain and proceed to PROCESS. PROCESS/RESPONSE still require a preceding ACK with `accept: true` from the same agent.
 - A message MUST be sent in TOON format.
 - An agent MUST NOT send CLAIM without a preceding ACK in the same chain.
 - An agent MUST NOT send CLAIM on a REQUEST that does not carry the `exclusivity: true` header.
@@ -463,7 +497,7 @@ Messages within a chain follow a defined state lifecycle. Each state transition 
 4. Agent sends a message of type `ACK`.
 5. Message is stored via Store Message.
 
-An ACK with `accept: true` commits the agent to eventually send RESPONSE or ERROR. An ACK with `accept: false` ends the agent's participation on the chain — no further messages are expected.
+An ACK with `accept: true` commits the agent to eventually send RESPONSE or ERROR. An ACK with `accept: false` declines for now — the agent is not obligated to contribute further on this chain. ACK is a non-binding declaration of intent: if the conversation later develops such that the agent's skills become relevant, it MAY re-ACK with `accept: true` on the same chain and proceed with PROCESS/RESPONSE.
 
 ### Parameters
 
@@ -485,7 +519,13 @@ An ACK with `accept: true` commits the agent to eventually send RESPONSE or ERRO
 6. Upon resolution, the store updates the chain entity's `owner` field to the winning agent's id.
 7. Upon resolution the store notifies CLAIMants on the chain:
     - The winning agent proceeds to PROCESS. No explicit win-notification is required — an agent learns it won by virtue of being the `owner` on the chain (observable via `get_chain`) and by the absence of a rejection ERROR addressed to its CLAIM.
-    - Each losing agent receives a store-emitted message of type ERROR with `replyTo` set to that agent's CLAIM id and a payload of the form `"CLAIM rejected; owner is {winner_id}"`. Receipt of this ERROR is what drives the losing agent into its TERMINAL state. Losing agents MUST NOT send further messages on the chain after this ERROR (not even an ACK of the ERROR — ERROR is itself terminal, per the state table).
+    - Each losing agent receives a store-emitted message of type ERROR with:
+        - `from`: the reserved sender id `"store"` (see §Messages).
+        - `to`: `[loser_id]` — a unicast targeting only the losing agent. This is an exception to the "mirror original REQUEST's `to`" rule that otherwise governs reply audience.
+        - `replyTo`: that agent's CLAIM id.
+        - `payload`: `"CLAIM rejected; owner is {winner_id}"`.
+      
+      Receipt of this ERROR is what drives the losing agent into its TERMINAL state. Losing agents MUST NOT send further messages on the chain after this ERROR (not even an ACK of the ERROR — ERROR is itself terminal, per the state table).
 
 ### Parameters
 

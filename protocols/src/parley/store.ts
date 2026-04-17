@@ -8,10 +8,12 @@ import type {
 	MessageFilterParley,
 	MessageHandlerParley,
 	MessageParley,
-	NotificationHandlerParley,
-	StoreNotification,
 	UserParley,
 } from "./types.ts";
+
+// Reserved sender id for store-synthesized messages (e.g. CLAIM-rejection
+// ERRORs). Never a registered agent/user; agents must not spoof it.
+export const STORE_SENDER = "store";
 
 export class StoreParley {
 	private users: UserParley[] = [];
@@ -20,8 +22,10 @@ export class StoreParley {
 	private chains: Map<string, Chain> = new Map();
 	private channels: Map<string, Channel> = new Map();
 	private subscribers: Map<string, MessageHandlerParley> = new Map();
-	private notificationSubscribers: Map<string, NotificationHandlerParley> =
-		new Map();
+	// Per-chain, per-sender next sequence counter. Store-assigned sequence is
+	// authoritative per spec §Sequencing; agents send an intended value but
+	// this counter overwrites.
+	private sequenceCounters: Map<string, Map<string, number>> = new Map();
 
 	registerUser(name: string): UserParley {
 		const user: UserParley = { id: crypto.randomUUID(), name, channels: [] };
@@ -76,7 +80,14 @@ export class StoreParley {
 		const decoded = decodeMessageParley(toonString);
 
 		if (decoded.version !== 2) {
-			throw new Error(`Invalid version: expected 2, got ${decoded.version}`);
+			if (decoded.version === undefined) {
+				throw new Error(
+					"Missing protocol version; expected 2. Pre-v2 messages omit this field and are rejected per spec §Versioning.",
+				);
+			}
+			throw new Error(
+				`Unsupported protocol version: got ${decoded.version}, expected 2`,
+			);
 		}
 
 		if (!decoded.type || !decoded.from || !decoded.chainId) {
@@ -89,6 +100,7 @@ export class StoreParley {
 			...decoded,
 			id: crypto.randomUUID(),
 			timestamp: new Date().toISOString(),
+			sequence: this.nextSequence(decoded.chainId, decoded.from),
 		};
 
 		// Chain enforcement
@@ -114,21 +126,25 @@ export class StoreParley {
 			chain = this.createChain(message.chainId, message.timestamp);
 		}
 
-		// CLAIM handling: first-wins
+		// CLAIM handling: first-wins resolution. A CLAIM on a chain that
+		// already has an owner is stored (it is a valid protocol message), but
+		// the claimant is immediately notified of rejection via a
+		// store-synthesized ERROR (spec §CLAIM step 7).
 		let claimJustResolved = false;
+		let claimLoser = false;
 		if (message.type === "CLAIM") {
 			if (!chain) {
 				throw new Error(
 					`Cannot CLAIM on non-existent chain ${message.chainId}`,
 				);
 			}
-			if (chain.owner) {
-				throw new Error(
-					`Chain ${message.chainId} already claimed by ${chain.owner}`,
-				);
+			if (chain.owner && chain.owner !== message.from) {
+				claimLoser = true;
+			} else if (!chain.owner) {
+				chain.owner = message.from;
+				claimJustResolved = true;
 			}
-			chain.owner = message.from;
-			claimJustResolved = true;
+			// chain.owner === message.from: duplicate CLAIM by same agent — idempotent
 		}
 
 		// TTL enforcement — check if chain has expired
@@ -220,29 +236,75 @@ export class StoreParley {
 			}
 		}
 
-		// Emit claim_rejected notifications to all other subscribers when a
-		// CLAIM resolves ownership (spec §CLAIM step 7). Agents without state
-		// for this chain ignore; those that had begun PROCESS/CLAIM clean up.
+		// Per spec §CLAIM step 7: emit a store-synthesized ERROR to each
+		// non-winner CLAIMant. Under first-wins, the winner's CLAIM has no
+		// priors (emitClaimRejections is a no-op on the winning write), and
+		// later CLAIMants are rejected inline via claimLoser.
 		if (claimJustResolved && chain) {
-			const originRequest = this.messages.find(
-				(m) =>
-					m.chainId === message.chainId && m.type === "REQUEST" && !m.replyTo,
+			this.emitClaimRejections(message.chainId, message.from);
+		}
+		if (claimLoser && chain?.owner) {
+			this.emitRejectionFor(
+				message.chainId,
+				message.id,
+				message.from,
+				chain.owner,
 			);
-			if (originRequest) {
-				const notification: StoreNotification = {
-					type: "claim_rejected",
-					chainId: message.chainId,
-					winner: message.from,
-					requestId: originRequest.id,
-				};
-				for (const [entityId, handler] of this.notificationSubscribers) {
-					if (entityId === message.from) continue;
-					queueMicrotask(() => handler(notification));
-				}
-			}
 		}
 
 		return message;
+	}
+
+	private emitClaimRejections(chainId: string, winnerId: string): void {
+		const priorClaims = this.messages.filter(
+			(m) =>
+				m.chainId === chainId && m.type === "CLAIM" && m.from !== winnerId,
+		);
+		for (const claim of priorClaims) {
+			// Skip if this loser already received a rejection (idempotent).
+			const alreadyRejected = this.messages.some(
+				(m) =>
+					m.chainId === chainId &&
+					m.type === "ERROR" &&
+					m.from === STORE_SENDER &&
+					m.replyTo === claim.id,
+			);
+			if (alreadyRejected) continue;
+			this.emitRejectionFor(chainId, claim.id, claim.from, winnerId);
+		}
+	}
+
+	private emitRejectionFor(
+		chainId: string,
+		claimId: string,
+		claimantId: string,
+		winnerId: string,
+	): void {
+		const error: MessageParley = {
+			id: crypto.randomUUID(),
+			version: 2,
+			chainId,
+			sequence: this.nextSequence(chainId, STORE_SENDER),
+			replyTo: claimId,
+			timestamp: new Date().toISOString(),
+			type: "ERROR",
+			payload: `CLAIM rejected; owner is ${winnerId}`,
+			headers: {},
+			from: STORE_SENDER,
+			to: [claimantId],
+		};
+		this.messages.push(error);
+		log.debug("store_parley", "claim_rejected_emitted", {
+			chainId,
+			to: claimantId,
+			winner: winnerId,
+			claimId,
+		});
+		const handler = this.subscribers.get(claimantId);
+		if (handler) {
+			const toon = encodeMessageParley(error);
+			queueMicrotask(() => handler(toon, error));
+		}
 	}
 
 	getMessage(filter: MessageFilterParley): MessageParley[] {
@@ -349,17 +411,6 @@ export class StoreParley {
 		log.debug("store_parley", "unsubscribed", { entityId });
 	}
 
-	subscribeNotifications(
-		entityId: string,
-		handler: NotificationHandlerParley,
-	): void {
-		this.notificationSubscribers.set(entityId, handler);
-	}
-
-	unsubscribeNotifications(entityId: string): void {
-		this.notificationSubscribers.delete(entityId);
-	}
-
 	private validateStateTransition(
 		message: MessageParley,
 		chain: Chain | undefined,
@@ -398,20 +449,35 @@ export class StoreParley {
 				if (replyTarget.type !== "REQUEST" && replyTarget.type !== "CANCEL") {
 					throw new Error("ACK must reply to a REQUEST or CANCEL message");
 				}
+				// Per spec §Headers: `accept` is required on ACK-of-REQUEST.
+				// ACK-of-CANCEL is bookkeeping and does not require it.
+				if (replyTarget.type === "REQUEST") {
+					const accept = message.headers?.accept;
+					if (accept !== "true" && accept !== "false") {
+						throw new Error(
+							`ACK replying to REQUEST must include header 'accept' set to "true" or "false" (got ${accept === undefined ? "missing" : JSON.stringify(accept)})`,
+						);
+					}
+				}
 				break;
 			}
 			case "PROCESS": {
-				// Sender must have ACK'd the same REQUEST
-				const hasAck = this.messages.some(
+				// Per spec §Constraints: PROCESS requires a prior ACK with
+				// `accept: true` from the same agent replying to the same
+				// REQUEST. Per S1, an agent MAY have earlier declined (accept:
+				// false) and later re-ACKed — as long as at least one ACK with
+				// accept=true exists, PROCESS is allowed.
+				const hasAcceptingAck = this.messages.some(
 					(m) =>
 						m.chainId === message.chainId &&
 						m.from === message.from &&
 						m.type === "ACK" &&
-						m.replyTo === requestId,
+						m.replyTo === requestId &&
+						m.headers?.accept === "true",
 				);
-				if (!hasAck) {
+				if (!hasAcceptingAck) {
 					throw new Error(
-						"Cannot send PROCESS without a prior ACK for this REQUEST",
+						"Cannot send PROCESS without a prior ACK (accept: true) for this REQUEST",
 					);
 				}
 				// Ownership check
@@ -476,6 +542,19 @@ export class StoreParley {
 				break;
 			}
 		}
+	}
+
+	// Per spec §Sequencing: store assigns a per-(chain, sender) monotonic counter.
+	// Callers' intended `sequence` values are overwritten by the return of this method.
+	private nextSequence(chainId: string, from: string): number {
+		let perChain = this.sequenceCounters.get(chainId);
+		if (!perChain) {
+			perChain = new Map();
+			this.sequenceCounters.set(chainId, perChain);
+		}
+		const current = perChain.get(from) ?? 0;
+		perChain.set(from, current + 1);
+		return current;
 	}
 
 	private findChannelByName(name: string): Channel | undefined {
