@@ -225,7 +225,10 @@ export class ProtocolAgentParley {
 				messages: history,
 			});
 
-			totalInputTokens += response.usage.input_tokens;
+			totalInputTokens +=
+				response.usage.input_tokens +
+				(response.usage.cache_creation_input_tokens ?? 0) +
+				(response.usage.cache_read_input_tokens ?? 0);
 			totalOutputTokens += response.usage.output_tokens;
 
 			// Build the assistant message content

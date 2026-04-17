@@ -89,8 +89,12 @@ def run_single_agent(agent_name: str, system_prompt: str, message: str, chain_id
 
     usage = None
     if result.token_usage:
+        # Report total processed input (fresh + cached) to keep protocol
+        # comparisons apples-to-apples regardless of caching.
+        prompt = result.token_usage.prompt_tokens or 0
+        cached = getattr(result.token_usage, "cached_prompt_tokens", 0) or 0
         usage = {
-            "input_tokens": result.token_usage.prompt_tokens or 0,
+            "input_tokens": prompt + cached,
             "output_tokens": result.token_usage.completion_tokens or 0,
         }
 
@@ -160,10 +164,14 @@ def run_full_crew(message: str, chain_id: str | None = None) -> list[dict]:
     for i, task_output in enumerate(result.tasks_output):
         per_task_usage = None
         if result.token_usage:
+            # Report total processed input (fresh + cached), divided evenly
+            # across agents since CrewAI aggregates at the crew level.
             total_prompt = result.token_usage.prompt_tokens or 0
+            total_cached = getattr(result.token_usage, "cached_prompt_tokens", 0) or 0
+            total_input = total_prompt + total_cached
             total_completion = result.token_usage.completion_tokens or 0
             per_task_usage = {
-                "input_tokens": total_prompt // n,
+                "input_tokens": total_input // n,
                 "output_tokens": total_completion // n,
             }
 

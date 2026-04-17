@@ -129,8 +129,15 @@ async def handle_send_message(params: dict, request_id) -> JSONResponse:
         response_text = "".join(
             block.text for block in completion.content if block.type == "text"
         )
+        # Report total processed input (fresh + cache reads + cache creation)
+        # to keep protocol comparisons apples-to-apples regardless of caching.
+        input_total = (
+            completion.usage.input_tokens
+            + (getattr(completion.usage, "cache_creation_input_tokens", 0) or 0)
+            + (getattr(completion.usage, "cache_read_input_tokens", 0) or 0)
+        )
         usage = {
-            "input_tokens": completion.usage.input_tokens,
+            "input_tokens": input_total,
             "output_tokens": completion.usage.output_tokens,
         }
         history.append({"role": "assistant", "content": response_text})

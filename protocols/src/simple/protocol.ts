@@ -86,9 +86,14 @@ export class SimpleProtocol implements Protocol {
 				});
 				const durationMs: number = performance.now() - start;
 
+				const inputTokens =
+					completion.usage.input_tokens +
+					(completion.usage.cache_creation_input_tokens ?? 0) +
+					(completion.usage.cache_read_input_tokens ?? 0);
+
 				log.info("simple", "agent_complete", {
 					agent: persona.name,
-					inputTokens: completion.usage.input_tokens,
+					inputTokens,
 					outputTokens: completion.usage.output_tokens,
 					durationMs: Math.round(durationMs),
 				});
@@ -112,7 +117,7 @@ export class SimpleProtocol implements Protocol {
 						to: [_userId],
 					},
 					usage: {
-						inputTokens: completion.usage.input_tokens,
+						inputTokens,
 						outputTokens: completion.usage.output_tokens,
 					},
 					model: MODEL,
