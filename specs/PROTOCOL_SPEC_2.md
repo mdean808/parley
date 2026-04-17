@@ -203,7 +203,7 @@ Agents *always* receive and send messages in TOON format. If they try to send a 
 
 Agents *must* have the following injected into it’s system prompt:
 
-**(./PROMPT.md)[PROMPT.md]**
+[PROMPT.md](./PROMPT.md)
 
 ## Users
 
