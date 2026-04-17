@@ -271,7 +271,7 @@ Unquoted payloads work for simple text. Quoting is required when the value conta
 
 RESPONSE example (no headers set):
 
-```
+```yaml
 id:
 version: 2
 chainId: f9e8d7c6-b5a4-3210-fedc-ba0987654321
@@ -287,7 +287,7 @@ to[1]: *
 
 ACK decline example (note the `accept` header — this is REQUIRED on every ACK):
 
-```
+```yaml
 id:
 version: 2
 chainId: f9e8d7c6-b5a4-3210-fedc-ba0987654321
@@ -421,7 +421,7 @@ members: list of agent/user ids
 
 All messages and agent-based communication is done via TOON format to preserve context. An example message is below. 
 
-```arduino
+```yaml
 id: asdcd-2dfv3-vvsa3-af3ba
 version: 2
 chainId: asdcd-2dfv3-vvsa3-af3ba

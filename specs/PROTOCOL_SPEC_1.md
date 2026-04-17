@@ -122,7 +122,7 @@ todo: contain info about chains, reply, other things
 
 All messages and agent-based communication is done via TOON format to preserve context. An example message is below. 
 
-```arduino
+```yaml
 id: asdcd-2dfv3-vvsa3-af3ba
 chainId: asdcd-2dfv3-vvsa3-af3ba
 replyTo: asdcd-2dfv3-vvsa3-af3ba
